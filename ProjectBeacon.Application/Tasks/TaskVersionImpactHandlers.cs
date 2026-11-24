@@ -14,6 +14,10 @@ public sealed record TaskVersionImpactDto(
     string? Impact,
     string? Rationale,
     DateTime? DeclaredAt,
+    string? ReviewStatus,
+    string? ReviewNote,
+    DateTime? ReviewedAt,
+    Guid? ReviewedBySessionId,
     int Revision);
 
 public sealed record SetTaskVersionImpactCommand(
@@ -21,6 +25,15 @@ public sealed record SetTaskVersionImpactCommand(
     string Impact,
     string Rationale,
     int ExpectedRevision,
+    ActorContext Actor);
+
+public sealed record ReviewTaskVersionImpactCommand(
+    Guid TaskId,
+    string Decision,
+    string Note,
+    int ExpectedRevision,
+    Guid? ReviewSessionId,
+    PipelineRole? ReviewerRole,
     ActorContext Actor);
 
 public sealed class GetTaskVersionImpactHandler
@@ -43,7 +56,8 @@ public sealed class GetTaskVersionImpactHandler
 
     internal static TaskVersionImpactDto Map(TaskItem task) =>
         new(task.Id, task.ProjectId, task.VersionImpact, task.VersionImpactRationale,
-            task.VersionImpactAt, task.VersionImpactRevision);
+            task.VersionImpactAt, task.VersionImpactReviewStatus, task.VersionImpactReviewNote,
+            task.VersionImpactReviewedAt, task.VersionImpactReviewedBySessionId, task.VersionImpactRevision);
 
     internal static async Task<bool> CanAccessProjectAsync(
         IBeaconDb db, Guid projectId, ActorContext actor, bool readOnly, CancellationToken ct)
@@ -109,6 +123,78 @@ public sealed class SetTaskVersionImpactHandler
         {
             return Result.Failure<TaskVersionImpactDto>(
                 "Version impact changed concurrently. Read it again and retry.", ErrorKind.Conflict);
+        }
+        return Result.Ok(GetTaskVersionImpactHandler.Map(task));
+    }
+}
+
+
+/// <summary>
+/// Confirms or challenges the current task impact. Authorization is bound to the authenticated
+/// harness token's server-issued Review role and exact active PipelineSession, not request input.
+/// </summary>
+public sealed class ReviewTaskVersionImpactHandler
+{
+    private readonly IBeaconDbFactory _dbFactory;
+
+    public ReviewTaskVersionImpactHandler(IBeaconDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<Result<TaskVersionImpactDto>> HandleAsync(
+        ReviewTaskVersionImpactCommand command, CancellationToken ct = default)
+    {
+        if (!command.Actor.IsApiToken
+            || !command.Actor.Capabilities.HasFlag(ApiTokenCapability.TaskWrite)
+            || command.ReviewerRole != PipelineRole.Review
+            || command.ReviewSessionId is not { } reviewSessionId
+            || reviewSessionId == Guid.Empty)
+            return Result.Forbidden<TaskVersionImpactDto>(
+                "Only the active Reviewer pipeline session may confirm or challenge version impact.");
+
+        if (command.Decision is not ("Confirmed" or "Challenged"))
+            return Result.Failure<TaskVersionImpactDto>(
+                "Decision must be Confirmed or Challenged.", ErrorKind.Validation);
+        if (string.IsNullOrWhiteSpace(command.Note) || command.Note.Trim().Length > 1000)
+            return Result.Failure<TaskVersionImpactDto>(
+                "A review note of 1-1000 characters is required.", ErrorKind.Validation);
+
+        await using var db = _dbFactory.CreateDbContext();
+        var task = await db.Tasks.FirstOrDefaultAsync(item => item.Id == command.TaskId, ct);
+        if (task is null)
+            return Result.Failure<TaskVersionImpactDto>("Task not found.", ErrorKind.NotFound);
+        if (command.Actor.ProjectId is { } tokenProjectId && tokenProjectId != task.ProjectId)
+            return Result.Forbidden<TaskVersionImpactDto>();
+
+        var session = await db.PipelineSessions.FirstOrDefaultAsync(
+            item => item.Id == reviewSessionId
+                && item.TaskId == task.Id
+                && item.ProjectId == task.ProjectId
+                && item.Role == PipelineRole.Review
+                && (item.Status == SessionStatus.Active || item.Status == SessionStatus.WaitingForUser),
+            ct);
+        if (session is null)
+            return Result.Forbidden<TaskVersionImpactDto>(
+                "The supplied Reviewer session is not active for this task.");
+
+        if (task.VersionImpact is null)
+            return Result.Failure<TaskVersionImpactDto>(
+                "The Actor has not declared version impact for this task.", ErrorKind.Conflict);
+        if (command.ExpectedRevision < 1 || command.ExpectedRevision != task.VersionImpactRevision)
+            return Result.Failure<TaskVersionImpactDto>(
+                "Version impact changed since it was reviewed. Read it again and retry.", ErrorKind.Conflict);
+
+        try
+        {
+            task.ReviewVersionImpact(command.Decision, command.Note, reviewSessionId);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Result.Failure<TaskVersionImpactDto>(
+                "Version impact changed concurrently. Read it again and retry.", ErrorKind.Conflict);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Result.Failure<TaskVersionImpactDto>(exception.Message, ErrorKind.Conflict);
         }
         return Result.Ok(GetTaskVersionImpactHandler.Map(task));
     }
