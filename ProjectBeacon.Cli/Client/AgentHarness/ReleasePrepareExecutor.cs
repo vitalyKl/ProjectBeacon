@@ -101,7 +101,7 @@ internal static class ReleasePrepareExecutor
                     remote.Url!, remote.Repository!, disabledFilters, ensured.Value!, ct);
 
             return await VerifyLandingAsync(
-                payload, repositoryRoot, projectId, releaseId, targetBranch,
+                payload, repositoryRoot, projectPrefix, projectId, releaseId, targetBranch,
                 remote.Url!, disabledFilters, ensured.Value!, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -252,7 +252,7 @@ internal static class ReleasePrepareExecutor
     }
 
     private static async Task<(bool Ok, string? Result, string? Error)> VerifyLandingAsync(
-        JsonObject payload, string repositoryRoot, Guid projectId, Guid releaseId, string targetBranch,
+        JsonObject payload, string repositoryRoot, string projectPrefix, Guid projectId, Guid releaseId, string targetBranch,
         string originUrl, string[] filters, Metadata metadata, CancellationToken ct)
     {
         var parsed = ParsePolicy(payload);
@@ -275,7 +275,8 @@ internal static class ReleasePrepareExecutor
             return Fail("VerifyLanding payload is incomplete or invalid.");
         if (metadata.PreparedCommitSha is null
             || !string.Equals(metadata.PreparedCommitSha, preparedCommit, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(metadata.ManifestSha256, manifestSha, StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(metadata.ManifestSha256, manifestSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(metadata.TargetBranch, targetBranch, StringComparison.Ordinal))
             return Fail("VerifyLanding does not match the persisted ReleasePrepare worktree metadata.");
 
         var fetch = await AgentTaskGitOperations.RunRemoteGitAsync(
@@ -325,7 +326,6 @@ internal static class ReleasePrepareExecutor
 
         foreach (var source in policy.Sources)
         {
-            var projectPrefix = Text(payload, "projectRelativePath").Trim('/');
             var repositoryPath = ToRepositoryPath(projectPrefix, source.Path);
             var file = await Git(repositoryRoot, ct, filters, "show", candidateSha.Value + ":" + repositoryPath);
             if (!Succeeded(file))
