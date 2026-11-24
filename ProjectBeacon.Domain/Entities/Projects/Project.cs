@@ -42,6 +42,7 @@ public class Project : Entity, IOrgScoped
     public ICollection<ProjectInvite> Invites { get; private set; } = [];
     public ICollection<ApiToken> ApiTokens { get; private set; } = [];
     public ICollection<Milestone> Milestones { get; private set; } = [];
+    public ICollection<Release> Releases { get; private set; } = [];
 
     public static Project Create(string name, string? description, Guid orgId)
     {
