@@ -254,6 +254,11 @@ else
                               Label="@L["ProjectVersionSources"]"
                               HelperText="@L["ProjectVersionSourcesHelp"]"
                               Variant="Variant.Outlined" Margin="Margin.Dense" Lines="5" />
+                <MudTextField T="string" @bind-Value="_versionDeploymentEndpoint"
+                              Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                              Label="@L["ProjectVersionDeploymentEndpoint"]"
+                              HelperText="@L["ProjectVersionDeploymentEndpointHelp"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
                 @if (!_canEditProposalPolicies)
                 {
                     <MudText Typo="Typo.caption" Color="Color.Secondary">@L["ProjectVersionOwnerAdminOnly"]</MudText>
@@ -464,6 +469,7 @@ else
     private bool _releaseManagementEnabled;
     private string _versionInitialOfficialVersion = string.Empty;
     private string _versionSourcesText = string.Empty;
+    private string _versionDeploymentEndpoint = string.Empty;
     private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
@@ -664,6 +670,7 @@ else
         _versionInitialOfficialVersion = policy.OfficialVersion ?? string.Empty;
         _versionSourcesText = string.Join(Environment.NewLine,
             policy.Sources.Select(source => $"{source.Path}|{source.Format}|{source.Selector}"));
+        _versionDeploymentEndpoint = policy.DeploymentVersionEndpoint ?? string.Empty;
     }
 
     private async Task ReloadVersionPolicy()
@@ -712,7 +719,8 @@ else
             _versionTagPattern.Trim(),
             _versionScheme == "SemVer" && _versionAllowPrerelease,
             sources,
-            _releaseManagementEnabled);
+            _releaseManagementEnabled,
+            string.IsNullOrWhiteSpace(_versionDeploymentEndpoint) ? null : _versionDeploymentEndpoint.Trim());
         _versionPolicyBusy = true;
         try
         {
