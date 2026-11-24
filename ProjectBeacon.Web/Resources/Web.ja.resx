@@ -3420,4 +3420,5 @@ orthstar</value>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>公開済み</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>キャンセル済み</value></data>
 
+  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate は ReleasePrepare によって、ポリシー、影響、landing、検証の各チェックに合格した後に作成されます。</value></data>
 </root>
