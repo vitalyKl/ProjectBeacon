@@ -133,6 +133,7 @@ internal sealed class UiNotificationService : IUiNotificationService
             case ErrorCodes.InviteInvalidOrExpired:
                 return _localizer["InviteInvalidOrExpired"].Value;
             case ErrorCodes.Unavailable:
+                return _localizer["UiOperationUnavailable", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
             case ErrorCodes.InternalError:
             case ErrorCodes.Unclassified:
                 return _localizer["UiOperationUnexpectedFailed", section, operationLabel, diagnosticId ?? CreateDiagnosticId()].Value;
