@@ -388,6 +388,9 @@ public sealed class ApiTokenAuthMiddleware
             if (ActorVersionImpactToolForRequest(segments, scopedTaskId, method) is { } versionImpactTool)
                 return IsMcpToolGranted(allowedMcpTools, versionImpactTool);
 
+            if (ActorVersionContextRequest(segments, projectId, scopedTaskId, method, allowedMcpTools))
+                return true;
+
             if (ActorKnowledgeWriteToolForRequest(segments, projectId, method) is { } knowledgeWriteTool)
             {
                 // Legacy Proposed/NeedsReview writes belong to knowledge-curator only.
@@ -565,6 +568,25 @@ public sealed class ApiTokenAuthMiddleware
             && Guid.TryParse(segments[5], out _))
             return McpToolNames.GetContextNode;
         return null;
+    }
+
+    private static bool ActorVersionContextRequest(
+        string[] segments, Guid projectId, Guid taskId, string method, IReadOnlyList<string>? grants)
+    {
+        if (method != HttpMethods.Get || grants is null || segments.Length < 4)
+            return false;
+        if (segments.Length == 4 && segments[1] == "projects"
+            && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "version-policy")
+            return IsMcpToolGranted(grants, McpToolNames.VersionCheck)
+                || IsMcpToolGranted(grants, McpToolNames.ReleaseContext);
+        if (segments.Length == 4 && segments[1] == "projects"
+            && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "milestones")
+            return IsMcpToolGranted(grants, McpToolNames.ReleaseContext)
+                || IsMcpToolGranted(grants, McpToolNames.ListMilestones);
+        if (segments.Length == 4 && segments[1] == "tasks"
+            && GuidSegmentEquals(segments, 2, taskId) && segments[3] == "version-impact")
+            return IsMcpToolGranted(grants, McpToolNames.GetTaskVersionImpact);
+        return false;
     }
 
     private static string? ActorVersionImpactToolForRequest(
