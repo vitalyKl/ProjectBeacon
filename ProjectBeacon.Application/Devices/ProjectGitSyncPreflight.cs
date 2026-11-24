@@ -29,10 +29,8 @@ internal static class ProjectGitSyncPreflight
         var query = db.WorkstationCommands.IgnoreQueryFilters()
             .Where(command => command.Kind == WorkstationCommandKind.GitSync
                 && command.Status == WorkstationCommandStatus.Pending
-                && command.StartedAt == null
-                && command.Attempts == 0
-                && command.ClaimInstanceId == null
-                && command.CreatedAt <= cutoff);
+                && command.PendingSince != null
+                && command.PendingSince <= cutoff);
         if (projectId is { } scopedProjectId)
             query = query.Where(command => command.ProjectId == scopedProjectId);
         if (deviceId is { } scopedDeviceId)
@@ -40,6 +38,7 @@ internal static class ProjectGitSyncPreflight
 
         return await query.ExecuteUpdateAsync(update => update
             .SetProperty(command => command.Status, WorkstationCommandStatus.Cancelled)
+            .SetProperty(command => command.PendingSince, (DateTime?)null)
             .SetProperty(command => command.Error, "GitSyncPendingExpired")
             .SetProperty(command => command.CompletedAt, utcNow)
             .SetProperty(command => command.LeaseExpiresAt, (DateTime?)null)
