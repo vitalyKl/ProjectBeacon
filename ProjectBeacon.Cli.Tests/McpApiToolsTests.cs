@@ -885,8 +885,7 @@ public sealed class McpApiToolsTests
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/context/compile" => """{"success":true,"value":{"briefMarkdown":"# Project\n\n## Goals\n\nDone."}}""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/version-policy" => """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":true,"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"/Project/PropertyGroup/Version"}],"officialVersion":"0.7.5.9","revision":2}""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/milestones" => """[{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","name":"Prepare API release","releaseId":"cccccccc-cccc-cccc-cccc-cccccccccccc"}]""",
-                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/releases" => """[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","name":"0.7.5.9","targetVersion":"0.7.5.9","targetBranch":"main","status":0,"order":1,"milestoneCount":2}]""",
-                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/releases" => """[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","name":"0.7.5.9","targetVersion":"0.7.5.9","status":"InProgress"}]""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/releases" => """[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","name":"0.7.5.9","targetVersion":"0.7.5.9","targetBranch":"main","status":"InProgress","order":1,"milestoneCount":2}]""",
                 _ => """{"ok":true}"""
             };
             return new HttpResponseMessage(HttpStatusCode.OK)
