@@ -3276,4 +3276,13 @@
   <data name="WorkstationCommandCancelled" xml:space="preserve">
     <value>Рабочая станция отменила операцию: {0}.</value>
   </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>Рабочая станция вернула причину блокировки запуска, которую интерфейс не распознаёт. Обновите задачу и проверьте журнал рабочей станции, если проблема повторится.</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>Рабочая станция вернула причину сбоя синхронизации репозитория, которую интерфейс не распознаёт. Проверьте подробности команды и передайте службе поддержки диагностический ID ниже.</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Технические подробности Git</value>
+  </data>
 </root>

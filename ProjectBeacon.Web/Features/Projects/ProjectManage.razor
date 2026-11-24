@@ -324,7 +324,11 @@ else
                 }
                 @if (!string.IsNullOrWhiteSpace(_gitSyncResult.Stderr))
                 {
-                    <MudText Typo="Typo.caption" Class="mt-1">@_gitSyncResult.Stderr</MudText>
+                    <MudExpansionPanels Elevation="0" Class="mt-2">
+                        <MudExpansionPanel Text="@L["GitSyncTechnicalDetails"]">
+                            <MudText Typo="Typo.caption" Class="beacon-ellipsis">@_gitSyncResult.Stderr</MudText>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
                 }
             </MudAlert>
         }
@@ -429,8 +433,15 @@ else
             or >= 'a' and <= 'f'
             or >= 'A' and <= 'F');
 
-    private string GitSyncReasonText(GitSyncRefusalCode reason) =>
-        L["GitSyncReason" + reason].Value;
+    private string GitSyncReasonText(GitSyncRefusalCode reason)
+    {
+        var localized = L["GitSyncReason" + reason];
+        return localized.ResourceNotFound
+            ? Notifications.FormatUnknownReasonCode(
+                reason.ToString(), "GitSyncReasonUnknown", "read repository synchronization status",
+                new { ProjectId })
+            : localized.Value;
+    }
 
     private DaemonDeviceDto? FolderDevice => _devices.FirstOrDefault(d => d.Id == _folderDeviceId);
 

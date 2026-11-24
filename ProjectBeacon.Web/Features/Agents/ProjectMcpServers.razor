@@ -175,7 +175,6 @@
                     L["Load"].Value,
                     new { ProjectId = ProjectId });
                 _loadError = message;
-                Notifications.Error(message);
                 return;
             }
 
@@ -186,7 +185,6 @@
             var diagnosticId = Notifications.LogException(exception, "load project MCP server settings", new { ProjectId });
             var message = Notifications.FormatDiagnosticMessage("ProjectMcpServersLoadFailed", diagnosticId);
             _loadError = message;
-            Notifications.Error(message);
         }
         finally
         {

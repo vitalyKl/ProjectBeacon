@@ -3294,4 +3294,13 @@ orthstar</value>
   <data name="WorkstationCommandCancelled" xml:space="preserve">
     <value>工作站已取消此操作：{0}。</value>
   </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>工作站返回了界面无法识别的启动预检原因。请刷新任务；如果问题仍然存在，请检查工作站日志。</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>工作站返回了界面无法识别的仓库同步失败原因。请检查命令详情，并向支持人员提供下方的诊断 ID。</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Git 技术详情</value>
+  </data>
 </root>

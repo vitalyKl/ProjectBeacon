@@ -184,7 +184,7 @@ else
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3"
                   data-testid="repository-sync-reason">
-            @L["GitSyncReason" + repositoryReason]
+            @GitSyncReasonText(repositoryReason)
             <a href="/project/settings">@L["GitSyncTitle"]</a>
         </MudAlert>
     }
@@ -1337,8 +1337,12 @@ else
 
         if (command.Status == WorkstationCommandStatus.Failed)
         {
-            Notifications.Add(L["GitSyncWorkstationCommandFailed"].Value + Environment.NewLine
-                + string.Format(L["WorkstationCommandId"].Value, command.Id), Severity.Error);
+            Notifications.Failure(
+                command.Error,
+                L["Tasks"].Value,
+                ErrorCodes.InternalError,
+                L["SynchronizeRepository"].Value,
+                new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id });
         }
         else if (command.Status == WorkstationCommandStatus.Cancelled)
         {
@@ -1384,21 +1388,34 @@ else
             }
             else if (result.ReasonCode is { } reason)
             {
-                var message = L["GitSyncReason" + reason].Value;
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                    message += Environment.NewLine + result.Stderr;
-                Notifications.Add(message, Severity.Warning);
+                Notifications.Warning(GitSyncReasonText(reason, result.Stderr, command.Id));
             }
             else
             {
-                var message = L["GitSyncOutcomeFailed"].Value;
-                if (!string.IsNullOrWhiteSpace(result.Stderr))
-                    message += Environment.NewLine + result.Stderr;
-                Notifications.Add(message, Severity.Warning);
+                Notifications.Warning(Notifications.FormatUnknownReasonCode(
+                    "MissingReasonCode",
+                    "GitSyncReasonUnknown",
+                    "report repository synchronization result",
+                    new { TaskId, ProjectId = _task?.ProjectId, DeviceId = command.DeviceId, CommandId = command.Id, result.Stderr }));
             }
         }
 
         _gitSyncTargetDeviceId = null;
+    }
+
+    private string GitSyncReasonText(GitSyncRefusalCode reason, string? stderr = null, Guid? commandId = null)
+    {
+        var localized = L["GitSyncReason" + reason];
+        if (localized.ResourceNotFound)
+        {
+            return Notifications.FormatUnknownReasonCode(
+                reason.ToString(),
+                "GitSyncReasonUnknown",
+                "read repository synchronization status",
+                new { TaskId, ProjectId = _task?.ProjectId, CommandId = commandId, Stderr = stderr });
+        }
+
+        return localized.Value;
     }
 
     private static bool IsVerifiedFastForward(GitSyncResultDto result) =>

@@ -3294,4 +3294,13 @@ orthstar</value>
   <data name="WorkstationCommandCancelled" xml:space="preserve">
     <value>ワークステーションが操作をキャンセルしました: {0}。</value>
   </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>ワークステーションから、画面で認識できない起動事前チェックの理由が返されました。タスクを更新し、問題が続く場合はワークステーションのログを確認してください。</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>ワークステーションから、画面で認識できないリポジトリ同期エラーの理由が返されました。コマンドの詳細を確認し、下記の診断 ID をサポートにお知らせください。</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Git の技術的な詳細</value>
+  </data>
 </root>

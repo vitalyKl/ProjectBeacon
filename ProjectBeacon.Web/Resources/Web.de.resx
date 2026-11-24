@@ -3286,4 +3286,13 @@ orthstar</value>
   <data name="WorkstationCommandCancelled" xml:space="preserve">
     <value>Die Workstation hat den Vorgang abgebrochen: {0}.</value>
   </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>Die Workstation hat einen Startprüfungsgrund gemeldet, den die Oberfläche nicht kennt. Aktualisieren Sie die Aufgabe und prüfen Sie bei erneutem Auftreten das Workstation-Protokoll.</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>Die Workstation hat einen Grund für die fehlgeschlagene Repository-Synchronisierung gemeldet, den die Oberfläche nicht kennt. Prüfen Sie die Befehlsdetails und teilen Sie dem Support die Diagnose-ID unten mit.</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Technische Git-Details</value>
+  </data>
 </root>

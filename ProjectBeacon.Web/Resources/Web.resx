@@ -3485,4 +3485,13 @@ No Beacon-hosted coding agent.</value>
   <data name="WorkstationCommandCancelled" xml:space="preserve">
     <value>The workstation cancelled the operation: {0}.</value>
   </data>
+  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
+    <value>The workstation returned a launch-preflight reason the interface does not recognize. Refresh the task and check the workstation log if the problem persists.</value>
+  </data>
+  <data name="GitSyncReasonUnknown" xml:space="preserve">
+    <value>The workstation reported a repository synchronization reason the interface does not recognize. Check the workstation command details and share the diagnostic ID below with support.</value>
+  </data>
+  <data name="GitSyncTechnicalDetails" xml:space="preserve">
+    <value>Technical details from Git</value>
+  </data>
 </root>
