@@ -88,7 +88,7 @@ public sealed class ReleaseHandlerTests : IDisposable
         _db.Milestones.Add(milestone);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        var assign = await new SetMilestoneReleaseHandler(Factory(), new AuthorizationService())
+        var assign = await new SetMilestoneReleaseHandler(Factory(), new AuthorizationService(), new EfAuditWriter())
             .HandleAsync(new SetMilestoneReleaseCommand(
                 new SetMilestoneReleaseRequest(milestone.Id, _projectId, created.Value.Id, milestone.Revision),
                 OwnerActor()), TestContext.Current.CancellationToken);
