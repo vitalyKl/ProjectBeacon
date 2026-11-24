@@ -3624,4 +3624,6 @@ No Beacon-hosted coding agent.</value>
   <data name="HotfixDeploymentRun" xml:space="preserve"><value>Open deployment workflow run</value></data>
   <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Forward-port of Hotfix</value></data>
   <data name="HotfixTasks" xml:space="preserve"><value>Hotfix and forward-port tasks</value></data>
+  <data name="HotfixOriginNotice" xml:space="preserve"><value>This task is based on the exact commit deployed to production. Its branch and base commit are protected by Beacon.</value></data>
+  <data name="ForwardPortNotice" xml:space="preserve"><value>This ordinary task was created after the source Hotfix was verified as landed. Complete it through the normal Planner, Actor, Reviewer and landing workflow.</value></data>
 </root>
