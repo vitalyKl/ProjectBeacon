@@ -184,6 +184,81 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task RequestLanding_RejectsReviewProofProducedOnAnotherWorkstation()
+    {
+        var done = await SeedDoneSubtaskAsync("Reject landing proof from another workstation");
+        var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
+        Guid pinnedDeviceId;
+        using (TenantScope.EnterUnscoped())
+        {
+            pinnedDeviceId = await _db.Tasks.IgnoreQueryFilters()
+                .Where(task => task.Id == done.Task.Id)
+                .Select(task => task.PipelineDeviceId!.Value)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+
+        var review = await new StartReviewHandler(factory, new FakeSpawner())
+            .HandleAsync(new StartReviewCommand(
+                new StartReviewRequest(done.Task.Id, AutoLaunch: true)),
+                TestContext.Current.CancellationToken);
+        Assert.True(review.Success, review.Error);
+
+        var verdict = await new RecordReviewVerdictHandler(factory)
+            .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(
+                done.Task.Id, ReviewVerdictKind.Approve, "Approve the task branch.")),
+                TestContext.Current.CancellationToken);
+        Assert.True(verdict.Success, verdict.Error);
+        Assert.Equal(TaskPipelineStage.Approved, verdict.Value!.Stage);
+
+        var (otherUser, otherDevice) = await SeedOnlineRuntimeAsync(done.ProjectId);
+        await SetReviewCheckCommandAsync(done.ProjectId, "dotnet test");
+        var commandHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes("dotnet test"))).ToLowerInvariant();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var reviewRun = await _db.ReviewRuns.IgnoreQueryFilters()
+                .SingleAsync(run => run.TaskId == done.Task.Id, TestContext.Current.CancellationToken);
+            reviewRun.SetCheckCommandHash(commandHash);
+            reviewRun.CompleteCheck(
+                "All tests passed.",
+                "review-artifact",
+                new string('a', 40),
+                new string('b', 40),
+                otherDevice.Id,
+                "main");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(task => task.Id == done.Task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(pinnedDeviceId, persistedTask.PipelineDeviceId);
+            Assert.NotEqual(pinnedDeviceId, otherDevice.Id);
+        }
+
+        var landing = await new RequestLandingHandler(
+                factory, new Application.Devices.EnqueueCommandHandler(factory))
+            .HandleAsync(new RequestLandingCommand(
+                new RequestLandingRequest(done.Task.Id, "The proof device must match the task workspace."),
+                HumanActor(otherUser.Id)),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(landing.Success);
+        Assert.Equal(ErrorKind.Conflict, landing.Kind);
+        Assert.Contains("other than the one pinned", landing.Error, StringComparison.OrdinalIgnoreCase);
+
+        using (TenantScope.EnterUnscoped())
+        {
+            Assert.Empty(await _db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
+                .Where(attempt => attempt.ProjectId == done.ProjectId && attempt.TaskId == done.Task.Id)
+                .ToListAsync(TestContext.Current.CancellationToken));
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(task => task.Id == done.Task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(pinnedDeviceId, persistedTask.PipelineDeviceId);
+        }
+    }
+
+    [Fact]
     public async Task StartReview_AfterLatestLandingConflict_RequiresFreshReviewWithoutDiscardingCompletedSubtasks()
     {
         var done = await SeedDoneSubtaskAsync("Re-review conflicted landing");
