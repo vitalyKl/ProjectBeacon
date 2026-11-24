@@ -259,12 +259,19 @@
             new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
         if (!result.Success)
         {
-            if (_waitingTasksFailures.RecordFailure())
+            var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+            if (errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                or ErrorCodes.NotFound or ErrorCodes.Conflict)
+            {
+                _waitingTasksFailures.RecordSuccess();
+                _waitingTasksErrorMessage = Notifications.FormatFailure(result, L["Chat"].Value, L["Load"].Value);
+            }
+            else if (_waitingTasksFailures.RecordFailure())
                 _waitingTasksErrorMessage = Notifications.FormatFailure(result, L["Chat"].Value, L["Load"].Value);
             else
                 Logger.LogWarning(
                     "Transient waiting pipeline task list read failure. UserId={UserId}, ErrorCode={ErrorCode}, Detail={Detail}",
-                    _userId, result.ErrorCode ?? ErrorCodes.For(result.Kind), result.Error);
+                    _userId, errorCode, result.Error);
             return;
         }
 
@@ -534,7 +541,18 @@
 
                     if (pollFailed)
                     {
-                        if (_pollFailures.RecordFailure())
+                        if (pollErrorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                            or ErrorCodes.NotFound or ErrorCodes.Conflict)
+                        {
+                            _pollFailures.RecordSuccess();
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                        }
+                        else if (_pollFailures.RecordFailure())
                             _pollErrorMessage = Notifications.FormatFailure(
                                 pollError,
                                 L["Chat"].Value,
@@ -603,17 +621,23 @@
                 _proxyStatusFailures.RecordSuccess();
                 _proxyStatusErrorMessage = null;
             }
-            else if (!isBackground || _proxyStatusFailures.RecordFailure())
-            {
-                if (!isBackground)
-                    _proxyStatusFailures.RecordFailure();
-                _proxyStatusErrorMessage = Notifications.FormatFailure(
-                    status, L["Chat"].Value, L["Read"].Value);
-            }
             else
-                Logger.LogWarning(
-                    "Transient chat dock runtime status result failure. ErrorCode={ErrorCode}, Detail={Detail}",
-                    status.ErrorCode ?? ErrorCodes.For(status.Kind), status.Error);
+            {
+                var errorCode = status.ErrorCode ?? ErrorCodes.For(status.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _proxyStatusFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _proxyStatusFailures.RecordSuccess();
+                    _proxyStatusErrorMessage = Notifications.FormatFailure(
+                        status, L["Chat"].Value, L["Read"].Value);
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient chat dock runtime status result failure. ErrorCode={ErrorCode}, Detail={Detail}",
+                        errorCode, status.Error);
+            }
         }
         catch (Exception exception)
         {
