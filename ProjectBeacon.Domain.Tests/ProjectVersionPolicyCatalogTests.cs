@@ -146,7 +146,7 @@ public sealed class ProjectVersionPolicyCatalogTests
 
     [Theory]
     [InlineData("v{version}", true)]
-    [InlineData("release-{version}", false)]
+    [InlineData("release-{version}", true)]
     [InlineData("/v{version}", false)]
     [InlineData("v{version}-{version}", false)]
     [InlineData("../v{version}", false)]
