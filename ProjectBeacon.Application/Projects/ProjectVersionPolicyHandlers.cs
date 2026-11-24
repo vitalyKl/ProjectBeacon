@@ -129,6 +129,21 @@ public sealed class SetProjectVersionPolicyHandler
             return Result.Failure<ProjectVersionPolicyDto>(
                 "Version policy changed since it was loaded. Refresh settings and retry.", ErrorKind.Conflict);
 
+        if (project.VersionPolicyJson is not null
+            && ProjectVersionPolicyCatalog.TryRead(project.VersionPolicyJson, out var previousPolicy, out _)
+            && previousPolicy.ReleaseManagementEnabled
+            && !command.Policy.ReleaseManagementEnabled)
+        {
+            var activeReleases = await db.Releases.AnyAsync(
+                release => release.ProjectId == command.ProjectId
+                    && release.Status != ReleaseStatus.Cancelled
+                    && release.Status != ReleaseStatus.Published, ct);
+            if (activeReleases)
+                return Result.Failure<ProjectVersionPolicyDto>(
+                    "Release Management cannot be disabled while Planned, InProgress, or Candidate releases exist. Cancel or publish them first.",
+                    ErrorKind.Conflict);
+        }
+
         if (project.OfficialVersion is not null
             && !ProjectVersionPolicyCatalog.TryNormalizeVersion(
                 command.Policy, project.OfficialVersion, out _, out var currentVersionError))
