@@ -67,6 +67,10 @@
             {
                 <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_pollErrorMessage</MudAlert>
             }
+            @if (_proxyStatusErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_proxyStatusErrorMessage</MudAlert>
+            }
             @if (_block == "folder")
             {
                 <MudAlert Severity="Severity.Info" Dense="true">@L["ChatNeedsFolder"]</MudAlert>
@@ -157,7 +161,9 @@
     private bool _failed;
     private string? _sessionLoadErrorMessage;
     private string? _pollErrorMessage;
+    private string? _proxyStatusErrorMessage;
     private readonly UiBackgroundFailureTracker _pollFailures = new();
+    private readonly UiBackgroundFailureTracker _proxyStatusFailures = new();
     private CancellationTokenSource? _poll;
 
     protected override async Task OnInitializedAsync()
@@ -168,8 +174,14 @@
         if (actor.UserId is not null)
             _userId = actor.UserId.Value;
         var current = await CurrentProject.HandleAsync(actor);
+        if (!current.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value));
+            return;
+        }
         if (current.Value is null || _userId == Guid.Empty)
             return;
+
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
         {
@@ -181,7 +193,11 @@
                 if (chosen is not null)
                     _model = ChatModelSelection.ResolveBackendModelId(chosen.BackendType, chosen.Name, chosen.ProviderModelId);
             }
+            else if (!preferred.Success)
+                Notifications.Warning(Notifications.FormatFailure(preferred, L["Chat"].Value, L["Load"].Value));
         }
+        else
+            Notifications.Warning(Notifications.FormatFailure(registry, L["Agents"].Value, L["Load"].Value));
         await ReloadSessions();
         await ReloadRouteContext();
         await ReloadWaitingTasks();
@@ -394,10 +410,12 @@
 
         if (!parts.Success)
         {
-            _parts = [];
             if (!isBackground)
+            {
+                _parts = [];
                 _sessionLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = sessionId });
-            return (false, parts.Error, parts.ErrorCode);
+            }
+            return (false, parts.Error, parts.ErrorCode ?? ErrorCodes.For(parts.Kind));
         }
 
         _sessionLoadErrorMessage = null;
@@ -435,7 +453,7 @@
                     var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(sessionId, _userId)));
                     var pollFailed = !session.Success;
                     string? pollError = session.Error;
-                    string? pollErrorCode = session.ErrorCode;
+                    string? pollErrorCode = session.ErrorCode ?? (session.Success ? null : ErrorCodes.For(session.Kind));
                     if (session.Success && _session?.Id == sessionId)
                         _session = session.Value;
                     if (_session?.Id != sessionId)
@@ -506,9 +524,30 @@
 
     private async Task LoadProxyStatus()
     {
-        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
-        if (status.Success)
-            _proxy = status.Value;
+        try
+        {
+            var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+            if (status.Success)
+            {
+                _proxy = status.Value;
+                if (_proxyStatusFailures.RecordSuccess())
+                    _proxyStatusErrorMessage = null;
+            }
+            else if (_proxyStatusFailures.RecordFailure())
+            {
+                _proxyStatusErrorMessage = Notifications.FormatFailure(
+                    status, L["Chat"].Value, L["Read"].Value);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (_proxyStatusFailures.RecordFailure())
+            {
+                var diagnosticId = Notifications.LogException(exception, "read chat dock model runtime status");
+                _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "ProxyStatusUnavailable", diagnosticId);
+            }
+        }
     }
 
     private async Task OnModelBound()

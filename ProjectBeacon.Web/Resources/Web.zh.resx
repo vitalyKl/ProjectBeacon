@@ -3366,4 +3366,7 @@ orthstar</value>
   <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
     <value>无法恢复与待处理仓库同步命令的连接。再次启动同步前，请检查任务和工作站状态。</value>
   </data>
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>聊天模型的运行状态暂时不可用。聊天仍可继续使用，但模型就绪状态可能已过期。</value>
+  </data>
 </root>

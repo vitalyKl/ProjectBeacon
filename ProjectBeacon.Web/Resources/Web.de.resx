@@ -3358,4 +3358,7 @@ orthstar</value>
   <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
     <value>Die ausstehende Repository-Synchronisierung konnte nicht wiederhergestellt werden. Prüfen Sie den Aufgaben- und Workstation-Status, bevor Sie eine weitere Synchronisierung starten.</value>
   </data>
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>Der Laufzeitstatus des Chat-Modells ist vorübergehend nicht verfügbar. Der Chat kann weiter verwendet werden, aber die Modellbereitschaft ist möglicherweise nicht aktuell.</value>
+  </data>
 </root>

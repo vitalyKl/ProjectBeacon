@@ -62,12 +62,20 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
+else if (_task is null && _taskLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_taskLoadErrorMessage" />
+}
 else if (_task is null)
 {
     <MudAlert Severity="Severity.Info">@L["TaskNotFound"]</MudAlert>
 }
 else
 {
+    @if (_taskLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_taskLoadErrorMessage</MudAlert>
+    }
     <header class="beacon-task-hero">
         <div>
             <div class="beacon-task-kicker">
@@ -491,6 +499,7 @@ else
 
     [Parameter] public Guid TaskId { get; set; }
     private TaskItemDto? _task;
+    private string? _taskLoadErrorMessage;
     private TaskItemStatus _status = TaskItemStatus.Todo;
     private bool _loading = true;
     private CancellationTokenSource? _pipelinePoll;
@@ -753,7 +762,15 @@ else
     private async Task Reload()
     {
         var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
-        _task = result.Success ? result.Value : null;
+        if (!result.Success)
+        {
+            _taskLoadErrorMessage = Notifications.FormatFailure(
+                result, L["Tasks"].Value, L["Load"].Value, new { TaskId });
+            return;
+        }
+
+        _taskLoadErrorMessage = null;
+        _task = result.Value;
         _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus) ? parsedStatus : TaskItemStatus.Todo;
         if (_task is not null)
         {
@@ -761,9 +778,19 @@ else
                 _task.ProjectId, _actorContext);
 
             var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
-            _labels = labels.Success ? labels.Value!.ToList() : [];
+            if (labels.Success)
+                _labels = labels.Value!.ToList();
+            else
+                Notifications.Warning(Notifications.FormatFailure(labels, L["Tasks"].Value, L["Load"].Value,
+                    new { TaskId, Resource = "labels" }));
+
             var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId), _actorContext));
-            _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+            if (milestones.Success)
+                _milestones = milestones.Value!.ToList();
+            else
+                Notifications.Warning(Notifications.FormatFailure(milestones, L["Tasks"].Value, L["Load"].Value,
+                    new { TaskId, Resource = "milestones" }));
+
             await ReloadTaskProposals();
         }
     }
@@ -779,7 +806,11 @@ else
         var proposals = await ListProposals.HandleAsync(
             new ListProposalsQuery(_task.ProjectId, TaskId: TaskId, Limit: 100),
             _actorContext);
-        _taskProposals = proposals.Success ? proposals.Value!.ToList() : [];
+        if (proposals.Success)
+            _taskProposals = proposals.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(proposals, L["Tasks"].Value, L["Load"].Value,
+                new { TaskId, Resource = "proposals" }));
     }
 
     private string TaskProposalStatus(ProposalStatus status) => status switch
@@ -1045,7 +1076,14 @@ else
             return;
         var result = await WorkspaceIndex.HandleAsync(new WorkspaceIndexQuery(
             new WorkspaceIndexRequest(TaskId, Limit: 100)));
-        _workspaceSections = result.Success ? result.Value!.ToList() : [];
+        if (!result.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(
+                result, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "workspace" }));
+            return;
+        }
+
+        _workspaceSections = result.Value!.ToList();
         if (_selectedWorkspace is not null
             && _workspaceSections.Any(section => section.Key == _selectedWorkspace.Key))
             await OnReadWorkspaceSection(_selectedWorkspace.Key);
@@ -1119,10 +1157,21 @@ else
     private async Task ReloadSteps()
     {
         var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId)));
-        _steps = result.Success ? result.Value!.ToList() : [];
+        if (result.Success)
+            _steps = result.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                result, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "checklist" }));
+
         var phases = await ListPhases.HandleAsync(new ListTaskPhasesCommand(TaskId));
-        _phases = phases.Success ? phases.Value!.ToList() : [];
-        _openPhaseId ??= _phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)?.Id ?? _phases.FirstOrDefault()?.Id;
+        if (phases.Success)
+        {
+            _phases = phases.Value!.ToList();
+            _openPhaseId ??= _phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)?.Id ?? _phases.FirstOrDefault()?.Id;
+        }
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                phases, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "phases" }));
     }
 
     private void TogglePhase(Guid id) => _openPhaseId = _openPhaseId == id ? null : id;

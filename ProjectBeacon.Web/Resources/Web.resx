@@ -3557,4 +3557,7 @@ No Beacon-hosted coding agent.</value>
   <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
     <value>Could not reconnect to the pending repository synchronization command. Check the task and workstation status before starting another synchronization.</value>
   </data>
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>The chat model runtime status is temporarily unavailable. Chat can continue, but model readiness may be out of date.</value>
+  </data>
 </root>
