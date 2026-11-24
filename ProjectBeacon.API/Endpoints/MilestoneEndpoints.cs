@@ -190,5 +190,5 @@ public static class MilestoneEndpoints
     }
 
     private static MilestoneDto MapMilestoneResponse(MilestoneDto dto) =>
-        new(dto.Id, dto.Name, dto.Description, dto.ProjectId, dto.Order, dto.CreatedAt, dto.UpdatedAt, dto.ClosedAt, dto.Revision);
+        new(dto.Id, dto.Name, dto.Description, dto.ProjectId, dto.Order, dto.CreatedAt, dto.UpdatedAt, dto.ClosedAt, dto.Revision, dto.ReleaseId);
 }
