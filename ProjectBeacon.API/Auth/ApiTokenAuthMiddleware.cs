@@ -573,8 +573,11 @@ public sealed class ApiTokenAuthMiddleware
     private static bool ActorVersionContextRequest(
         string[] segments, Guid projectId, Guid taskId, string method, IReadOnlyList<string>? grants)
     {
-        if (method != HttpMethods.Get || grants is null || segments.Length < 4)
+        if (method != HttpMethods.Get || grants is null || segments.Length < 3)
             return false;
+        if (segments.Length == 3 && segments[0] == "v1"
+            && segments[1] == "tasks" && GuidSegmentEquals(segments, 2, taskId))
+            return IsMcpToolGranted(grants, McpToolNames.ReleaseContext);
         if (segments.Length == 4 && segments[1] == "projects"
             && GuidSegmentEquals(segments, 2, projectId) && segments[3] == "version-policy")
             return IsMcpToolGranted(grants, McpToolNames.VersionCheck)
