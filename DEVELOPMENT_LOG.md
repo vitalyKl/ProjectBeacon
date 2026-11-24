@@ -426,6 +426,31 @@ No release tag or production deployment was created. No SaaS Control Plane or bi
 - The current execution container cannot resolve `github.com`, and no local .NET SDK is installed; the complete Python tests, YAML/workflow validation and .NET checks must be confirmed by GitHub Actions on the latest head.
 - Exact-head CI has not yet been rerun after these workflow and validator changes.
 
+
+
+## 2026-11-24 — Release workflow no longer assumes a `v` tag prefix
+
+**Implementation head before journal update:** `c47498f77e5464324e824b3fcf6283dcf0d0c5f7`.
+
+### Implementation
+- Release workflow now listens for any Git tag. This is not an authorization bypass: `verify_release_manifest.py` is the first test step, and image/client/deploy jobs depend on that gate.
+- Manifest validation accepts any configured safe `tagPattern` with exactly one `{version}` placeholder and compares the exact tag name to both the manifest's `tagName` and `GITHUB_REF_NAME`.
+- The validator exports `version` and `tag_name` through `GITHUB_OUTPUT`; the tests job exposes them as job outputs.
+- Client archive version, container build version and production `/v1/version` comparison use the validated manifest version, not a prefix-stripped tag.
+- Container image names now use the immutable commit SHA tag only. Git tag hierarchies are not valid Docker tag syntax and are no longer copied into GHCR image names. Scan and deploy remain digest-bound.
+- Added Python unit tests for the default `v0.7.5.9`, a custom SemVer tag `release-2.4.1`, a hierarchical tag `customer/releases/2.4.1`, mismatched tag rejection, duplicate/missing placeholder rejection and unsafe Git ref names.
+- These unit tests run in the ordinary Linux PR CI and again in the tag-triggered Release workflow.
+
+### Review / safety
+- Unrelated tags may start the workflow, but cannot progress beyond the manifest gate unless the tagged commit contains a valid Beacon ReleasePrepare manifest and exact configured tag/version relationship.
+- No real tag has been pushed, no GitHub Release created, and no production deployment run.
+- Tag protection for arbitrary project-configured patterns and production Environment reviewers remain unverified. This remains a publication blocker; do not create a test release tag until those protections have been inspected and confirmed.
+
+### Validation state
+- Source inspection confirms the release workflow no longer contains `GITHUB_REF_NAME#v` and the client/image/deploy stages consume `needs.tests.outputs.version`.
+- Python helper rules were exercised against safe/unsafe tag cases, but the complete Python unit test file and workflow have not yet been run by GitHub Actions on this head.
+- The current environment cannot resolve `github.com`; no local checkout or local .NET/Python workflow execution is available. Exact-head GitHub Actions remains the required validation.
+
 ## Update format
 
 For every subsequent work session append:
