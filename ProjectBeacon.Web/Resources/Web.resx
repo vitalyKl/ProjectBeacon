@@ -3638,4 +3638,16 @@ No Beacon-hosted coding agent.</value>
   <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Publish release “{0}” as version {1} using tag “{2}” from branch “{3}”? This creates an immutable Git tag and starts the configured GitHub release workflow, which may deploy to production. A pushed tag is never moved or deleted; retries reuse the same Candidate and tag.</value></data>
   <data name="ReleasePublicationQueued" xml:space="preserve"><value>Publication was queued on the pinned workstation. Beacon will verify the GitHub workflow and deployed version/SHA.</value></data>
   <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>The immutable release tag has already been pushed. Retrying will not move it.</value></data>
+  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>Version impact</value></data>
+  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>The Actor has not declared version impact for this task yet.</value></data>
+  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>Declared impact</value></data>
+  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Actor rationale</value></data>
+  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Reviewer decision</value></data>
+  <data name="TaskVersionImpactNone" xml:space="preserve"><value>No version change</value></data>
+  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Confirmed</value></data>
+  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Challenged</value></data>
+  <data name="TaskVersionImpactPending" xml:space="preserve"><value>Pending Reviewer</value></data>
 </root>
