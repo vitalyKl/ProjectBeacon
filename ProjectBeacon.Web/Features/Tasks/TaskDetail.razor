@@ -100,7 +100,7 @@ else
                         <MudProgressLinear Indeterminate="true" Class="mt-1" />
                     }
                 }
-                else if (_pipeline?.Preflight is { PipelineGitSyncSupported: true, PipelineDeviceId: not null })
+                else if (_pipeline?.Preflight is { PipelineGitSyncSupported: true, PipelineDeviceId: not null, HasOnlineNativeWorkstation: true })
                 {
                     @if (_canManageRepositorySync)
                     {
@@ -506,9 +506,11 @@ else
             ? L["PipelineNativeWorkstationOffline"].Value
             : L["PipelinePreflightNoRoleModel"].Value;
     private string PlannerPreflightMessage =>
-        string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
-            ? L["PipelinePreflightNoPlannerModel"].Value
-            : L[_pipeline.StartBlockedReason].Value;
+        !string.IsNullOrWhiteSpace(_pipeline?.Preflight?.PipelineWorkstationBlockedReason)
+            ? L[_pipeline!.Preflight!.PipelineWorkstationBlockedReason!].Value
+            : string.IsNullOrWhiteSpace(_pipeline?.StartBlockedReason)
+                ? L["PipelinePreflightNoPlannerModel"].Value
+                : L[_pipeline.StartBlockedReason].Value;
     private string? _userId;
     private bool CanManageLanding => _actorContext.IsHuman && _actorContext.UserId is not null;
 

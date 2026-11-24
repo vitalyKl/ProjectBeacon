@@ -253,11 +253,13 @@
 
     private string PreflightMessage(PipelineSessionDto session) => session.LaunchBlockedReason is { } reason
         ? L[reason].Value
-        : Pipeline?.Preflight?.HasNativeWorkstation != true
-            ? L["PipelinePreflightNoNativeWorkstation"].Value
-            : Pipeline.Preflight.HasOnlineNativeWorkstation != true
-                ? L["PipelineNativeWorkstationOffline"].Value
-                : L["PipelinePreflightNoRoleModel"].Value;
+        : Pipeline?.Preflight?.PipelineWorkstationBlockedReason is { } workstationReason
+            ? L[workstationReason].Value
+            : Pipeline?.Preflight?.HasNativeWorkstation != true
+                ? L["PipelinePreflightNoNativeWorkstation"].Value
+                : Pipeline.Preflight.HasOnlineNativeWorkstation != true
+                    ? L["PipelineNativeWorkstationOffline"].Value
+                    : L["PipelinePreflightNoRoleModel"].Value;
 
     private string StageLabel(TaskPipelineStage stage) => stage switch
     {
