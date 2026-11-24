@@ -37,6 +37,9 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
         if (command.Request.Kind == WorkstationCommandKind.GitLand && !command.Request.TrustedGitLand)
             return Result.Forbidden<WorkstationCommandDto>(
                 "GitLand commands can only be queued by the landing workflow.");
+        if (command.Request.Kind == WorkstationCommandKind.ReleasePrepare && !command.Request.TrustedReleasePrepare)
+            return Result.Forbidden<WorkstationCommandDto>(
+                "ReleasePrepare commands can only be queued by the authorized Release Management workflow.");
         if (command.Request.Kind == WorkstationCommandKind.ApplyProposalPatch)
             return Result.Forbidden<WorkstationCommandDto>(
                 "Proposal patches can only be queued by the proposal review workflow.");
