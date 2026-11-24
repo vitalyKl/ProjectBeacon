@@ -292,6 +292,7 @@ public static class ProjectVersionPolicyCatalog
     private static bool IsSafeTagPattern(string? pattern)
     {
         if (string.IsNullOrWhiteSpace(pattern) || pattern.Length > 100
+            || !pattern.StartsWith("v", StringComparison.Ordinal)
             || pattern.IndexOf("{version}", StringComparison.Ordinal) < 0
             || pattern.IndexOf("{version}", StringComparison.Ordinal) != pattern.LastIndexOf("{version}", StringComparison.Ordinal))
             return false;
