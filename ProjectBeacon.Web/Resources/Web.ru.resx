@@ -3360,4 +3360,7 @@
   <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
     <value>Не удалось загрузить метрики рабочей станции. Проверьте её подключение и повторите попытку. Диагностический ID: {0}</value>
   </data>
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>Список задач, ожидающих вашего ответа, временно недоступен. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
+  </data>
 </root>

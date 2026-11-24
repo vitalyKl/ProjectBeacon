@@ -251,34 +251,66 @@
             _session = _sessions.FirstOrDefault(x => x.Id == _session.Id) ?? _session;
     }
 
-    private async Task ReloadWaitingTasks()
+    private async Task ReloadWaitingTasks(bool isBackground = false)
     {
         if (_userId == Guid.Empty)
             return;
-        var result = await ListWaitingTasks.HandleAsync(
-            new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
-        if (!result.Success)
+
+        try
         {
-            var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
-            if (errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
-                or ErrorCodes.NotFound or ErrorCodes.Conflict)
+            var result = await ListWaitingTasks.HandleAsync(
+                new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
+            if (!result.Success)
             {
-                _waitingTasksFailures.RecordSuccess();
-                _waitingTasksErrorMessage = Notifications.FormatFailure(result, L["Chat"].Value, L["Load"].Value);
+                var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _waitingTasksFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _waitingTasksFailures.RecordSuccess();
+                    _waitingTasksErrorMessage = Notifications.FormatFailure(
+                        result,
+                        L["Chat"].Value,
+                        L["Load"].Value,
+                        new { UserId = _userId, Resource = "waiting pipeline tasks" });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient waiting pipeline task list read failure. UserId={UserId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        _userId, errorCode, result.Error);
+                return;
             }
-            else if (_waitingTasksFailures.RecordFailure())
-                _waitingTasksErrorMessage = Notifications.FormatFailure(result, L["Chat"].Value, L["Load"].Value);
+
+            // Clear a permanent or previously reported background error on any successful poll.
+            _waitingTasksFailures.RecordSuccess();
+            _waitingTasksErrorMessage = null;
+            _waitingTasks = result.Value!.ToList();
+        }
+        catch (OperationCanceledException) when (_poll?.IsCancellationRequested == true)
+        {
+            // Component navigation/disposal is not a user-visible failure.
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _waitingTasksFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _waitingTasksFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(
+                    exception,
+                    "load waiting pipeline tasks for chat",
+                    new { UserId = _userId });
+                _waitingTasksErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "ChatWaitingTasksUnavailable",
+                    diagnosticId);
+            }
             else
                 Logger.LogWarning(
-                    "Transient waiting pipeline task list read failure. UserId={UserId}, ErrorCode={ErrorCode}, Detail={Detail}",
-                    _userId, errorCode, result.Error);
-            return;
+                    exception,
+                    "Transient waiting pipeline task list read exception; retrying. UserId={UserId}",
+                    _userId);
         }
-
-        // Clear a permanent or previously reported background error on any successful poll.
-        _waitingTasksFailures.RecordSuccess();
-        _waitingTasksErrorMessage = null;
-        _waitingTasks = result.Value!.ToList();
     }
 
     private async Task ReloadRouteContext()
@@ -501,7 +533,7 @@
             {
                 try
                 {
-                    await ReloadWaitingTasks();
+                    await ReloadWaitingTasks(isBackground: true);
 
                     // Recover failed initial loads even while the dock is closed or has no
                     // explicitly selected conversation. Opening the dock must not auto-select

@@ -3370,4 +3370,7 @@ orthstar</value>
   <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
     <value>Die Workstation-Metriken konnten nicht geladen werden. Prüfen Sie die Verbindung der Workstation und versuchen Sie es erneut. Diagnose-ID: {0}</value>
   </data>
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
+  </data>
 </root>
