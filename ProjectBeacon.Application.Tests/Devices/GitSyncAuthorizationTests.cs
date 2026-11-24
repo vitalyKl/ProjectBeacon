@@ -851,6 +851,14 @@ public sealed class GitSyncAuthorizationTests
                 project.Id,
                 owner.Id);
             running.Claim(TimeSpan.FromMinutes(15), "active-daemon-instance");
+            var requeued = WorkstationCommand.Create(
+                device.Id,
+                WorkstationCommandKind.GitSync,
+                JsonSerializer.Serialize(new { projectId = project.Id, mode = "PullFastForward" }),
+                project.Id,
+                owner.Id);
+            requeued.Claim(TimeSpan.FromMinutes(15), "recovered-daemon-instance");
+            requeued.Requeue();
 
             db.Orgs.Add(org);
             db.Projects.Add(project);
@@ -858,7 +866,7 @@ public sealed class GitSyncAuthorizationTests
             db.ProjectMembers.Add(ProjectMember.Create(project.Id, owner.Id, MemberRole.Owner));
             db.DaemonDevices.Add(device);
             db.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, device.Id, Path.GetTempPath()));
-            db.WorkstationCommands.AddRange(pending, running);
+            db.WorkstationCommands.AddRange(pending, running, requeued);
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             unscoped.Dispose();
 
@@ -869,7 +877,7 @@ public sealed class GitSyncAuthorizationTests
             {
                 var staleCreatedAt = DateTime.UtcNow - ProjectGitSyncPreflight.PendingCommandLifetime - TimeSpan.FromMinutes(1);
                 await db.WorkstationCommands.IgnoreQueryFilters()
-                    .Where(command => command.Id == pending.Id)
+                    .Where(command => command.Id == pending.Id || command.Id == requeued.Id)
                     .ExecuteUpdateAsync(update => update.SetProperty(command => command.CreatedAt, staleCreatedAt),
                         TestContext.Current.CancellationToken);
             }
@@ -891,11 +899,16 @@ public sealed class GitSyncAuthorizationTests
                     .SingleAsync(command => command.Id == pending.Id, TestContext.Current.CancellationToken);
                 var stillRunning = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
                     .SingleAsync(command => command.Id == running.Id, TestContext.Current.CancellationToken);
+                var recoveredPending = await db.WorkstationCommands.IgnoreQueryFilters().AsNoTracking()
+                    .SingleAsync(command => command.Id == requeued.Id, TestContext.Current.CancellationToken);
                 Assert.Equal(WorkstationCommandStatus.Cancelled, expired.Status);
                 Assert.Equal("GitSyncPendingExpired", expired.Error);
                 Assert.NotNull(expired.CompletedAt);
                 Assert.Equal(WorkstationCommandStatus.Running, stillRunning.Status);
                 Assert.NotNull(stillRunning.LeaseExpiresAt);
+                Assert.Equal(WorkstationCommandStatus.Pending, recoveredPending.Status);
+                Assert.Equal(1, recoveredPending.Attempts);
+                Assert.Equal("recovered-daemon-instance", recoveredPending.ClaimInstanceId);
             }
 
             await using var preflightDb = factory.CreateDbContext();
