@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
-  <data name="Close" xml:space="preserve">
+<data name="Close" xml:space="preserve">
     <value>閉じる</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -918,7 +918,7 @@
 <data name="Constraints" xml:space="preserve">
     <value>制約</value>
   </data>
-  <data name="Activate" xml:space="preserve">
+<data name="Activate" xml:space="preserve">
     <value>有効化</value>
   </data>
 <data name="Reject" xml:space="preserve">
@@ -3198,124 +3198,7 @@ orthstar</value>
   <data name="WorkstationUpdateProgress" xml:space="preserve">
     <value>更新処理を引き渡しました。ワークステーションの再起動と新しいバージョンの報告を待っています。</value>
   </data>
-  <data name="Fail" xml:space="preserve">
-    <value>失敗として記録</value>
-  </data>
-  <data name="Reopen" xml:space="preserve">
-    <value>再開</value>
-  </data>
-  <data name="Request" xml:space="preserve">
-    <value>リクエスト</value>
-  </data>
-  <data name="TimeZoneSaveFailed" xml:space="preserve">
-    <value>タイムゾーン設定を保存できませんでした。もう一度お試しください。問題が続く場合は、診断 ID をサポートにお知らせください。</value>
-  </data>
-  <data name="Enable" xml:space="preserve">
-    <value>有効にする</value>
-  </data>
-  <data name="Verify" xml:space="preserve">
-    <value>確認</value>
-  </data>
-  <data name="Disable" xml:space="preserve">
-    <value>無効にする</value>
-  </data>
-  <data name="Change" xml:space="preserve">
-    <value>変更</value>
-  </data>
-  <data name="Initialize" xml:space="preserve">
-    <value>初期化</value>
-  </data>
-  <data name="FolderListingInvalid" xml:space="preserve">
-    <value>ワークステーションから読み取れないディレクトリ一覧が返されました。ワークステーションのログを確認して、もう一度お試しください。</value>
-  </data>
-  <data name="SynchronizeRepository" xml:space="preserve">
-    <value>リポジトリを同期</value>
-  </data>
-  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
-    <value>エージェントセッションの実行中にサブタスクが失敗しました。上のセッションアクティビティを展開すると、失敗の詳細と診断 ID を確認できます。</value>
-  </data>
-  <data name="PipelinePatchConflict" xml:space="preserve">
-    <value>プロジェクトファイルが変更されたか、編集内容が競合しているため、エージェントの変更を適用できませんでした。分離された作業ツリーは保持されています。コマンド結果を確認し、競合を解決してから再試行してください。</value>
-  </data>
-  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
-    <value>{0} で「{1}」を実行するには、もう一度サインインしてください。</value>
-  </data>
-  <data name="UiOperationUnavailable" xml:space="preserve">
-    <value>サービスが一時的に利用できないため、{0} で「{1}」を完了できませんでした。後でもう一度お試しください。診断 ID: {2}</value>
-  </data>
-  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
-    <value>このマージに必要なワークステーションまたはタスクの作業ツリーを利用できません。ワークステーションを再接続して、もう一度お試しください。</value>
-  </data>
-  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
-    <value>タスクブランチが最新の Review で確認されたリビジョンと一致しなくなりました。タスクブランチを更新し、Review を再実行して、新しい Preview を要求してください。</value>
-  </data>
-  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
-    <value>Preview 後に承認、Review 結果、または固定されたチェックコマンドが変更されました。マージを実行する前に Review を再実行し、新しい Preview を要求してください。</value>
-  </data>
-  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
-    <value>Preview 後にターゲットブランチまたはそのチェックアウトが変更されたか、安全に確認できませんでした。ターゲットブランチの状態を更新し、新しい Preview を要求してください。</value>
-  </data>
-  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
-    <value>Git 設定またはワークステーション環境がランディング要件を満たしていません。プロジェクトの Git ポリシー、remote、filter、Git のバージョンを確認してください。</value>
-  </data>
-  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
-    <value>マージ候補を作成または検証できませんでした。マージ結果と設定済みの ReviewCheckCommand を確認し、Preview を再実行してください。</value>
-  </data>
-  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
-    <value>変更に保護対象またはプロジェクト外のパスが含まれるか、設定済みの上限を超えているか、許可されていないシンボリックリンクまたはサブモジュールが含まれています。変更範囲と Git ポリシーを確認してください。</value>
-  </data>
-  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
-    <value>ランディング処理の状態を安全に照合できませんでした。ターゲットブランチはすでに変更されている可能性があります。再試行する前にターゲットブランチと試行の詳細を確認してください。</value>
-  </data>
-  <data name="LandingReasonRevertFailed" xml:space="preserve">
-    <value>マージを安全に取り消せなかったか、revert コミットを検証できませんでした。再試行する前にターゲットブランチを確認してください。</value>
-  </data>
-  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
-    <value>ワークステーションがランディングコマンドを受け付けませんでした。オンラインで GitLand に対応していることを確認し、再試行する前にランディング状態を更新してください。</value>
-  </data>
-  <data name="LandingReasonManualActionRequired" xml:space="preserve">
-    <value>プロジェクトポリシーにより、このランディング操作は人が手動で実行または再試行する必要があります。</value>
-  </data>
-  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
-    <value>Execute をキューに入れるまで、タスクは Approved の状態を維持する必要があります。新しいランディングを要求する前に Review を再実行して承認してください。</value>
-  </data>
-  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
-    <value>マージはすでにターゲットブランチに反映されている可能性がありますが、マージ後の検証に失敗したか、結果を確認できませんでした。revert を要求する前にターゲットを確認してください。</value>
-  </data>
-  <data name="LandingReasonUnknown" xml:space="preserve">
-    <value>ランディング処理が、画面で認識できない理由を返しました。ワークステーションのログを確認し、診断 ID をサポートに伝えてください。</value>
-  </data>
-  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
-    <value>ワークステーションが再起動し、バージョン {0} を報告しました。</value>
-  </data>
-  <data name="WorkstationCommandFailed" xml:space="preserve">
-    <value>予期しないエラーが発生したため、ワークステーションのコマンドを完了できませんでした。</value>
-  </data>
-  <data name="WorkstationCommandCancelled" xml:space="preserve">
-    <value>ワークステーションが操作をキャンセルしました: {0}。</value>
-  </data>
-  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
-    <value>ワークステーションから、画面で認識できない起動事前チェックの理由が返されました。タスクを更新し、問題が続く場合はワークステーションのログを確認してください。</value>
-  </data>
-  <data name="GitSyncReasonUnknown" xml:space="preserve">
-    <value>ワークステーションから、画面で認識できないリポジトリ同期エラーの理由が返されました。コマンドの詳細を確認し、下記の診断 ID をサポートにお知らせください。</value>
-  </data>
-  <data name="GitSyncTechnicalDetails" xml:space="preserve">
-    <value>Git の技術的な詳細</value>
-  </data>
-  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
-    <value>ワークステーションのコマンド履歴を読み込めませんでした。このセクションを再読み込みして、もう一度お試しください。</value>
-  </data>
-  <data name="WorkstationSettingsInvalid" xml:space="preserve">
-    <value>ワークステーションから読み取り不能な形式の設定が返されました。ワークステーションのデータを更新し、問題が続く場合はログを確認してください。</value>
-  </data>
-  <data name="WorkstationProbeInvalid" xml:space="preserve">
-    <value>ワークステーションから読み取り不能な形式の診断情報が返されました。診断情報を更新し、問題が続く場合はログを確認してください。</value>
-  </data>
-  <data name="InviteTokenMissing" xml:space="preserve">
-    <value>招待リンクに招待トークンが含まれていません。招待メールに記載された完全なリンクを開いてください。</value>
-  </data>
-  <data name="InviteInvalidOrExpired" xml:space="preserve">
-    <value>この招待は無効か、有効期限切れ、または使用済みです。招待者に新しい招待を依頼してください。</value>
+  <data name="ResetTokenMissing" xml:space="preserve">
+    <value>パスワードリセットリンクにトークンがありません。新しいリセットリンクをリクエストして、もう一度開いてください。</value>
   </data>
 </root>

@@ -49,7 +49,7 @@
         if (query.TryGetValue("token", out var token))
             _token = token.ToString();
         if (string.IsNullOrEmpty(_token))
-            _error = L["Error"].Value;
+            _error = Notifications.FormatFailure(L["ResetTokenMissing"].Value, L["AuthResetOperation"].Value);
     }
 
     private async Task Submit()

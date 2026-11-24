@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>取消</value>
   </data>
-  <data name="Close" xml:space="preserve">
+<data name="Close" xml:space="preserve">
     <value>关闭</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -918,8 +918,8 @@
 <data name="Constraints" xml:space="preserve">
     <value>约束</value>
   </data>
-  <data name="Activate" xml:space="preserve">
-    <value>激活</value>
+<data name="Activate" xml:space="preserve">
+    <value>启用</value>
   </data>
 <data name="Reject" xml:space="preserve">
     <value>拒绝</value>
@@ -3198,124 +3198,7 @@ orthstar</value>
   <data name="WorkstationUpdateProgress" xml:space="preserve">
     <value>更新已交接。正在等待工作站重启并报告新版本。</value>
   </data>
-  <data name="Fail" xml:space="preserve">
-    <value>标记为失败</value>
-  </data>
-  <data name="Reopen" xml:space="preserve">
-    <value>重新打开</value>
-  </data>
-  <data name="Request" xml:space="preserve">
-    <value>请求</value>
-  </data>
-  <data name="TimeZoneSaveFailed" xml:space="preserve">
-    <value>无法保存时区设置。请重试。如果问题仍然存在，请向支持人员提供诊断 ID。</value>
-  </data>
-  <data name="Enable" xml:space="preserve">
-    <value>启用</value>
-  </data>
-  <data name="Verify" xml:space="preserve">
-    <value>验证</value>
-  </data>
-  <data name="Disable" xml:space="preserve">
-    <value>禁用</value>
-  </data>
-  <data name="Change" xml:space="preserve">
-    <value>更改</value>
-  </data>
-  <data name="Initialize" xml:space="preserve">
-    <value>初始化</value>
-  </data>
-  <data name="FolderListingInvalid" xml:space="preserve">
-    <value>工作站返回的目录列表无法读取。请检查工作站日志后重试。</value>
-  </data>
-  <data name="SynchronizeRepository" xml:space="preserve">
-    <value>同步仓库</value>
-  </data>
-  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
-    <value>代理会话运行期间此子任务失败。请展开上方的会话活动面板，查看错误详情和诊断 ID。</value>
-  </data>
-  <data name="PipelinePatchConflict" xml:space="preserve">
-    <value>由于项目文件已更改或包含冲突修改，无法应用代理的更改。隔离工作树已保留。请检查命令结果并解决冲突后再重试。</value>
-  </data>
-  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
-    <value>请重新登录，以便在“{0}”中执行“{1}”。</value>
-  </data>
-  <data name="UiOperationUnavailable" xml:space="preserve">
-    <value>由于服务暂时不可用，无法在“{0}”中完成“{1}”。请稍后重试。诊断 ID：{2}</value>
-  </data>
-  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
-    <value>此合并所需的工作站或任务工作树不可用。请重新连接工作站后重试。</value>
-  </data>
-  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
-    <value>任务分支已不再匹配最近一次 Review 检查的版本。请更新任务分支，重新运行 Review，并请求新的 Preview。</value>
-  </data>
-  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
-    <value>Preview 后，审批、Review 结果或固定的检查命令发生了变化。请重新运行 Review，并在执行合并前请求新的 Preview。</value>
-  </data>
-  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
-    <value>Preview 后目标分支或其检出状态发生了变化，或者无法安全检查。请刷新目标分支状态并请求新的 Preview。</value>
-  </data>
-  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
-    <value>Git 配置或工作站环境不符合合并要求。请检查项目 Git 策略、remote、过滤器以及安装的 Git 版本。</value>
-  </data>
-  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
-    <value>无法构建或验证合并候选结果。请检查合并结果和配置的 ReviewCheckCommand，然后重新运行 Preview。</value>
-  </data>
-  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
-    <value>更改包含受保护或项目范围外的路径、超过配置的限制，或包含不允许的符号链接或子模块。请检查更改范围和项目 Git 策略。</value>
-  </data>
-  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
-    <value>无法安全协调合并操作状态。目标分支可能已经发生变化。重试前请检查目标分支和本次尝试的详细信息。</value>
-  </data>
-  <data name="LandingReasonRevertFailed" xml:space="preserve">
-    <value>无法安全撤销合并，或无法验证 revert 提交。重试前请检查目标分支。</value>
-  </data>
-  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
-    <value>工作站未接受合并命令。请确认工作站在线且支持 GitLand，然后刷新合并状态再重试。</value>
-  </data>
-  <data name="LandingReasonManualActionRequired" xml:space="preserve">
-    <value>项目策略要求由人员手动执行或重试此合并操作。</value>
-  </data>
-  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
-    <value>在 Execute 入队之前，任务必须保持 Approved 状态。请重新运行 Review 并重新批准任务，然后再请求合并。</value>
-  </data>
-  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
-    <value>合并可能已经进入目标分支，但合并后验证失败或无法确认。请求 revert 前请先检查目标分支。</value>
-  </data>
-  <data name="LandingReasonUnknown" xml:space="preserve">
-    <value>合并尝试返回了界面无法识别的原因。请检查工作站日志，并向支持人员提供下面的诊断 ID。</value>
-  </data>
-  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
-    <value>工作站已重新启动并报告版本 {0}。</value>
-  </data>
-  <data name="WorkstationCommandFailed" xml:space="preserve">
-    <value>发生意外错误，无法完成工作站命令。</value>
-  </data>
-  <data name="WorkstationCommandCancelled" xml:space="preserve">
-    <value>工作站已取消此操作：{0}。</value>
-  </data>
-  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
-    <value>工作站返回了界面无法识别的启动预检原因。请刷新任务；如果问题仍然存在，请检查工作站日志。</value>
-  </data>
-  <data name="GitSyncReasonUnknown" xml:space="preserve">
-    <value>工作站返回了界面无法识别的仓库同步失败原因。请检查命令详情，并向支持人员提供下方的诊断 ID。</value>
-  </data>
-  <data name="GitSyncTechnicalDetails" xml:space="preserve">
-    <value>Git 技术详情</value>
-  </data>
-  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
-    <value>无法加载工作站命令历史记录。请刷新此区域后重试。</value>
-  </data>
-  <data name="WorkstationSettingsInvalid" xml:space="preserve">
-    <value>工作站返回了无法读取格式的设置。请刷新工作站数据；如果问题仍然存在，请检查工作站日志。</value>
-  </data>
-  <data name="WorkstationProbeInvalid" xml:space="preserve">
-    <value>工作站返回了无法读取格式的诊断信息。请刷新诊断信息；如果问题仍然存在，请检查工作站日志。</value>
-  </data>
-  <data name="InviteTokenMissing" xml:space="preserve">
-    <value>此邀请链接不包含邀请令牌。请打开邀请邮件中的完整链接。</value>
-  </data>
-  <data name="InviteInvalidOrExpired" xml:space="preserve">
-    <value>此邀请无效、已过期或已被使用。请联系邀请人重新发送邀请。</value>
+  <data name="ResetTokenMissing" xml:space="preserve">
+    <value>密码重置链接缺少令牌。请重新申请密码重置链接并再次打开。</value>
   </data>
 </root>
