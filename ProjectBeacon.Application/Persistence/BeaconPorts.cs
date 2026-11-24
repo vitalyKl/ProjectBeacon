@@ -39,6 +39,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<Report> Reports { get; }
     DbSet<Milestone> Milestones { get; }
     DbSet<Release> Releases { get; }
+    DbSet<ReleaseCandidateSnapshot> ReleaseCandidateSnapshots { get; }
     DbSet<TaskDependency> TaskDependencies { get; }
     DbSet<TaskComment> TaskComments { get; }
     DbSet<TaskAttachment> TaskAttachments { get; }
