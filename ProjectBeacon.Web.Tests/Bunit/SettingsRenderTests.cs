@@ -215,7 +215,7 @@ public sealed class SettingsRenderTests : BUnitRenderBase
 
         var cut = Bunit.RenderComponent<Features.Settings.Workstations>();
 
-        Assert.Contains("Repository repository status", cut.Markup, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Project repository status", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Local changes", cut.Markup, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Updated", cut.Markup);
     }
