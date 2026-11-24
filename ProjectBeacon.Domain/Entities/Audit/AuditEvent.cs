@@ -137,7 +137,7 @@ public sealed class AuditEvent : Entity
                     var pattern = property.Name is "sourceBranch" or "targetBranch"
                         ? BranchNamePattern
                         : property.Name == "targetVersion"
-                            ? new Regex("^[A-Za-z0-9._+:-]{1,100}$", RegexOptions.CultureInvariant | RegexOptions.Compiled)
+                            ? new Regex("^[A-Za-z0-9._+:/-]{1,100}$", RegexOptions.CultureInvariant | RegexOptions.Compiled)
                             : DetailCodePattern;
                     if (code is null || !pattern.IsMatch(code))
                         throw new ArgumentException($"Audit detail '{property.Name}' must be a short code, not free-form text.", nameof(detailsJson));
