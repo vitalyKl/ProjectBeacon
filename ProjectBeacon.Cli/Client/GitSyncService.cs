@@ -37,7 +37,8 @@ internal sealed class GitSyncService
         string payloadJson,
         CancellationToken ct,
         string? activeWorktreeDirectory = null,
-        Action<string>? repositoryBaseSynced = null)
+        Action<string>? repositoryBaseSynced = null,
+        bool automatic = false)
     {
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return (false, null, "The configured project directory does not exist.");
@@ -69,7 +70,6 @@ internal sealed class GitSyncService
             return (false, null, "The configured project directory is not a Git repository.");
 
         var repositoryRoot = Path.GetFullPath(rootResult.StdOut.Trim());
-        using var operationLock = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
         var hooksDirectory = CreateHooksDirectory();
         try
         {
@@ -184,6 +184,24 @@ internal sealed class GitSyncService
 
             if (mode == GitSyncMode.Status)
                 return Complete(ToResult(state, GitSyncOutcome.UpToDate, null, null, state.Head));
+
+            // Network fetch is complete. Only now serialize the short local checkout mutation,
+            // so status checks never hold the worktree/session repository gate while offline.
+            IDisposable? checkoutLease = automatic
+                ? await GitCheckoutGate.TryAcquireAsync(repositoryRoot, TimeSpan.FromMilliseconds(150), ct)
+                : await GitCheckoutGate.AcquireAsync(repositoryRoot, ct);
+            if (checkoutLease is null)
+                return Complete(Refused(state, GitSyncRefusalCode.CheckoutBusy, null, state.Head));
+            using var checkoutOperation = checkoutLease;
+            using var repositoryOperation = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
+
+            state = await ReadStateAsync(repositoryRoot, hooksDirectory, ct, filters.Drivers);
+            if (state.Error is not null)
+                return Complete(Failed(state, state.Error.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+                    ? GitSyncRefusalCode.Timeout : GitSyncRefusalCode.FetchFailed, state.Error));
+            if (string.IsNullOrWhiteSpace(activeWorktreeDirectory)
+                && GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
+                return Complete(Refused(state, GitSyncRefusalCode.ActiveSessions, null, state.Head));
 
             if (state.Diverged)
                 return Complete(Refused(state, GitSyncRefusalCode.Diverged, null, state.Head));

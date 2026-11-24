@@ -255,7 +255,8 @@ public enum GitSyncRefusalCode
     Timeout = 6,
     MergeFailed = 7,
     RuntimeChanged = 8,
-    NeverSynced = 9
+    NeverSynced = 9,
+    CheckoutBusy = 10
 }
 
 /// <summary>Bounded repository state returned by the workstation. Stderr is sanitized.</summary>
