@@ -3444,4 +3444,7 @@ orthstar</value>
   <data name="RepoSyncRuntimeChanged" xml:space="preserve">
     <value>同期中にプロジェクトの割り当て先ディレクトリが変更されました — 更新を延期</value>
   </data>
+  <data name="RepoSyncNoRemote" xml:space="preserve">
+    <value>Upstreamはリモートではなくローカルブランチを指しています</value>
+  </data>
 </root>

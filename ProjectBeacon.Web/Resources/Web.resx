@@ -3635,4 +3635,7 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncRuntimeChanged" xml:space="preserve">
     <value>The attached project directory changed during synchronization — update deferred</value>
   </data>
+  <data name="RepoSyncNoRemote" xml:space="preserve">
+    <value>The upstream is a local branch, not a remote</value>
+  </data>
 </root>

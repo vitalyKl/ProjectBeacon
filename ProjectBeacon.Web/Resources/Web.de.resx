@@ -3436,4 +3436,7 @@ orthstar</value>
   <data name="RepoSyncRuntimeChanged" xml:space="preserve">
     <value>Das zugeordnete Projektverzeichnis wurde während der Synchronisierung geändert — Update verschoben</value>
   </data>
+  <data name="RepoSyncNoRemote" xml:space="preserve">
+    <value>Der Upstream verweist auf einen lokalen Branch, nicht auf ein Remote</value>
+  </data>
 </root>

@@ -3426,4 +3426,7 @@
   <data name="RepoSyncRuntimeChanged" xml:space="preserve">
     <value>Каталог проекта на станции изменился во время синхронизации — обновление отложено</value>
   </data>
+  <data name="RepoSyncNoRemote" xml:space="preserve">
+    <value>Upstream указывает на локальную ветку, а не на remote</value>
+  </data>
 </root>

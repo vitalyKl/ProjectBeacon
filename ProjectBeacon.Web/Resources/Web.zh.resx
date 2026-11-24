@@ -3444,4 +3444,7 @@ orthstar</value>
   <data name="RepoSyncRuntimeChanged" xml:space="preserve">
     <value>同步期间项目绑定目录已更改 — 延后更新</value>
   </data>
+  <data name="RepoSyncNoRemote" xml:space="preserve">
+    <value>Upstream 指向本地分支，而不是远程仓库</value>
+  </data>
 </root>
