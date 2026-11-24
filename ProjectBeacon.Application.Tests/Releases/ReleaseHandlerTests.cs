@@ -133,6 +133,28 @@ public sealed class ReleaseHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ReleaseCreationIsDisabledWhenProjectFeatureFlagIsOff()
+    {
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        Assert.True(ProjectVersionPolicyCatalog.TryRead(
+            project.VersionPolicyJson, out var policy, out var error), error);
+        project.SetVersionPolicyJson(
+            ProjectVersionPolicyCatalog.Serialize(policy with { ReleaseManagementEnabled = false }));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Disabled", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        Assert.Contains("disabled", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(await _db.Releases.ToListAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task ManualCandidateTransitionIsRejected()
     {
         var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
