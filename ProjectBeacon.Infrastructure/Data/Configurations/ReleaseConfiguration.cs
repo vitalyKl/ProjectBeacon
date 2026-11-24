@@ -37,6 +37,23 @@ public sealed class ReleaseConfiguration : IEntityTypeConfiguration<Release>
         entity.Property(release => release.PreparationResultJson).HasColumnType("jsonb");
         entity.Property(release => release.PreparationError).HasMaxLength(4000);
         entity.Property(release => release.PreparationUpdatedAtUtc);
+        entity.Property(release => release.PublicationRevision)
+            .HasDefaultValue(1).IsRequired().IsConcurrencyToken();
+        entity.Property(release => release.PublicationStatus)
+            .HasConversion<string>().HasDefaultValue(ReleasePublicationStatus.NotStarted).IsRequired();
+        entity.Property(release => release.PublicationDeviceId);
+        entity.Property(release => release.PublicationCommandId);
+        entity.Property(release => release.PublicationPayloadJson).HasColumnType("jsonb");
+        entity.Property(release => release.PublicationResultJson).HasColumnType("jsonb");
+        entity.Property(release => release.PublicationError).HasMaxLength(4000);
+        entity.Property(release => release.PublicationTagPushed).HasDefaultValue(false).IsRequired();
+        entity.Property(release => release.PublicationUpdatedAtUtc);
+        entity.Property(release => release.PublishedTagName).HasMaxLength(200);
+        entity.Property(release => release.DeploymentWorkflowRunId);
+        entity.Property(release => release.DeploymentWorkflowRunUrl).HasMaxLength(512);
+        entity.Property(release => release.DeployedVersion).HasMaxLength(100);
+        entity.Property(release => release.DeployedCommitSha).HasMaxLength(64);
+        entity.Property(release => release.DeployedAtUtc);
 
         entity.HasOne(release => release.Project)
             .WithMany(project => project.Releases)
