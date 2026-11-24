@@ -13,13 +13,15 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
     private readonly IDaemonAgentRuntimeGate _gate;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
+    private readonly GitAutoSyncSnapshot _repoSync;
 
     public DaemonHeartbeatLoop(
         DaemonDependencies deps,
         IDaemonLlamaSync llamaSync,
         IDaemonAgentRuntimeGate gate,
         IDaemonRuntimeState state,
-        DaemonTiming timing)
+        DaemonTiming timing,
+        GitAutoSyncSnapshot repoSync)
     {
         _http = deps.Http;
         _llama = deps.Llama;
@@ -28,6 +30,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
         _gate = gate;
         _state = state;
         _timing = timing;
+        _repoSync = repoSync;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -66,7 +69,7 @@ internal sealed class DaemonHeartbeatLoop : IDaemonLoop
                 var host = HostLoadSampler.Sample();
                 var heartbeat = await _http.PostAsJsonAsync(ApiRoutes.DeviceHeartbeat, new WorkstationHeartbeatRequest(
                     WorkstationProbe.ProbeJson(
-                        _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.RuntimeStatusWire()),
+                        _llama.StatusWire(), HostLoadSampler.ToWire(host), _gate.RuntimeStatusWire(), _repoSync.ToProbeValue()),
                     settings is null ? null : JsonSerializer.Serialize(settings, DaemonJson.Camel),
                     DaemonInstance.Id), ct);
                 var code = (int)heartbeat.StatusCode;

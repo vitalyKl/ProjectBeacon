@@ -9,7 +9,7 @@ using ProjectBeacon.Domain.Common;
 /// </summary>
 public static class WorkstationProbe
 {
-    public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? agentRuntimeStatus = null)
+    public static string ProbeJson(object? llamaSwapStatus = null, object? hostLoad = null, object? agentRuntimeStatus = null, object? repoSync = null)
     {
         var gitPath = Which("git");
         var probe = new Dictionary<string, object?>
@@ -33,6 +33,8 @@ public static class WorkstationProbe
             probe["hostLoad"] = hostLoad;
         if (agentRuntimeStatus is not null)
             probe["agentRuntime"] = agentRuntimeStatus;
+        if (repoSync is not null)
+            probe["repoSync"] = repoSync;
         return JsonSerializer.Serialize(probe);
     }
 
@@ -40,7 +42,7 @@ public static class WorkstationProbe
     {
         if (gitPath is null)
             return Array.Empty<string>();
-        var capabilities = new List<string> { WorkstationCapabilities.GitSyncV1 };
+        var capabilities = new List<string> { WorkstationCapabilities.GitSyncV1, "git-autosync-v1" };
         var (settings, error) = WorkstationSettings.TryRead();
         if (error is null && WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
         {

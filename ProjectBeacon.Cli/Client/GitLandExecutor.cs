@@ -98,17 +98,6 @@ internal static class GitLandExecutor
             return BusinessFailure("GitFilterConfigurationUnavailable");
         var disabledFilters = filters.Filters!;
 
-        IDisposable? checkoutLease = null;
-        if (request.Action is "Execute" or "Revert")
-        {
-            var targetCheckout = await FindTargetCheckoutAsync(repositoryRoot, request.TargetBranch, disabledFilters, ct);
-            if (targetCheckout.Error is not null)
-                return BusinessFailure("TargetCheckoutUnavailable");
-            if (targetCheckout.Checkout is { CheckedOut: true } checkout
-                && SamePath(checkout.Path, repositoryRoot))
-                checkoutLease = await GitCheckoutGate.AcquireAsync(repositoryRoot, ct);
-        }
-
         var version = await Git(repositoryRoot, disabledFilters, ct, "--version");
         if (!Succeeded(version) || !AgentTaskWorktree.SupportsBranchWorkflow(version.StdOut))
             return BusinessFailure("GitVersionUnsupported");
@@ -140,6 +129,17 @@ internal static class GitLandExecutor
             return BusinessFailure("MergeDriverInspectionFailed");
         if (customMergeDrivers.ExitCode == 0 && !string.IsNullOrWhiteSpace(customMergeDrivers.StdOut))
             return BusinessFailure("CustomMergeDriversConfigured");
+
+        IDisposable? checkoutLease = null;
+        if (request.Action is "Execute" or "Revert")
+        {
+            var targetCheckout = await FindTargetCheckoutAsync(repositoryRoot, request.TargetBranch, disabledFilters, ct);
+            if (targetCheckout.Error is not null)
+                return BusinessFailure("TargetCheckoutUnavailable");
+            if (targetCheckout.Checkout is { CheckedOut: true } checkout
+                && SamePath(checkout.Path, repositoryRoot))
+                checkoutLease = await GitCheckoutGate.AcquireAsync(repositoryRoot, ct);
+        }
 
         (bool Ok, string? Result, string? Error) outcome;
         try
