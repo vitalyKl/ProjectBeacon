@@ -47,42 +47,36 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
             return Result.Failure<PipelineStateDto>("Task not found.");
 
         var state = await PipelineSupport.StateAsync(db, task, ct);
-        var preflight = await BuildPreflightAsync(db, task.Id, task.ProjectId, ct);
+        var preflight = await BuildPreflightAsync(db, task, ct);
         var repositorySyncInProgress = preflight.RepositorySyncInProgress;
+        var workstationBlocked = preflight.PipelineWorkstationBlockedReason is not null;
+        var sessions = state.Sessions.Select(session =>
+            session.Status == SessionStatus.Ready && workstationBlocked
+                ? session with
+                {
+                    CanLaunch = false,
+                    LaunchBlockedReason = preflight.PipelineWorkstationBlockedReason
+                }
+                : session).ToList();
         return Result.Ok(state with
         {
             Preflight = preflight,
-            CanStart = state.CanStart && !repositorySyncInProgress,
-            StartBlockedReason = repositorySyncInProgress
-                ? "PipelineRepositorySyncInProgress"
-                : state.StartBlockedReason
+            Sessions = sessions,
+            CanStart = state.CanStart && preflight.HasOnlineNativeWorkstation
+                && !repositorySyncInProgress && !workstationBlocked,
+            StartBlockedReason = preflight.PipelineWorkstationBlockedReason
+                ?? (repositorySyncInProgress ? "PipelineRepositorySyncInProgress" : state.StartBlockedReason)
         });
     }
 
     private static async Task<PipelinePreflightDto> BuildPreflightAsync(
-        IBeaconDb db, Guid taskId, Guid projectId, CancellationToken ct)
+        IBeaconDb db, Domain.Entities.Tasks.TaskItem task, CancellationToken ct)
     {
-        var runtimes = await db.ProjectRuntimes.IgnoreQueryFilters()
-            .Where(r => r.ProjectId == projectId).ToListAsync(ct);
-        var deviceIds = runtimes.Select(r => r.DeviceId).Distinct().ToArray();
-        var devices = await db.DaemonDevices.IgnoreQueryFilters()
-            .Where(d => deviceIds.Contains(d.Id)).ToListAsync(ct);
-        var now = DateTime.UtcNow;
-        var runtimeDevices = runtimes.Join(devices, r => r.DeviceId, d => d.Id,
-            (runtime, device) => device).ToList();
-        var selectedPipelineDevice = runtimeDevices
-            .Where(device => device.IsOnline(now)
-                && ProjectGitSyncPreflight.IsNativeRuntime(device.WorkstationJson))
-            .OrderByDescending(device => device.LastHeartbeatAt)
-            .ThenBy(device => device.Id)
-            .FirstOrDefault();
-        var selectedPipelineDeviceId = selectedPipelineDevice?.Id;
+        var workstation = await ProjectGitSyncPreflight.ResolveTaskWorkstationAsync(
+            db, task, DateTime.UtcNow, ct);
+        var selectedPipelineDevice = workstation.Device;
         var repositorySync = await ProjectGitSyncPreflight.EvaluateAsync(
-            db, projectId, selectedPipelineDevice, ct);
-        var nativeDevices = runtimeDevices
-            .Where(device => ProjectGitSyncPreflight.IsNativeRuntime(device.WorkstationJson)).ToList();
-        var hasNative = nativeDevices.Count > 0;
-        var hasOnlineNative = nativeDevices.Any(device => device.IsOnline(now));
+            db, task.ProjectId, selectedPipelineDevice, ct);
 
         var phases = await db.TaskPhases.Where(p => p.TaskId == taskId).ToListAsync(ct);
         var roleBindings = await db.RoleBindings.Where(b => b.ProjectId == projectId).ToListAsync(ct);
@@ -114,19 +108,20 @@ public class GetPipelineHandler : ICommandHandler<GetPipelineCommand, Result<Pip
         }
 
         return new PipelinePreflightDto(
-            hasNative,
-            hasOnlineNative,
+            workstation.HasNativeWorkstation,
+            workstation.HasOnlineNativeWorkstation,
             HasModel(PipelineRole.Planner),
             HasModel(PipelineRole.Actor),
             HasModel(PipelineRole.Review),
             repositorySync.Behind,
             repositorySync.Branch,
             repositorySync.CheckedAt,
-            selectedPipelineDeviceId,
+            selectedPipelineDevice?.Id,
             repositorySync.Supported,
             repositorySync.InProgress,
             repositorySync.Blocked,
-            repositorySync.ReasonCode);
+            repositorySync.ReasonCode,
+            workstation.BlockedReason);
     }
 
 
