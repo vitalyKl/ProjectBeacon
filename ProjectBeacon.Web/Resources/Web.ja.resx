@@ -3056,4 +3056,20 @@ orthstar</value>
   <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>この値は一度だけ初期化できます。以後の変更には ReleasePrepare ワークフローが必要です。</value></data>
   <data name="SaveVersionPolicy" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
   <data name="VersionSourceLineInvalid" xml:space="preserve"><value>各ソースは path|Format|selector 形式で指定してください。</value></data>
+  <data name="ProjectVersionScheme" xml:space="preserve"><value>バージョン方式</value></data>
+  <data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>数値コンポーネント</value></data>
+  <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>カレンダーバージョン</value></data>
+  <data name="ProjectVersionComponentCount" xml:space="preserve"><value>数値コンポーネント数 (1～8)</value></data>
+  <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>カレンダー形式 (.NET の不変カルチャ日付形式)</value></data>
+  <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git タグパターン</value></data>
+  <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>{version} プレースホルダーを1つだけ指定します（例: v{version}）。</value></data>
+  <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>SemVer のプレリリースバージョンを許可</value></data>
+  <data name="ProjectOfficialVersion" xml:space="preserve"><value>公式プロジェクトバージョン（Beacon が正本）</value></data>
+  <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>初期公式バージョン</value></data>
+  <data name="ProjectVersionSources" xml:space="preserve"><value>バージョンファイルの投影元</value></data>
+  <data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>1行に1つ指定: 相対パス|Xml、Json、Toml または Regex|セレクター。XML は XPath、JSON は JSON Pointer、TOML はドット区切りキー、Regex は名前付き 'version' グループまたはキャプチャグループ1を使用します。ファイルはプロジェクト workspace 内に配置してください。</value></data>
+  <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>バージョンポリシーを変更できるのはプロジェクトの Owner と Admin のみです。</value></data>
+  <data name="ProjectVersionSave" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
+  <data name="ProjectVersionSaved" xml:space="preserve"><value>バージョンポリシーを保存しました</value></data>
 </root>
