@@ -2,10 +2,13 @@ namespace ProjectBeacon.Application.Devices;
 
 using System.Text.Json;
 using Application.Audit;
+using Application.Authorization;
 using Application.Common;
 using Application.Persistence;
+using Application.Projects;
 using Domain.Common;
 using Domain.Entities.Tasks;
+using Domain.Enums;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -188,7 +191,6 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         }
 
         db.RemoteLandingProofs.Add(proof);
-        _ = db.Projects; // Keep all proof and task changes on this same unit of work.
         var actor = new ActorContext(
             ActorType.Device, null, false, null, deviceId,
             request.ProjectId, project.OrgId, ApiTokenCapability.None);
