@@ -88,8 +88,12 @@ public sealed class ProjectRuntimeResolverTests : IDisposable
         await AttachRuntimeAsync(secondProject.Id, deviceId, user.Id, @"A:\work\second");
         await AttachRuntimeAsync(secondProject.Id, otherDevice.Value.Id, user.Id, @"B:\other\second");
 
-        var result = await new ListDeviceProjectRuntimesHandler(Factory())
-            .HandleAsync(deviceId, TestContext.Current.CancellationToken);
+        IReadOnlyList<DeviceProjectRuntimeDto> result;
+        using (TenantScope.EnterUnscoped())
+        {
+            result = await new ListDeviceProjectRuntimesHandler(Factory())
+                .HandleAsync(deviceId, TestContext.Current.CancellationToken);
+        }
 
         Assert.Equal(2, result.Count);
         Assert.Collection(
