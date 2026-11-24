@@ -16,7 +16,6 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
     private readonly DaemonTiming _timing;
     private readonly IDaemonRuntimeState _runtimeState;
     private readonly Dictionary<Guid, BackoffState> _backoff = [];
-    private readonly Dictionary<Guid, string> _runtimeRoots = [];
     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -120,21 +119,11 @@ internal sealed class GitAutoSyncLoop : IDaemonLoop
         _snapshot.KeepProjects(ids);
         foreach (var staleProjectId in _backoff.Keys.Where(projectId => !ids.Contains(projectId)).ToArray())
             _backoff.Remove(staleProjectId);
-        foreach (var staleProjectId in _runtimeRoots.Keys.Where(projectId => !ids.Contains(projectId)).ToArray())
-            _runtimeRoots.Remove(staleProjectId);
-
         foreach (var project in projects)
         {
             ct.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(project.LocalRoot))
                 continue;
-
-            // Backoff belongs to one concrete checkout. A runtime reattachment that
-            // changes LocalRoot must not inherit an outage pause from the previous path.
-            if (_runtimeRoots.TryGetValue(project.ProjectId, out var previousRoot)
-                && !SameLocalRoot(previousRoot, project.LocalRoot))
-                _backoff.Remove(project.ProjectId);
-            _runtimeRoots[project.ProjectId] = project.LocalRoot;
 
             var now = _timing.TimeProvider.GetUtcNow();
             if (project.ManualGitSyncActive)

@@ -285,98 +285,6 @@ public sealed class GitAutoSyncLoopTests
     }
 
     [Fact]
-    public async Task RunCycle_ClearsRemoteFailureBackoffWhenRuntimeRootChangesBetweenCycles()
-    {
-        var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-root-backoff-" + Guid.NewGuid().ToString("N"));
-        var firstRoot = Path.Combine(parent, "first-project");
-        var secondRoot = Path.Combine(parent, "second-project");
-        var remote = Path.Combine(parent, "origin.git");
-        Directory.CreateDirectory(parent);
-
-        try
-        {
-            await Git(parent, "init", "-b", "main", firstRoot);
-            await ConfigureIdentity(firstRoot);
-            await File.WriteAllTextAsync(Path.Combine(firstRoot, "README.md"), "first");
-            await Git(firstRoot, "add", "README.md");
-            await Git(firstRoot, "commit", "-m", "first checkout");
-            await Git(firstRoot, "remote", "add", "origin", Path.Combine(parent, "missing-origin.git"));
-
-            await Git(parent, "init", "--bare", "--initial-branch=main", remote);
-            await Git(parent, "init", "-b", "main", secondRoot);
-            await ConfigureIdentity(secondRoot);
-            await File.WriteAllTextAsync(Path.Combine(secondRoot, "README.md"), "second");
-            await Git(secondRoot, "add", "README.md");
-            await Git(secondRoot, "commit", "-m", "second checkout");
-            await Git(secondRoot, "remote", "add", "origin", remote);
-            await Git(secondRoot, "push", "-u", "origin", "main");
-
-            var projectId = Guid.NewGuid();
-            var firstRuntime = JsonSerializer.Serialize(
-                new[] { new DeviceProjectRuntimeDto(projectId, firstRoot, false, false) },
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            var secondRuntime = JsonSerializer.Serialize(
-                new[] { new DeviceProjectRuntimeDto(projectId, secondRoot, false, false) },
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            var requests = 0;
-            using var http = new HttpClient(new RecordingHandler((_, _) =>
-            {
-                var runtime = Interlocked.Increment(ref requests) == 1 ? firstRuntime : secondRuntime;
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent(runtime, Encoding.UTF8, "application/json")
-                });
-            }))
-            {
-                BaseAddress = new Uri("https://beacon.test/")
-            };
-
-            var dependencies = new DaemonDependencies(
-                http,
-                null!,
-                () => new WorkstationSettings { AutoPullMode = "Off", AutoSyncIntervalMinutes = 10 },
-                _ => null!);
-            var clock = new MutableTimeProvider(DateTimeOffset.Parse("2026-11-24T12:00:00Z"));
-            var timing = new DaemonTiming(clock)
-            {
-                GitAutoSyncStartupDelay = TimeSpan.Zero,
-                GitAutoSyncJitterFactor = static () => 0
-            };
-            using var cancellation = new CancellationTokenSource();
-            var delays = 0;
-            timing.DelayAsync = (delay, _) =>
-            {
-                var count = Interlocked.Increment(ref delays);
-                if (count == 2)
-                    clock.Advance(delay);
-                if (count == 3)
-                    cancellation.Cancel();
-                return Task.CompletedTask;
-            };
-
-            var snapshot = new GitAutoSyncSnapshot();
-            var loop = new GitAutoSyncLoop(
-                dependencies, new GitSyncService(), snapshot, timing,
-                new DaemonRuntimeState("https://beacon.test", null));
-
-            await loop.RunAsync(cancellation.Token);
-
-            Assert.Equal(2, requests);
-            var status = snapshot.Get(projectId);
-            Assert.NotNull(status);
-            Assert.Equal("main", status.Branch);
-            Assert.Equal("origin/main", status.Upstream);
-            Assert.Equal(0, status.Behind);
-            Assert.True(status.Clean);
-            Assert.Null(status.LastError);
-        }
-        finally
-        {
-            try { Directory.Delete(parent, recursive: true); } catch { }
-        }
-    }
-
-    [Fact]
     public async Task RunCycle_DoesNotPullOldDirectoryWhenRuntimeRootChangesAfterStatusFetch()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-auto-sync-runtime-change-" + Guid.NewGuid().ToString("N"));
@@ -743,15 +651,6 @@ public sealed class GitAutoSyncLoopTests
         {
             try { Directory.Delete(parent, recursive: true); } catch { }
         }
-    }
-
-    private sealed class MutableTimeProvider(DateTimeOffset initialTime) : TimeProvider
-    {
-        private DateTimeOffset _utcNow = initialTime;
-
-        public override DateTimeOffset GetUtcNow() => _utcNow;
-
-        public void Advance(TimeSpan elapsed) => _utcNow += elapsed;
     }
 
     private static async Task ConfigureIdentity(string directory)
