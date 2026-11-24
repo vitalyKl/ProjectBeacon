@@ -3088,4 +3088,7 @@ orthstar</value>
   <data name="RepoSyncNotGit" xml:space="preserve">
     <value>Kein Git-Repository</value>
   </data>
+  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+    <value>Andere Checkout-Operation läuft — Update verschoben</value>
+  </data>
 </root>

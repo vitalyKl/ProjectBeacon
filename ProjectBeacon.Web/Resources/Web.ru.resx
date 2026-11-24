@@ -3078,4 +3078,7 @@
   <data name="RepoSyncNotGit" xml:space="preserve">
     <value>Каталог не является Git-репозиторием</value>
   </data>
+  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+    <value>Выполняется другая операция с checkout — обновление отложено</value>
+  </data>
 </root>

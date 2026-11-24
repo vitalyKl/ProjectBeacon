@@ -3287,4 +3287,7 @@ No Beacon-hosted coding agent.</value>
   <data name="RepoSyncNotGit" xml:space="preserve">
     <value>Not a Git repository</value>
   </data>
+  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+    <value>Another checkout operation is in progress — update deferred</value>
+  </data>
 </root>

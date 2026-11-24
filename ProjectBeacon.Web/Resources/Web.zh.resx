@@ -3096,4 +3096,7 @@ orthstar</value>
   <data name="RepoSyncNotGit" xml:space="preserve">
     <value>不是 Git 仓库</value>
   </data>
+  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+    <value>正在执行其他 Checkout 操作 — 延后更新</value>
+  </data>
 </root>
