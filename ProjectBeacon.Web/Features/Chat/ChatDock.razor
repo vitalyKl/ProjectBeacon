@@ -494,6 +494,16 @@
                 try
                 {
                     await ReloadWaitingTasks();
+
+                    // Recover failed initial loads even while the dock is closed or has no
+                    // explicitly selected conversation. Opening the dock must not auto-select
+                    // a session; it only refreshes the available list.
+                    if (_sessionsLoadErrorMessage is not null)
+                        await ReloadSessions();
+
+                    if (_proxyStatusErrorMessage is not null)
+                        await LoadProxyStatus(isBackground: true);
+
                     if (!_open || _session is null)
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);

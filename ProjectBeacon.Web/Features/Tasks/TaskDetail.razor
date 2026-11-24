@@ -646,7 +646,8 @@ else
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
                 var repositorySyncPending = _pipeline?.Preflight?.RepositorySyncInProgress == true
                     || _gitSyncCommandPending
-                    || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null;
+                    || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null
+                    || _pipelineRefreshErrorMessage is not null;
                 if ((_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed or TaskPipelineStage.Cancelled)
                     && !repositorySyncPending)
                     continue;

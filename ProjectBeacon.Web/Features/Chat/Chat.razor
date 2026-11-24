@@ -391,9 +391,21 @@ else
             {
                 try
                 {
+                    // Recover the session list and runtime status after an initial load failure.
+                    // Do not create a conversation or change an existing explicit selection.
+                    if (_sessionsLoadErrorMessage is not null)
+                        await ReloadSessions();
+
+                    if (_selected is null && _sessions.FirstOrDefault() is { } firstSession)
+                        await Select(firstSession);
+
+                    if (_proxyStatusErrorMessage is not null)
+                        await LoadProxyStatus(isBackground: true);
+
                     if (_selected is null)
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
+                        await InvokeAsync(StateHasChanged);
                         continue;
                     }
                     // Capture the id before the waits and fetches: a session switch in flight must
