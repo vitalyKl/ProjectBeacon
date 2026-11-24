@@ -3401,4 +3401,5 @@
   <data name="ReleaseStatusCandidate" xml:space="preserve"><value>Кандидат</value></data>
   <data name="ReleaseStatusPublished" xml:space="preserve"><value>Опубликован</value></data>
   <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Отменён</value></data>
+
 </root>
