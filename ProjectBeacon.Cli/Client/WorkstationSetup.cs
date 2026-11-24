@@ -23,15 +23,19 @@ public static class WorkstationSetup
         var full = resolved.Value!;
         Directory.CreateDirectory(full);
 
-        // InitProject writes into the real checkout (.gitignore and, optionally, .git).
-        // Resolve the repository root so this lease uses the same key as GitSync/GitLand.
-        using var checkoutLease = GitCheckoutGate.Acquire(ResolveCheckoutRoot(full));
+        var gitMetadataPath = Path.Combine(full, ".git");
+        var hasGitMetadata = Directory.Exists(gitMetadataPath) || File.Exists(gitMetadataPath);
+        var createGit = payloadRoot.TryGetProperty("createGit", out var gitEl)
+            && gitEl.ValueKind == JsonValueKind.True && !hasGitMetadata;
 
-        if (payloadRoot.TryGetProperty("createGit", out var gitEl) && gitEl.ValueKind == JsonValueKind.True
-            && !Directory.Exists(Path.Combine(full, ".git")))
-        {
+        // InitProject writes into the real checkout (.gitignore and, optionally, .git).
+        // A newly initialized nested repository gets its own checkout key; otherwise
+        // resolve the existing repository root shared with GitSync and GitLand.
+        var checkoutRoot = createGit ? Path.GetFullPath(full) : ResolveCheckoutRoot(full);
+        using var checkoutLease = GitCheckoutGate.Acquire(checkoutRoot);
+
+        if (createGit)
             Run("git", "init", full);
-        }
 
         var gitignore = Path.Combine(full, ".gitignore");
         MergeGitignore(gitignore);
