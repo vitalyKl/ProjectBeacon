@@ -23,7 +23,8 @@ public sealed record ProjectVersionPolicy(
     string? CalendarFormat,
     string TagPattern,
     bool AllowPrerelease,
-    IReadOnlyList<ProjectVersionSourcePolicy> Sources);
+    IReadOnlyList<ProjectVersionSourcePolicy> Sources,
+    bool ReleaseManagementEnabled = false);
 
 /// <summary>Deterministic parsing/validation for version policies and source files.</summary>
 public static class ProjectVersionPolicyCatalog
@@ -50,7 +51,7 @@ public static class ProjectVersionPolicyCatalog
             }
             var allowed = new HashSet<string>(StringComparer.Ordinal)
             {
-                "scheme", "componentCount", "calendarFormat", "tagPattern", "allowPrerelease", "sources"
+                "scheme", "componentCount", "calendarFormat", "tagPattern", "allowPrerelease", "releaseManagementEnabled", "sources"
             };
             var names = document.RootElement.EnumerateObject().Select(item => item.Name).ToArray();
             if (names.Distinct(StringComparer.Ordinal).Count() != names.Length
