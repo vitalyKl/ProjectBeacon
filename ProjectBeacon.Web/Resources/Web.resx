@@ -3227,4 +3227,24 @@ No Beacon-hosted coding agent.</value>
   <data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Automatically sync upstream</value></data>
   <data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon periodically fetches this project's upstream and fast-forwards only a clean, idle checkout. Local edits, divergence, detached HEAD, and active agent sessions are preserved. Existing local tags are never force-updated or deleted.</value></data>
   <data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Connect a workstation running an AutoSync-capable Beacon client to enable this setting.</value></data>
+  <data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>Project version policy</value></data>
+  <data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon stores the authoritative project version and checks configured repository manifests against it. Repository files are projections; agents cannot publish or change the official version during ordinary task work.</value></data>
+  <data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>The version policy could not be loaded.</value></data>
+  <data name="OfficialProjectVersion" xml:space="preserve"><value>Official version</value></data>
+  <data name="VersionNotInitialized" xml:space="preserve"><value>Not initialized</value></data>
+  <data name="VersionScheme" xml:space="preserve"><value>Version scheme</value></data>
+  <data name="VersionSchemeNumeric" xml:space="preserve"><value>Numeric components</value></data>
+  <data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+  <data name="VersionSchemeCalendar" xml:space="preserve"><value>Calendar version</value></data>
+  <data name="VersionComponentCount" xml:space="preserve"><value>Number of numeric components</value></data>
+  <data name="VersionCalendarFormat" xml:space="preserve"><value>Calendar format</value></data>
+  <data name="VersionTagPattern" xml:space="preserve"><value>Git tag pattern</value></data>
+  <data name="VersionTagPatternHelp" xml:space="preserve"><value>Use exactly one {version} placeholder, for example v{version}.</value></data>
+  <data name="VersionAllowPrerelease" xml:space="preserve"><value>Allow SemVer prerelease versions</value></data>
+  <data name="VersionManifestSources" xml:space="preserve"><value>Version manifest sources</value></data>
+  <data name="VersionManifestSourcesHelp" xml:space="preserve"><value>One source per line: path|Format|selector. Examples: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; regex files use a named (?&lt;version>...) or first capture group.</value></data>
+  <data name="InitialOfficialVersion" xml:space="preserve"><value>Initialize official version</value></data>
+  <data name="InitialOfficialVersionHelp" xml:space="preserve"><value>This value can be initialized once. Further official version changes require the ReleasePrepare workflow.</value></data>
+  <data name="SaveVersionPolicy" xml:space="preserve"><value>Save version policy</value></data>
+  <data name="VersionSourceLineInvalid" xml:space="preserve"><value>Each version source must use path|Format|selector.</value></data>
 </root>
