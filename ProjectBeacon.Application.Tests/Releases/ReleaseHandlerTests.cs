@@ -133,6 +133,28 @@ public sealed class ReleaseHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ManualCandidateTransitionIsRejected()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Candidate must be prepared", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var result = await new SetReleaseStatusHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new SetReleaseStatusCommand(
+                new SetReleaseStatusRequest(
+                    created.Value!.Id, _projectId, ReleaseStatus.Candidate, created.Value.Revision),
+                OwnerActor()), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Validation, result.Kind);
+        Assert.Equal(ReleaseStatus.Planned, (await _db.Releases
+            .SingleAsync(item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+    [Fact]
     public async Task ReleaseManagementCannotBeDisabledWhileReleaseIsActive()
     {
         var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
