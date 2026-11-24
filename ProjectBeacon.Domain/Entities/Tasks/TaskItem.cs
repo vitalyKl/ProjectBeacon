@@ -28,6 +28,9 @@ public class TaskItem : Entity, IProjectScoped
     public DateTime? CompletedAt { get; private set; }
     public TaskPipelineStage? PipelineStage { get; private set; }
 
+    /// <summary>Workstation that owns this task's persistent local branch workspace.</summary>
+    public Guid? PipelineDeviceId { get; private set; }
+
     /// <summary>
     /// Optimistic-concurrency token for guarded state transitions. Guarded finish
     /// transitions compare-and-swap it in SQL, so a rival report that read a stale
@@ -80,6 +83,16 @@ public class TaskItem : Entity, IProjectScoped
         Description = description;
         ReviewNotes = reviewNotes;
         ContentRevision++;
+    }
+
+    /// <summary>Pins the task's local pipeline workspace to one workstation. The pin is permanent unless an explicit migration is performed.</summary>
+    public void PinPipelineDevice(Guid deviceId)
+    {
+        if (deviceId == Guid.Empty)
+            throw new ArgumentException("Pipeline workstation id is required.", nameof(deviceId));
+        if (PipelineDeviceId is { } existing && existing != deviceId)
+            throw new InvalidOperationException("The task is already pinned to another workstation. Migrate its task workspace explicitly before changing the pin.");
+        PipelineDeviceId = deviceId;
     }
 
     public void AssignLabel(Guid? labelId)

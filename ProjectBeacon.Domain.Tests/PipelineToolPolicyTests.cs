@@ -64,8 +64,14 @@ public sealed class PipelineToolPolicyTests
             new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest },
             PipelineToolPolicy.GitToolsForRole("Planner"));
         Assert.Equal(
-            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitPullRequest },
+            new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitCommit, PipelineToolPolicy.GitIntegrate, PipelineToolPolicy.GitPullRequest },
             PipelineToolPolicy.GitToolsForRole("Actor"));
+        Assert.DoesNotContain(PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitToolsForRole("Actor"));
+        Assert.DoesNotContain(PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitToolsForRole("Planner"));
+        Assert.DoesNotContain(PipelineToolPolicy.GitPublish, PipelineToolPolicy.GitToolsForRole("Review"));
+        Assert.False(PipelineToolPolicy.IsGitToolAllowed("Actor", PipelineToolPolicy.GitPublish));
+        Assert.True(PipelineToolPolicy.IsGitToolAllowed("Actor", PipelineToolPolicy.GitPublish, allowAgentGitPublish: true));
+        Assert.False(PipelineToolPolicy.IsGitToolAllowed("Review", PipelineToolPolicy.GitPublish, allowAgentGitPublish: true));
         Assert.Equal(
             new[] { PipelineToolPolicy.GitInfo, PipelineToolPolicy.GitPullRequest },
             PipelineToolPolicy.GitToolsForRole("Review"));

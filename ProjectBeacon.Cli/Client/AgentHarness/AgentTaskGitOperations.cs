@@ -140,8 +140,10 @@ internal static class AgentTaskGitOperations
         JsonObject arguments,
         CancellationToken ct)
     {
-        if (!PipelineToolPolicy.GitToolsForRole(authorization.PipelineRole)
-            .Contains(toolName, StringComparer.Ordinal))
+        if (!PipelineToolPolicy.IsGitToolAllowed(
+            authorization.PipelineRole,
+            toolName,
+            authorization.AllowAgentGitPublish))
             return Error("The current execution role is not authorized for this structured Git operation.");
 
         var allowDetachedRebase = toolName == PipelineToolPolicy.GitInfo
