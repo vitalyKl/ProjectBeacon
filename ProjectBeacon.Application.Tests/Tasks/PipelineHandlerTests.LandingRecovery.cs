@@ -187,48 +187,56 @@ public sealed partial class PipelineHandlerTests
     [Fact]
     public async Task RequestLanding_RejectsReviewProofProducedOnAnotherWorkstation()
     {
-        var done = await SeedDoneSubtaskAsync("Reject landing proof from another workstation");
-        var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
-        Guid pinnedDeviceId;
+        var (projectId, task) = await SeedTaskAsync("Reject landing proof from another workstation");
+        var factory = HandlerSqlite.Factory(_connection, Scope(projectId));
+
+        // Attach both stations before the pipeline creates a persistent task workspace.
+        // The latest eligible station is selected and pinned by StartPipeline; the first
+        // station remains attached but must not be accepted as the review proof producer.
+        Guid otherDeviceId;
+        Guid otherOwnerId;
         using (TenantScope.EnterUnscoped())
         {
-            pinnedDeviceId = await _db.Tasks.IgnoreQueryFilters()
-                .Where(task => task.Id == done.Task.Id)
-                .Select(task => task.PipelineDeviceId!.Value)
+            var firstRuntime = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(runtime => runtime.ProjectId == projectId)
+                .SingleAsync(TestContext.Current.CancellationToken);
+            otherDeviceId = firstRuntime.DeviceId;
+            otherOwnerId = await _db.DaemonDevices.IgnoreQueryFilters()
+                .Where(device => device.Id == otherDeviceId)
+                .Select(device => device.UserId)
                 .SingleAsync(TestContext.Current.CancellationToken);
         }
 
+        var (pinnedUser, pinnedDevice) = await SeedOnlineRuntimeAsync(projectId);
+        var start = await new StartPipelineHandler(factory, new FakeSpawner())
+            .HandleAsync(new StartPipelineCommand(new StartPipelineRequest(task.Id)),
+                TestContext.Current.CancellationToken);
+        Assert.True(start.Success, start.Error);
+
+        var subtask = await new CreateSubtaskHandler(factory)
+            .HandleAsync(new CreateSubtaskCommand(new CreateSubtaskRequest(task.Id, "Complete work for landing proof.")),
+                TestContext.Current.CancellationToken);
+        Assert.True(subtask.Success, subtask.Error);
+
+        var reported = await new ReportSubtaskResultHandler(factory)
+            .HandleAsync(new ReportSubtaskResultCommand(new ReportSubtaskResultRequest(
+                task.Id, subtask.Value!.Id, "diff://landing-proof-test", "Implementation completed.")),
+                TestContext.Current.CancellationToken);
+        Assert.True(reported.Success, reported.Error);
+
         var review = await new StartReviewHandler(factory, new FakeSpawner())
-            .HandleAsync(new StartReviewCommand(
-                new StartReviewRequest(done.Task.Id, AutoLaunch: true)),
+            .HandleAsync(new StartReviewCommand(new StartReviewRequest(task.Id)),
                 TestContext.Current.CancellationToken);
         Assert.True(review.Success, review.Error);
 
         var verdict = await new RecordReviewVerdictHandler(factory)
             .HandleAsync(new RecordReviewVerdictCommand(new RecordReviewVerdictRequest(
-                done.Task.Id, ReviewVerdictKind.Approve, "Approve the task branch.")),
+                task.Id, ReviewVerdictKind.Approve, "Approve the task branch.")),
                 TestContext.Current.CancellationToken);
         Assert.True(verdict.Success, verdict.Error);
         Assert.Equal(TaskPipelineStage.Approved, verdict.Value!.Stage);
 
-        // SeedDoneSubtaskAsync leaves the original Planner session Ready. Runtime
-        // attachment is correctly blocked while any pipeline session is open, so close
-        // that unused session before adding the second workstation for this proof test.
-        using (TenantScope.EnterUnscoped())
-        {
-            var openSessions = await _db.PipelineSessions.IgnoreQueryFilters()
-                .Where(session => session.TaskId == done.Task.Id
-                    && (session.Status == SessionStatus.Ready
-                        || session.Status == SessionStatus.Active
-                        || session.Status == SessionStatus.WaitingForUser))
-                .ToListAsync(TestContext.Current.CancellationToken);
-            foreach (var openSession in openSessions)
-                openSession.Close();
-            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        var (otherUser, otherDevice) = await SeedOnlineRuntimeAsync(done.ProjectId);
-        await SetReviewCheckCommandAsync(done.ProjectId, "dotnet test");
+        await SetReviewCheckCommandAsync(projectId, "dotnet test");
         var commandHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes("dotnet test"))).ToLowerInvariant();
@@ -236,28 +244,29 @@ public sealed partial class PipelineHandlerTests
         using (TenantScope.EnterUnscoped())
         {
             var reviewRun = await _db.ReviewRuns.IgnoreQueryFilters()
-                .SingleAsync(run => run.TaskId == done.Task.Id, TestContext.Current.CancellationToken);
+                .SingleAsync(run => run.TaskId == task.Id, TestContext.Current.CancellationToken);
             reviewRun.SetCheckCommandHash(commandHash);
             reviewRun.CompleteCheck(
                 "All tests passed.",
                 "review-artifact",
                 new string('a', 40),
                 new string('b', 40),
-                otherDevice.Id,
+                otherDeviceId,
                 "main");
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
-                .SingleAsync(task => task.Id == done.Task.Id, TestContext.Current.CancellationToken);
-            Assert.Equal(pinnedDeviceId, persistedTask.PipelineDeviceId);
-            Assert.NotEqual(pinnedDeviceId, otherDevice.Id);
+                .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(pinnedDevice.Id, persistedTask.PipelineDeviceId);
+            Assert.NotEqual(pinnedDevice.Id, otherDeviceId);
+            Assert.NotEqual(otherOwnerId, pinnedUser.Id);
         }
 
         var landing = await new RequestLandingHandler(
                 factory, new Application.Devices.EnqueueCommandHandler(factory))
             .HandleAsync(new RequestLandingCommand(
-                new RequestLandingRequest(done.Task.Id, "The proof device must match the task workspace."),
-                HumanActor(otherUser.Id)),
+                new RequestLandingRequest(task.Id, "The proof device must match the task workspace."),
+                HumanActor(otherOwnerId)),
                 TestContext.Current.CancellationToken);
 
         Assert.False(landing.Success);
@@ -267,11 +276,11 @@ public sealed partial class PipelineHandlerTests
         using (TenantScope.EnterUnscoped())
         {
             Assert.Empty(await _db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
-                .Where(attempt => attempt.ProjectId == done.ProjectId && attempt.TaskId == done.Task.Id)
+                .Where(attempt => attempt.ProjectId == projectId && attempt.TaskId == task.Id)
                 .ToListAsync(TestContext.Current.CancellationToken));
             var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
-                .SingleAsync(task => task.Id == done.Task.Id, TestContext.Current.CancellationToken);
-            Assert.Equal(pinnedDeviceId, persistedTask.PipelineDeviceId);
+                .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(pinnedDevice.Id, persistedTask.PipelineDeviceId);
         }
     }
 
