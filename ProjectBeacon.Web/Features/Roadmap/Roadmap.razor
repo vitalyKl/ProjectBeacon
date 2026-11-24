@@ -27,6 +27,9 @@
 @inject ListProjectReleasesHandler ListProjectReleases
 @inject CreateReleaseHandler CreateReleaseHandler
 @inject CreateHotfixTaskHandler CreateHotfixTaskHandler
+@inject PrepareReleaseHandler PrepareRelease
+@inject VerifyReleaseLandingHandler VerifyReleaseLanding
+@inject PublishReleaseHandler PublishRelease
 @inject UpdateReleaseHandler UpdateReleaseHandler
 @inject SetReleaseStatusHandler SetReleaseStatus
 @inject DeleteReleaseHandler DeleteReleaseHandler
@@ -188,14 +191,61 @@ else
                                         }
                                         @if (release.Status == ReleaseStatus.InProgress)
                                         {
-                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                                                @L["ReleaseCandidateViaPrepare"]
-                                            </MudText>
+                                            @if (release.PreparationStatus is ReleasePreparationStatus.NotStarted or ReleasePreparationStatus.Failed)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                           Disabled="@_releaseBusy" OnClick="() => PrepareReleaseAsync(release)">
+                                                    @L["PrepareReleaseCandidate"]
+                                                </MudButton>
+                                            }
+                                            else if (release.PreparationStatus is ReleasePreparationStatus.Prepared or ReleasePreparationStatus.VerifyFailed)
+                                            {
+                                                @if (GetPreparationPullRequestUrl(release.PreparationResultJson) is { } pullRequestUrl)
+                                                {
+                                                    <MudLink Href="@pullRequestUrl" Target="_blank">@L["ReleasePreparationPullRequest"]</MudLink>
+                                                }
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                           Disabled="@_releaseBusy" OnClick="() => VerifyReleaseLandingAsync(release)">
+                                                    @L["VerifyReleaseLanding"]
+                                                </MudButton>
+                                            }
+                                            else
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                    @L[$"ReleasePreparationStatus{release.PreparationStatus}"]
+                                                </MudText>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(release.PreparationError))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">@release.PreparationError</MudText>
+                                            }
                                         }
                                         @if (release.Status == ReleaseStatus.Candidate)
                                         {
-                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
-                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Cancelled)">@L["CancelRelease"]</MudButton>
+                                            @if (release.PublicationStatus == ReleasePublicationStatus.Queued)
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ReleasePublicationQueued"]</MudText>
+                                            }
+                                            else if (release.PublicationStatus != ReleasePublicationStatus.Published)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           Disabled="@_releaseBusy" OnClick="() => PublishReleaseAsync(release)">
+                                                    @L["PublishRelease"]
+                                                </MudButton>
+                                            }
+                                            @if (release.PublicationTagPushed)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">@L["ReleaseTagAlreadyPushed"]</MudText>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(release.PublicationError))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">@release.PublicationError</MudText>
+                                            }
+                                            @if (release.PublicationStatus is ReleasePublicationStatus.NotStarted or ReleasePublicationStatus.FailedBeforeTag)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
+                                                           OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Cancelled)">@L["CancelRelease"]</MudButton>
+                                            }
                                         }
                                         @if (release.Status is ReleaseStatus.Planned or ReleaseStatus.InProgress)
                                         {
@@ -667,6 +717,129 @@ else
         finally
         {
             _releaseBusy = false;
+        }
+    }
+
+    private async Task PrepareReleaseAsync(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.InProgress
+            || release.PreparationStatus is not (ReleasePreparationStatus.NotStarted or ReleasePreparationStatus.Failed))
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await PrepareRelease.HandleAsync(new PrepareReleaseCommand(
+                _project.Id, release.Id, release.Revision, _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["PrepareReleaseCandidate"].Value);
+                await Reload();
+                return;
+            }
+            Notifications.Add(L["ReleasePrepareQueued"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task VerifyReleaseLandingAsync(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.InProgress
+            || release.PreparationStatus is not (ReleasePreparationStatus.Prepared or ReleasePreparationStatus.VerifyFailed))
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await VerifyReleaseLanding.HandleAsync(new VerifyReleaseLandingCommand(
+                _project.Id, release.Id, release.PreparationRevision, _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["VerifyReleaseLanding"].Value);
+                await Reload();
+                return;
+            }
+            Notifications.Add(L["ReleaseLandingVerificationQueued"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task PublishReleaseAsync(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.Candidate
+            || release.PublicationStatus is ReleasePublicationStatus.Queued or ReleasePublicationStatus.Published)
+            return;
+
+        var policy = await GetVersionPolicy.HandleAsync(_project.Id, _actor);
+        var tagName = policy.Success && policy.Value is not null && !string.IsNullOrWhiteSpace(release.TargetVersion)
+            ? policy.Value.TagPattern.Replace("{version}", release.TargetVersion, StringComparison.Ordinal)
+            : release.TargetVersion ?? string.Empty;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["PublishReleaseConfirmTitle"].Value,
+            string.Format(
+                L["PublishReleaseConfirmMessage"].Value,
+                release.Name,
+                release.TargetVersion ?? "—",
+                tagName,
+                release.TargetBranch),
+            yesText: L["PublishRelease"].Value,
+            cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await PublishRelease.HandleAsync(new PublishReleaseCommand(
+                _project.Id, release.Id, release.Revision, release.PublicationRevision, _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["PublishRelease"].Value);
+                await Reload();
+                return;
+            }
+            Notifications.Add(L["ReleasePublicationQueued"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private static string? GetPreparationPullRequestUrl(string? resultJson)
+    {
+        if (string.IsNullOrWhiteSpace(resultJson))
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(resultJson);
+            if (!document.RootElement.TryGetProperty("pullRequestUrl", out var property)
+                || property.ValueKind != JsonValueKind.String)
+                return null;
+            var value = property.GetString();
+            return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && uri.Scheme == Uri.UriSchemeHttps
+                && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+                && System.Text.RegularExpressions.Regex.IsMatch(
+                    uri.AbsolutePath, @"^/[^/]+/[^/]+/pull/[1-9][0-9]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+                    ? uri.AbsoluteUri
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
