@@ -239,22 +239,24 @@
     {
         if (code is "ProjectRuntimeUnavailable" or "TaskWorkspaceUnavailable" or "LandingWorkstationUnavailable" or "WorkspaceModeRequiresTaskBranches")
             return "LandingReasonWorkspaceUnavailable";
+        if (code is "ProjectIdentityMismatch" or "InvalidTargetBranch")
+            return "LandingReasonGitConfigurationInvalid";
         if (code.StartsWith("Task", StringComparison.Ordinal))
             return "LandingReasonTaskWorktreeChanged";
         if (code.StartsWith("Review", StringComparison.Ordinal) || code is "ExecutePreviewEvidenceMissing" or "CandidateNoLongerValid")
             return "LandingReasonReviewEvidenceChanged";
-        if (code.StartsWith("PostMerge", StringComparison.Ordinal) || code is "PostMergeEvidenceInvalid" or "PostMergeVerificationFailed" or "TargetWorktreeUpdateFailed")
-            return "LandingReasonPostMergeVerificationFailed";
-        if (code.StartsWith("Revert", StringComparison.Ordinal) || code.StartsWith("GitRevert", StringComparison.Ordinal)
-            || code is "TargetAdvancedBeyondLanding" or "TargetChangedBeforeRevertUpdate" or "TargetBranchUnavailableForRevertRecovery")
-            return "LandingReasonRevertFailed";
-        if (code.StartsWith("Candidate", StringComparison.Ordinal) || code.StartsWith("MergeTree", StringComparison.Ordinal)
-            || code.StartsWith("LandingCommit", StringComparison.Ordinal) || code is "UnexpectedMergeTreeOutput")
-            return "LandingReasonCandidateBuildFailed";
         if (code.Contains("Protected", StringComparison.Ordinal) || code.Contains("OutsideProject", StringComparison.Ordinal)
             || code.Contains("Symlink", StringComparison.Ordinal) || code.Contains("Submodule", StringComparison.Ordinal)
             || code.Contains("TooLarge", StringComparison.Ordinal) || code.Contains("ModifiedFiles", StringComparison.Ordinal))
             return "LandingReasonProtectedChangesDetected";
+        if (code.StartsWith("PostMerge", StringComparison.Ordinal) || code is "PostMergeEvidenceInvalid" or "PostMergeVerificationFailed" or "TargetWorktreeUpdateFailed")
+            return "LandingReasonPostMergeVerificationFailed";
+        if (code.StartsWith("Revert", StringComparison.Ordinal) || code.StartsWith("GitRevert", StringComparison.Ordinal)
+            || code is "TargetAdvancedBeyondLanding" or "TargetChangedBeforeRevertUpdate" or "TargetBranchUnavailableForRevertRecovery" or "TargetCheckoutChangedBeforeRevert")
+            return "LandingReasonRevertFailed";
+        if (code.StartsWith("Candidate", StringComparison.Ordinal) || code.StartsWith("MergeTree", StringComparison.Ordinal)
+            || code.StartsWith("LandingCommit", StringComparison.Ordinal) || code is "UnexpectedMergeTreeOutput")
+            return "LandingReasonCandidateBuildFailed";
         if (code.Contains("Marker", StringComparison.Ordinal) || code.Contains("Recovery", StringComparison.Ordinal)
             || code.Contains("CompletionUnknown", StringComparison.Ordinal) || code.StartsWith("Invalid", StringComparison.Ordinal)
             || code.StartsWith("Unexpected", StringComparison.Ordinal)
@@ -262,6 +264,8 @@
             return "LandingReasonLandingRecoveryFailed";
         if (code.Contains("Enqueue", StringComparison.Ordinal) || code.Contains("Workstation", StringComparison.Ordinal))
             return "LandingReasonCommandQueueFailed";
+        if (code is "LandingCommitNotOnTargetBranch" or "TargetBranchChangedSincePreview")
+            return "LandingReasonTargetBranchChanged";
         if (code.StartsWith("Target", StringComparison.Ordinal) || code.StartsWith("LocalTarget", StringComparison.Ordinal))
             return "LandingReasonTargetBranchChanged";
         if (code.Contains("Workspace", StringComparison.Ordinal) || code.Contains("Worktree", StringComparison.Ordinal))
