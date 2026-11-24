@@ -245,11 +245,13 @@ public sealed class PrepareReleaseHandler
             if (policy.Sources.Count is < 1 or > 16)
                 return Result.Failure<ReleasePrepareOperationDto>(
                     "ReleasePrepare requires 1-16 configured version-file projections.", ErrorKind.Validation);
-            if (string.IsNullOrWhiteSpace(release.TargetVersion)
-                || !ProjectVersionPolicyCatalog.TryNormalizeVersion(
-                    policy, release.TargetVersion, out var version, out var versionError))
+            if (string.IsNullOrWhiteSpace(release.TargetVersion))
                 return Result.Failure<ReleasePrepareOperationDto>(
-                    versionError ?? "Set a valid target version on the Release before preparing.", ErrorKind.Validation);
+                    "Set a target version on the Release before preparing.", ErrorKind.Validation);
+            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
+                policy, release.TargetVersion, out var version, out var versionError))
+                return Result.Failure<ReleasePrepareOperationDto>(
+                    versionError ?? "Release target version is invalid.", ErrorKind.Validation);
             if (!ProjectVersionPolicyCatalog.IsSafeBranchName(release.TargetBranch))
                 return Result.Failure<ReleasePrepareOperationDto>(
                     "Release target branch is not a safe Git branch name.", ErrorKind.Validation);
@@ -374,7 +376,8 @@ public sealed class PrepareReleaseHandler
                 runtime => runtime.ProjectId == release.ProjectId && runtime.DeviceId == pinnedDeviceId, ct);
             var pinnedDevice = await db.DaemonDevices.FirstOrDefaultAsync(
                 device => device.Id == pinnedDeviceId && device.UserId == userId, ct);
-            if (pinnedRuntime is null || pinnedDevice is null || !pinnedDevice.IsOnline(nowUtc)
+            if (pinnedRuntime is null || string.IsNullOrWhiteSpace(pinnedRuntime.LocalRoot)
+                || pinnedDevice is null || !pinnedDevice.IsOnline(nowUtc)
                 || !WorkstationCapabilities.Supports(pinnedDevice.ProbeJson, WorkstationCapabilities.ReleasePrepareV1))
                 return (false, null, null, ErrorKind.Conflict,
                     "The Release's pinned workstation is offline, detached or no longer supports ReleasePrepare. Automatic workstation switching is forbidden.");
@@ -393,7 +396,8 @@ public sealed class PrepareReleaseHandler
             .ToListAsync(ct);
         var selected = runtimes
             .Join(devices, runtime => runtime.DeviceId, device => device.Id, (runtime, device) => (Runtime: runtime, Device: device))
-            .Where(item => item.Device.IsOnline(nowUtc)
+            .Where(item => !string.IsNullOrWhiteSpace(item.Runtime.LocalRoot)
+                && item.Device.IsOnline(nowUtc)
                 && WorkstationCapabilities.Supports(item.Device.ProbeJson, WorkstationCapabilities.ReleasePrepareV1))
             .OrderByDescending(item => item.Device.LastHeartbeatAt)
             .ThenBy(item => item.Device.Id)
