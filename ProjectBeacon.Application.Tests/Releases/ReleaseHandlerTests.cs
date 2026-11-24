@@ -8,6 +8,7 @@ using Application.Releases;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Data;
@@ -178,6 +179,44 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.Equal("release/0.7.5.9", updated.Value.TargetBranch);
         Assert.Equal(2, updated.Value.Order);
         Assert.Equal(created.Value.Revision + 1, updated.Value.Revision);
+    }
+
+    [Fact]
+    public async Task ReleaseSnapshotComparisonIgnoresCaptureTimeButRejectsTaskChanges()
+    {
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        var release = Release.Create("Snapshot", null, _projectId, "0.7.5.9", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        var milestone = Milestone.Create("Included work", null, _projectId, 1);
+        milestone.AssignRelease(release.Id);
+        var task = TaskItem.Create(
+            "Original task scope", _projectId, TaskPriority.High, TaskType.Feature, "Original description");
+        task.SetMilestone(milestone.Id);
+        _db.Releases.Add(release);
+        _db.Milestones.Add(milestone);
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(ProjectVersionPolicyCatalog.TryRead(
+            project.VersionPolicyJson, out var policy, out var policyError), policyError);
+        var prepared = await ReleasePreparePayload.BuildSnapshotAsync(
+            _db, release, project, policy, TestContext.Current.CancellationToken);
+        Assert.Null(prepared.Error);
+        Assert.NotNull(prepared.Json);
+
+        var unchanged = await ReleasePreparePayload.BuildSnapshotAsync(
+            _db, release, project, policy, TestContext.Current.CancellationToken);
+        Assert.Null(unchanged.Error);
+        Assert.True(ReleasePreparePayload.MatchesSnapshot(prepared.Json, unchanged.Json));
+
+        task.Update(title: "Changed after Prepare", description: "Changed release scope");
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var changed = await ReleasePreparePayload.BuildSnapshotAsync(
+            _db, release, project, policy, TestContext.Current.CancellationToken);
+        Assert.Null(changed.Error);
+        Assert.False(ReleasePreparePayload.MatchesSnapshot(prepared.Json, changed.Json));
     }
 
     [Fact]
