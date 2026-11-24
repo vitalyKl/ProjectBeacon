@@ -3428,4 +3428,15 @@ orthstar</value>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>Diese Aufgabe basiert exakt auf dem in Produktion bereitgestellten Commit. Branch und Basis-Commit werden von Beacon geschützt.</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>Diese reguläre Aufgabe wurde erstellt, nachdem der ursprüngliche Hotfix nachweislich gelandet ist. Verwende den normalen Planner-, Actor-, Reviewer- und Landing-Workflow.</value></data>
   <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release-Ablauf: Konfiguriere die maßgebliche Version und die Manifestdateien in den Projekteinstellungen, erstelle hier einen Release und ordne ihm anschließend Meilensteine zu. Aufgaben dieser Meilensteine erhalten Zielversion und Ziel-Branch im Planner-Kontext. Die Release-Vorbereitung erstellt einen unveränderlichen Candidate; die Veröffentlichung in Produktion erfordert eine separate ausdrückliche Bestätigung.</value></data>
+  <data name="PrepareReleaseCandidate" xml:space="preserve"><value>Candidate vorbereiten</value></data>
+  <data name="ReleasePreparationPullRequest" xml:space="preserve"><value>Release-Pull-Request öffnen</value></data>
+  <data name="VerifyReleaseLanding" xml:space="preserve"><value>Landing verifizieren</value></data>
+  <data name="ReleasePreparationInProgress" xml:space="preserve"><value>Die Release-Vorbereitung läuft auf der fest zugeordneten Workstation.</value></data>
+  <data name="ReleasePrepareQueued" xml:space="preserve"><value>Die Release-Vorbereitung wurde auf der fest zugeordneten Workstation eingereiht.</value></data>
+  <data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>Die Landing-Prüfung wurde auf derselben Workstation eingereiht.</value></data>
+  <data name="PublishRelease" xml:space="preserve"><value>In Produktion veröffentlichen</value></data>
+  <data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>Produktionsveröffentlichung bestätigen</value></data>
+  <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Release „{0}“ als Version {1} mit Tag „{2}“ aus Branch „{3}“ veröffentlichen? Dadurch wird ein unveränderlicher Git-Tag erstellt und der konfigurierte GitHub-Release-Workflow gestartet, der möglicherweise in Produktion deployed. Ein gepushter Tag wird niemals verschoben oder gelöscht; Wiederholungen verwenden denselben Candidate und Tag.</value></data>
+  <data name="ReleasePublicationQueued" xml:space="preserve"><value>Die Veröffentlichung wurde auf der fest zugeordneten Workstation eingereiht. Beacon prüft den GitHub-Workflow sowie die bereitgestellte Version und SHA.</value></data>
+  <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>Der unveränderliche Release-Tag wurde bereits gepusht. Ein erneuter Versuch verschiebt ihn nicht.</value></data>
 </root>
