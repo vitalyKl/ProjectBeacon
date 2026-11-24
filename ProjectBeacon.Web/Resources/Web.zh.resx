@@ -3030,4 +3030,10 @@ orthstar</value>
   <data name="LandingRevertQueued" xml:space="preserve">
     <value>合并回滚已排队。</value>
   </data>
+
+  <data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>要取消此仓库同步请求吗？只有在工作站领取命令之前才能取消。</value></data>
+
+  <data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>仓库同步请求已在工作站开始执行之前取消。</value></data>
+
+  <data name="GitSyncPendingExpired" xml:space="preserve"><value>由于 10 分钟内没有工作站领取，仓库同步请求已过期。</value></data>
 </root>
