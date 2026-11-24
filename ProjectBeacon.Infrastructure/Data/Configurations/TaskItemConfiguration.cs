@@ -23,6 +23,10 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         entity.Property(e => e.VersionImpact).HasMaxLength(16);
         entity.Property(e => e.VersionImpactRationale).HasMaxLength(1000);
         entity.Property(e => e.VersionImpactAt);
+        entity.Property(e => e.VersionImpactReviewStatus).HasMaxLength(16);
+        entity.Property(e => e.VersionImpactReviewNote).HasMaxLength(1000);
+        entity.Property(e => e.VersionImpactReviewedAt);
+        entity.Property(e => e.VersionImpactReviewedBySessionId);
         entity.Property(e => e.VersionImpactRevision).HasDefaultValue(1).IsRequired().IsConcurrencyToken();
         entity.Property(e => e.CreatedAt).IsRequired();
         entity.Property(e => e.CompletedAt);
