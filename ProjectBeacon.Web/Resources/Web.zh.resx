@@ -3436,4 +3436,15 @@ orthstar</value>
   <data name="HotfixOriginNotice" xml:space="preserve"><value>此任务基于实际部署到生产环境的确切提交。Beacon 会保护其来源分支和基础提交。</value></data>
   <data name="ForwardPortNotice" xml:space="preserve"><value>此普通任务是在来源 Hotfix 确认成功落地后创建的。请通过标准 Planner、Actor、Reviewer 和 landing 流程完成。</value></data>
   <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release 流程：先在项目设置中配置权威版本和清单文件，然后在此创建 Release，并将 Milestone 关联到该 Release。关联 Milestone 的任务会在 Planner 上下文中获得目标版本和目标分支。Release 准备阶段会创建不可变 Candidate；生产发布是单独且需要明确确认的操作。</value></data>
+  <data name="PrepareReleaseCandidate" xml:space="preserve"><value>准备 Candidate</value></data>
+  <data name="ReleasePreparationPullRequest" xml:space="preserve"><value>打开发布 Pull Request</value></data>
+  <data name="VerifyReleaseLanding" xml:space="preserve"><value>验证 Landing</value></data>
+  <data name="ReleasePreparationInProgress" xml:space="preserve"><value>正在固定的工作站上准备发布。</value></data>
+  <data name="ReleasePrepareQueued" xml:space="preserve"><value>已在固定的工作站上排队执行发布准备。</value></data>
+  <data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>已在同一工作站上排队执行 Landing 验证。</value></data>
+  <data name="PublishRelease" xml:space="preserve"><value>发布到生产环境</value></data>
+  <data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>确认发布到生产环境</value></data>
+  <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>要将发布“{0}”以版本 {1}、标签“{2}”从分支“{3}”发布吗？此操作会创建不可变的 Git 标签并启动可能部署到生产环境的 GitHub 发布工作流。已推送的标签不会被移动或删除；重试会使用相同的 Candidate 和标签。</value></data>
+  <data name="ReleasePublicationQueued" xml:space="preserve"><value>已在固定的工作站上排队发布。Beacon 将验证 GitHub 工作流以及实际部署的版本/SHA。</value></data>
+  <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>不可变的发布标签已推送。重试不会移动该标签。</value></data>
 </root>
