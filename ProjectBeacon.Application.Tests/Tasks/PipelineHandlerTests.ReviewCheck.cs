@@ -134,6 +134,10 @@ public sealed partial class PipelineHandlerTests
                 .FirstAsync(TestContext.Current.CancellationToken);
             using var doc = JsonDocument.Parse(command.PayloadJson);
             Assert.Equal("dotnet test", doc.RootElement.GetProperty("checkCommand").GetString());
+
+            var persistedTask = await _db.Tasks.IgnoreQueryFilters().AsNoTracking()
+                .SingleAsync(item => item.Id == task.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(device.Id, persistedTask.PipelineDeviceId);
         }
     }
 
