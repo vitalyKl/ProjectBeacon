@@ -12,6 +12,7 @@ public static class WorkstationCapabilities
     public const string AutoSyncV1 = "git-auto-sync-v1";
     public const string GitLandV1 = "git-land-v1";
     public const string GitLandIntegrationV1 = "git-land-integration-v1";
+    public const string ReleasePrepareV1 = "git-release-prepare-v1";
 
     public static bool Supports(string? probeJson, string capability)
     {
