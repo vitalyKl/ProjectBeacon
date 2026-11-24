@@ -247,6 +247,27 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void ReleaseContext_ReadsReleasesOnlyWithinPipelineRoleAndToolGrant()
+    {
+        var releases = $"/v1/projects/{_projectId:D}/releases";
+        var milestones = $"/v1/projects/{_projectId:D}/milestones";
+
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, releases, _taskId, _subtaskId, [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, releases, _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, milestones, _taskId, _subtaskId, [McpToolNames.ReleaseContext]));
+
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, releases, _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, releases, _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, releases, _taskId, _subtaskId, [McpToolNames.ReleaseContext]));
+    }
+
+    [Fact]
     public void PlannerAndReviewer_CanReadVersionContextButCannotDeclareActorImpact()
     {
         Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
