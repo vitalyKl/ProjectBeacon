@@ -216,11 +216,11 @@ internal static class ReleasePublishExecutor
         var fetch = await Git(root, ct, filters, "remote", "get-url", "--all", "origin");
         if (!Succeeded(fetch))
             return (null, null, "Release publication requires a configured GitHub origin.");
-        var urls = fetch.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
+        var urls = fetch.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (urls.Length != 1 || !AgentTaskGitOperations.TryParseGitHubRemote(urls[0].Trim(), out var repository))
             return (null, null, "Release publication requires exactly one GitHub HTTPS or SSH origin.");
         var push = await Git(root, ct, filters, "remote", "get-url", "--push", "--all", "origin");
-        var pushUrls = push.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
+        var pushUrls = push.StdOut.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         if (!Succeeded(push) || pushUrls.Length != 1
             || !AgentTaskGitOperations.TryParseGitHubRemote(pushUrls[0].Trim(), out var pushRepository)
             || !string.Equals(repository, pushRepository, StringComparison.OrdinalIgnoreCase))
@@ -371,7 +371,7 @@ internal static class ReleasePublishExecutor
         var target = await GitValue(root, ct, filters, "rev-parse", reference + "^{}");
         if (tagObject.Error is not null || target.Error is not null)
             return new TagRead(true, false, "Could not inspect annotated release tag metadata.");
-        var messageAt = tagObject.Value!.IndexOf("\\n\\n", StringComparison.Ordinal);
+        var messageAt = tagObject.Value!.IndexOf("\n\n", StringComparison.Ordinal);
         var message = messageAt >= 0 ? tagObject.Value[(messageAt + 2)..] : string.Empty;
         var expectedIdentity =
             message.Contains("ProjectBeacon-Release: " + request.ReleaseId.ToString("D"), StringComparison.Ordinal)
@@ -391,9 +391,9 @@ internal static class ReleasePublishExecutor
     private static RemoteTagMap ParseLsRemote(string output)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var raw in output.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var raw in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
-            var parts = raw.Split('\\t', 2);
+            var parts = raw.Split('\t', 2);
             if (parts.Length != 2 || !IsGitSha(parts[0]))
                 return new RemoteTagMap(result, "Remote returned malformed release tag metadata.");
             result[parts[1]] = parts[0].ToLowerInvariant();
@@ -502,26 +502,6 @@ internal static class ReleasePublishExecutor
         && uri.Scheme == Uri.UriSchemeHttps
         && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
         && Regex.IsMatch(uri.AbsolutePath, @"^/[^/]+/[^/]+/actions/runs/[1-9][0-9]*$", RegexOptions.CultureInvariant);
-
-    private static async Task<(string? Url, string? Repository, string? Error)> ReadOriginAsync(
-        string root, string[] filters, CancellationToken ct)
-    {
-        var fetch = await Git(root, ct, filters, "remote", "get-url", "--all", "origin");
-        if (!Succeeded(fetch))
-            return (null, null, "Release publication requires a configured GitHub origin.");
-        var urls = fetch.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (urls.Length != 1 || !AgentTaskGitOperations.TryParseGitHubRemote(urls[0].Trim(), out var repository))
-            return (null, null, "Release publication requires exactly one GitHub HTTPS or SSH origin.");
-        var push = await Git(root, ct, filters, "remote", "get-url", "--push", "--all", "origin");
-        var pushUrls = push.StdOut.Split(['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (!Succeeded(push) || pushUrls.Length != 1
-            || !AgentTaskGitOperations.TryParseGitHubRemote(pushUrls[0].Trim(), out var pushRepository)
-            || !string.Equals(repository, pushRepository, StringComparison.OrdinalIgnoreCase))
-            return (null, null, "Origin fetch and push URLs must target the same GitHub repository.");
-        if (!AgentTaskWorktree.IsSupportedFetchRemote(urls[0].Trim()))
-            return (null, null, "Configured Git origin uses an unsupported transport.");
-        return (urls[0].Trim(), repository, null);
-    }
 
     private static async Task<(int ExitCode, string StdOut, string StdErr, bool TimedOut)> Git(
         string directory, CancellationToken ct, IReadOnlyCollection<string> filters, params string[] args) =>
