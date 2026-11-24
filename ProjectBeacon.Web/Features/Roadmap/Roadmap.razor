@@ -26,6 +26,7 @@
 @inject GetProjectVersionPolicyHandler GetVersionPolicy
 @inject ListProjectReleasesHandler ListProjectReleases
 @inject CreateReleaseHandler CreateReleaseHandler
+@inject UpdateReleaseHandler UpdateReleaseHandler
 @inject SetReleaseStatusHandler SetReleaseStatus
 @inject DeleteReleaseHandler DeleteReleaseHandler
 @inject SetMilestoneReleaseHandler SetMilestoneRelease
@@ -82,6 +83,24 @@ else
                     <MudButton Variant="Variant.Text" Disabled="@_releaseBusy" OnClick="HideCreateReleaseForm">@L["Cancel"]</MudButton>
                 </MudStack>
             }
+            @if (_editingReleaseId is not null && _canManageReleases)
+            {
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle1">@L["Edit"] · @_releaseName</MudText>
+                <MudTextField @bind-Value="_releaseName" Label="@L["ReleaseName"]" Required="true"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MarkdownEditor @bind-Value="_releaseDescription" Label="@L["Description"]" Lines="2" />
+                <MudTextField @bind-Value="_releaseTargetVersion" Label="@L["ReleaseTargetVersion"]"
+                              HelperText="@L["ReleaseTargetVersionHelp"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_releaseTargetBranch" Label="@L["ReleaseTargetBranch"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudNumericField T="int" @bind-Value="_releaseOrder" Label="@L["Order"]"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_releaseBusy" OnClick="SaveRelease">@L["Save"]</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="@_releaseBusy" OnClick="CancelEditRelease">@L["Cancel"]</MudButton>
+                </MudStack>
+            }
             @if (_releases.Count == 0)
             {
                 <MudText Typo="Typo.body2" Class="mt-3">@L["NoReleases"]</MudText>
@@ -110,6 +129,11 @@ else
                                 @if (_canManageReleases)
                                 {
                                     <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+                                        @if (release.Status is ReleaseStatus.Planned or ReleaseStatus.InProgress)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@_releaseBusy"
+                                                       OnClick="() => StartEditRelease(release)">@L["Edit"]</MudButton>
+                                        }
                                         @if (release.Status == ReleaseStatus.Planned)
                                         {
                                             <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@_releaseBusy"
@@ -347,6 +371,8 @@ else
     private bool _releaseManagementEnabled;
     private bool _canManageReleases;
     private bool _showCreateReleaseForm;
+    private Guid? _editingReleaseId;
+    private int? _editingReleaseRevision;
     private bool _releaseBusy;
     private string _releaseName = string.Empty;
     private string? _releaseDescription;
@@ -417,11 +443,67 @@ else
         _releaseTargetBranch = "main";
         _releaseOrder = _releases.Count + 1;
         _showCreateReleaseForm = true;
+        _editingReleaseId = null;
+        _editingReleaseRevision = null;
         _showCreateForm = false;
         _editingId = null;
     }
 
     private void HideCreateReleaseForm() => _showCreateReleaseForm = false;
+
+    private void StartEditRelease(ReleaseDto release)
+    {
+        if (!_canManageReleases || _releaseBusy
+            || release.Status is not (ReleaseStatus.Planned or ReleaseStatus.InProgress))
+            return;
+        _editingReleaseId = release.Id;
+        _editingReleaseRevision = release.Revision;
+        _releaseName = release.Name;
+        _releaseDescription = release.Description;
+        _releaseTargetVersion = release.TargetVersion ?? string.Empty;
+        _releaseTargetBranch = release.TargetBranch;
+        _releaseOrder = release.Order;
+        _showCreateReleaseForm = false;
+        _showCreateForm = false;
+        _editingId = null;
+    }
+
+    private void CancelEditRelease()
+    {
+        _editingReleaseId = null;
+        _editingReleaseRevision = null;
+    }
+
+    private async Task SaveRelease()
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || _editingReleaseId is not { } releaseId
+            || _editingReleaseRevision is not { } expectedRevision)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await UpdateReleaseHandler.HandleAsync(new UpdateReleaseCommand(
+                new UpdateReleaseRequest(
+                    releaseId, _project.Id, _releaseName, _releaseDescription,
+                    _releaseTargetVersion, _releaseTargetBranch, _releaseOrder, expectedRevision),
+                _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Save"].Value);
+                await Reload();
+                return;
+            }
+            _editingReleaseId = null;
+            _editingReleaseRevision = null;
+            Notifications.Add(L["Saved"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
 
     private async Task CreateRelease()
     {
