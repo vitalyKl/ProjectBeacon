@@ -202,6 +202,20 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             var handler = new GetDeviceAutoSyncTargetsHandler(Factory());
+
+            // A pre-upgrade daemon advertises AutoSyncV1 but does not understand
+            // AutoSyncEnabled=false. It must not receive a remote-landing-only target.
+            var legacy = await handler.HandleAsync(deviceId, TestContext.Current.CancellationToken);
+            Assert.True(legacy.Success, legacy.Error);
+            Assert.Empty(legacy.Value!);
+
+            var device = await _db.DaemonDevices.SingleAsync(
+                item => item.Id == deviceId, TestContext.Current.CancellationToken);
+            device.Heartbeat(
+                """{"capabilities":["git-sync-v1","git-auto-sync-v1","git-land-v1","git-land-integration-v1","git-remote-landing-reconcile-v1"]}""",
+                "{}");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
             var result = await handler.HandleAsync(deviceId, TestContext.Current.CancellationToken);
 
             Assert.True(result.Success, result.Error);
