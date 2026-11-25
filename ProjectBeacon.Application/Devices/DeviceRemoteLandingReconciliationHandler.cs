@@ -81,10 +81,9 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                 "Project not found.", ErrorKind.NotFound);
         if (!ProjectGitPolicyCatalog.TryRead(
-            project.GitPolicyJson, project.GitPolicyRevision, out var gitPolicy)
-            || !gitPolicy.AutoSyncEnabled)
+            project.GitPolicyJson, project.GitPolicyRevision, out var gitPolicy))
             return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
-                "Remote landing reconciliation is disabled for this project.");
+                "The project Git policy is invalid; remote landing reconciliation is disabled.");
 
         var runtimeAttached = await db.ProjectRuntimes.IgnoreQueryFilters().AsNoTracking()
             .AnyAsync(runtime => runtime.ProjectId == request.ProjectId
@@ -161,6 +160,10 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                 "The Beacon landing attempt has not reached a verified Landed state for this exact GitHub merge. Resolve the landing attempt before closing the task.",
                 ErrorKind.Conflict);
+
+        if (!gitPolicy.AutoSyncEnabled && latestLandingAttempt is null)
+            return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
+                "AutoSync is disabled for this project. Only a Beacon-managed landing attempt with verified Landed evidence can be reconciled without AutoSync.");
 
         var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
             .AnyAsync(session => session.ProjectId == request.ProjectId
