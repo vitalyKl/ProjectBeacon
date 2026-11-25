@@ -70,6 +70,7 @@ public sealed class TenantFilterTests : IDisposable
         Assert.Contains(nameof(Domain.Entities.Content.ContentVersion), scoped);
         Assert.Contains(nameof(Domain.Entities.Roadmap.Release), scoped);
         Assert.Contains(nameof(Domain.Entities.Roadmap.ReleaseCandidateSnapshot), scoped);
-        Assert.Equal(35, scoped.Count);
+        Assert.Contains(nameof(RemoteLandingProof), scoped);
+        Assert.Equal(36, scoped.Count);
     }
 }
