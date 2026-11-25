@@ -1238,7 +1238,7 @@ public sealed partial class AgentTaskGitOperationsTests
             Assert.True(execute.Ok, execute.Error ?? execute.Result);
             using var executeJson = JsonDocument.Parse(execute.Result!);
             Assert.Equal("failed", executeJson.RootElement.GetProperty("status").GetString());
-            Assert.Equal("GitHubRemoteRequiresPullRequest", executeJson.RootElement.GetProperty("errorCode").GetString());
+            Assert.Equal("GitHubReviewBaseUnavailable", executeJson.RootElement.GetProperty("errorCode").GetString());
             Assert.Equal(
                 mainBefore,
                 await GitAsync(repository, "rev-parse", "refs/heads/main"));
