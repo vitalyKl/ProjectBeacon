@@ -478,25 +478,25 @@ internal static class ReleasePublishExecutor
     private static string ResultJson(
         PublishRequest request, bool tagPushed, long? runId, string? runUrl, string? workflowStatus,
         string? conclusion, JsonObject? deployment, string? error, DateTime? deployedAt = null) => new JsonObject
-        {
-            ["action"] = "Publish",
-            ["projectId"] = request.ProjectId.ToString("D"),
-            ["releaseId"] = request.ReleaseId.ToString("D"),
-            ["candidateId"] = request.CandidateId.ToString("D"),
-            ["version"] = request.Version,
-            ["tagName"] = request.TagName,
-            ["candidateSha"] = request.CandidateSha,
-            ["tagPushed"] = tagPushed,
-            ["workflowRunId"] = runId,
-            ["workflowRunUrl"] = runUrl,
-            ["workflowStatus"] = workflowStatus,
-            ["workflowConclusion"] = conclusion,
-            ["deployedVersion"] = deployment?["deployedVersion"]?.DeepClone(),
-            ["deployedCommitSha"] = deployment?["deployedCommitSha"]?.DeepClone(),
-            ["deploymentStatus"] = deployment?["status"]?.DeepClone(),
-            ["deployedAtUtc"] = deployedAt?.ToString("O"),
-            ["error"] = error
-        }.ToJsonString();
+            {
+                ["action"] = "Publish",
+                ["projectId"] = request.ProjectId.ToString("D"),
+                ["releaseId"] = request.ReleaseId.ToString("D"),
+                ["candidateId"] = request.CandidateId.ToString("D"),
+                ["version"] = request.Version,
+                ["tagName"] = request.TagName,
+                ["candidateSha"] = request.CandidateSha,
+                ["tagPushed"] = tagPushed,
+                ["workflowRunId"] = runId,
+                ["workflowRunUrl"] = runUrl,
+                ["workflowStatus"] = workflowStatus,
+                ["workflowConclusion"] = conclusion,
+                ["deployedVersion"] = deployment?["deployedVersion"]?.DeepClone(),
+                ["deployedCommitSha"] = deployment?["deployedCommitSha"]?.DeepClone(),
+                ["deploymentStatus"] = deployment?["status"]?.DeepClone(),
+                ["deployedAtUtc"] = deployedAt?.ToString("O"),
+                ["error"] = error
+            }.ToJsonString();
 
     private static bool IsWorkflowRunUrl(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
