@@ -111,7 +111,7 @@ internal static class GitLandExecutor
             if (origin.ExitCode == 0)
             {
                 var originUrls = origin.StdOut.Split(
-                    ['\\r', '\\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    ['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 if (AgentTaskGitOperations.HasGitHubOrigin(originUrls))
                     return BusinessFailure("GitHubRemoteRequiresPullRequest");
             }
