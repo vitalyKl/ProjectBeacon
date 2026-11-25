@@ -572,7 +572,7 @@ Do not mark an item complete because code was merely drafted or written. A compl
 - CI run [#45560509847](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45560509847) completed with failure on Windows, Linux and macOS.
 - All three platform jobs completed Restore, Build, EF pending-model check, and all seven test modules successfully.
 - The only failure reported by all three jobs was `dotnet format ProjectBeacon.sln --verify-no-changes`: lines 481–499 of `ReleasePublishExecutor.cs` had one extra indentation level (4 spaces).
-- Web tests reported 3 PostgreSQL persistence tests skipped because `BEACON_TEST_SKIP_POSTGRES=1`; this is an explicit skip, not a passing integration run. Linux separately initialized PostgreSQL for its test lane, but the test command still carried the skip flag.
+- Windows and macOS test lanes explicitly skipped the three PostgreSQL persistence tests because `BEACON_TEST_SKIP_POSTGRES=1`; these are reported skips, not passing database integration tests. The separate Linux lane uses its PostgreSQL service and enforces the result count and allowed-skip set through the TRX guard.
 - Corrected only the 19 formatter-reported lines in `ReleasePublishExecutor.cs`; no behavior was changed.
 
 ### Verification state
