@@ -311,3 +311,16 @@ After the server and target-discovery regression tests, the workstation loop now
 Тест проверяет, что AutoSync-off discovery не расширяет право на закрытие задач для любого Approved PR. Дополнительно DaemonAutoSyncLoop test подтверждает, что для AutoSync-off target вызывается remote-landing POST и не вызываются GitSync/tag-sync операции.
 
 Точная source/test вершина до обновления журнала: `7b0c811ebdc3040c0de7dfcddb0f8d8028efaf94`. Предыдущие CI #1641/#1642 не покрывают эту вершину; требуется новый полный Linux/Windows/macOS CI после фиксации журнала.
+
+
+### GitHub Merge Queue / stacked PR support is not complete
+
+Текущий GitHubLandingMergeExecutor использует синхронный REST endpoint PUT /repos/{owner}/{repo}/pulls/{number}/merge с точным expected head SHA. Он сохраняет GitHub branch protection, но синхронный endpoint не поддерживает Merge Queue и stacked PR.
+
+Актуальная документация GitHub рекомендует asynchronous merge API. Его merge_action=default выбирает Merge Queue, если она настроена, иначе выполняет прямой merge. Но ответ enqueued не означает завершённый merge; фактический статус нужно получить позднее через PR state. Источник: https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request-asynchronously.
+
+Следовательно:
+- Прямой GitHub merge путь реализован.
+- Репозитории, где branch rules требуют Merge Queue, пока не поддержаны; stacked PR тоже не поддержан.
+- Нельзя принимать enqueued за Landed или создавать RemoteLandingProof до реального состояния MERGED и проверки merge commit/tree/post-merge command.
+- Для поддержки async/queue нужны durable merge request UUID/recovery, состояние ожидания в LandingAttempt/UI, poller на workstation или сервере, и финальная проверка точного PR/source/base/merge commit. Нужны тесты pending → enqueued → merged, rejected/failed и lost response.
