@@ -761,3 +761,18 @@ AutoSync is a repository synchronization preference (fetch/fast-forward and tags
 - Added `DaemonAutoSyncLoopTests.ReconcilesVerifiedBeaconLandingWhenAutoSyncIsDisabledWithoutRunningGitSync`. It supplies an AutoSync-off target, fake verifier and fake HTTP API, and asserts one target GET, one reconciliation POST, exact merge evidence in the POST body, and no AutoSync cycle failure. The loop receives `GitSyncService = null` in this test, so an accidental normal GitSync call fails the test instead of being silently counted as a skip.
 - Full verification is still pending on the current slice. Previous CI #1641 runs on `bdd46d1a` and therefore does not include the AutoSync-independent code or this daemon-loop test. At the last poll Linux had completed successfully; Windows and macOS were in CLI tests.
 - The branch still does not perform a production tag, deploy or merge PR #230.
+
+
+### Additional negative discovery case — external Approved task is not eligible with AutoSync off
+
+**Source/test head before this journal update:** 7b0c811ebdc3040c0de7dfcddb0f8d8028efaf94
+
+The AutoSync-off target-discovery test now creates two tasks on the same pinned workstation and project:
+- one has the exact latest Review proof and Beacon LandingAttempt=Landed; it must be returned for remote-landing reconciliation;
+- the other has its own successful Review and Approve verdict but no LandingAttempt; it must not be returned.
+
+The test asserts exactly one remote landing target, preventing ordinary externally managed Approved work from being swept into reconciliation when AutoSync is disabled.
+
+The new daemon-loop test is in ProjectBeacon.Cli.Tests/DaemonAutoSyncLoopTests.cs. It injects the remote-landing verifier and a fake HTTP handler, passes no GitSyncService, and asserts a single reconcile POST without any AutoSync cycle failure. This covers the full background branch where AutoSyncEnabled=false.
+
+CI run #1641 is still tied to the older bdd46d1a head; run #1642 was queued for 15ac31a9 before this last regression assertion. Neither validates source/test head 7b0c811e. Trigger a fresh full matrix on the final journal-updated HEAD.
