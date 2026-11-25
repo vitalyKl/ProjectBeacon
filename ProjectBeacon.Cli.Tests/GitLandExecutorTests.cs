@@ -1232,7 +1232,10 @@ public sealed partial class AgentTaskGitOperationsTests
 
             var execute = await GitLandExecutor.ExecuteAsync(
                 projectRoot, projectId,
-                Payload(projectId, taskId, attemptId, "Execute", sourceSha, treeSha, commandHash, command),
+                Payload(
+                    projectId, taskId, attemptId, "Execute", sourceSha, treeSha, commandHash, command,
+                    previewJson.RootElement.GetProperty("targetHeadSha").GetString(),
+                    previewJson.RootElement.GetProperty("candidateTreeSha").GetString()),
                 settings, TestContext.Current.CancellationToken);
 
             Assert.True(execute.Ok, execute.Error ?? execute.Result);
