@@ -16,6 +16,37 @@ public sealed class ProjectVersionPolicyCatalogTests
         Assert.False(ProjectVersionPolicyCatalog.TryNormalizeVersion(policy, "0.7.5", out _, out _));
     }
 
+    [Theory]
+    [InlineData("//Version[1]")]
+    [InlineData("//Version[@Condition='release']")]
+    [InlineData("//*[local-name()='Version']")]
+    [InlineData("//Version | //PackageVersion")]
+    [InlineData("/Project/PropertyGroup/Version/text()")]
+    public void Validate_RejectsXmlXPathOutsideTheReleaseCiSupportedSubset(string selector)
+    {
+        var policy = new ProjectVersionPolicy(
+            "NumericComponents", 4, null, "v{version}", false,
+            [new ProjectVersionSourcePolicy("manifest.xml", "Xml", selector)]);
+
+        Assert.False(ProjectVersionPolicyCatalog.Validate(policy, out _));
+    }
+
+    [Theory]
+    [InlineData("yyyy.MM.dd", true)]
+    [InlineData("yyyyMMdd", true)]
+    [InlineData("yyyy-MM-ddTHH:mm:ss", true)]
+    [InlineData("yyyy-MM-ddTHH:mm:ssZ", true)]
+    [InlineData("yy.MM.dd", false)]
+    [InlineData("yyyy.MM", false)]
+    [InlineData("yyyy.MM.dd.fff", false)]
+    [InlineData("yyyy.MM.dd 'UTC'", false)]
+    public void Validate_RestrictsCalendarFormatsToThePortableReleaseCiTokenSet(string format, bool expected)
+    {
+        var policy = new ProjectVersionPolicy("Calendar", 0, format, "v{version}", false, []);
+
+        Assert.Equal(expected, ProjectVersionPolicyCatalog.Validate(policy, out _));
+    }
+
     [Fact]
     public void SemVer_RequiresPrereleaseToBeExplicitlyEnabled()
     {
@@ -39,6 +70,8 @@ public sealed class ProjectVersionPolicyCatalogTests
 
     [Theory]
     [InlineData("Xml", "/Project/PropertyGroup/Version", "<Project><PropertyGroup><Version>0.7.5.8</Version></PropertyGroup></Project>")]
+    [InlineData("Xml", "//Version", "<Project><PropertyGroup><Version>0.7.5.8</Version></PropertyGroup></Project>")]
+    [InlineData("Xml", "//PropertyGroup/Version", "<Project><PropertyGroup><Version>0.7.5.8</Version></PropertyGroup></Project>")]
     [InlineData("Json", "/version", "{\"version\":\"0.7.5.8\"}")]
     [InlineData("Toml", "package.version", "[package]\nversion = \"0.7.5.8\"")]
     [InlineData("Regex", "version=(?<version>[0-9.]+)", "version=0.7.5.8")]
