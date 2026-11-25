@@ -797,7 +797,7 @@ Changes:
 - Added WorkstationCapabilities.RemoteLandingReconcileV1 with wire value git-remote-landing-reconcile-v1.
 - Current WorkstationProbe advertises it only when the daemon has a supported Git task-branch workflow (same prerequisites as GitLand).
 - DeviceAutoSyncTargetsHandler returns an AutoSync-off, remote-landing-only target only when the pinned device advertises RemoteLandingReconcileV1. Legacy AutoSyncV1-only devices receive no such target.
-- ReconcileDeviceRemoteLandingHandler independently rejects AutoSync-off reconciliation from a device without the new capability; the prior exact LandingAttempt= L​​anded / Review/source/device/target/merge checks still apply.
+- ReconcileDeviceRemoteLandingHandler independently rejects AutoSync-off reconciliation from a device without the new capability; the prior exact LandingAttempt= Landed / Review/source/device/target/merge checks still apply.
 - Updated the positive AutoSync-off discovery test to first query as a legacy daemon and assert an empty result, then advertise the new capability and assert that only the Beacon-managed Landed task is returned. The external Approved task without a LandingAttempt remains excluded.
 - Updated reconciliation fixtures to advertise the new capability and added a Domain capability unit test for legacy vs new protocol support.
 - This is a capability gate, not a change to the AutoSync preference: AutoSync=false still performs no normal branch fetch/fast-forward and no tag synchronization.
