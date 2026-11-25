@@ -26,7 +26,7 @@ MANIFEST = ROOT / ".beacon" / "release.json"
 VERSION_TOKEN = "{version}"
 MAX_MANIFEST_BYTES = 256 * 1024
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
-REGEX_TIMEOUT_SECONDS = 1.0
+REGEX_TIMEOUT_SECONDS = 2.0
 
 # Run Python's backtracking regex engine in a child process. A Python thread
 # timeout cannot stop catastrophic backtracking, whereas subprocess.run does.
@@ -197,6 +197,7 @@ def read_regex_version(text: str, selector: str) -> str:
             [sys.executable, "-I", "-c", REGEX_WORKER],
             input=json.dumps({"pattern": pattern, "text": text}),
             text=True,
+            encoding="utf-8",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
