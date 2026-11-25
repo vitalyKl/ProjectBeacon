@@ -3,7 +3,7 @@
 **Implementation branch:** `feat/release-management`  
 **Plan branch:** `docs/release-management-plan`  
 **Initial base:** `main` at `22a1a9e559a97124f939b6da2de2e4f9612f4d94`  
-**Current PR base (24 Nov 2026):** `main` at `1290eae570d48c79f8523222b3293c5b536de99f` (`0.7.5.9`)  
+**Current PR base (25 Nov 2026):** `main` at `90a1778359ae0af5efd622af2876159e31c3480b` (`0.7.5.9`)  
 **Started:** 2026-11-24  
 **Scope:** universal ProjectBeacon product feature for customer projects; no SaaS Control Plane, billing, or platform-operator work.
 
@@ -12,11 +12,9 @@ This log is maintained in the repository and updated in the same branch as imple
 ## Status
 
 - Overall: **In progress**
-- Current slice: **S4 — GitHub Awareness / bounded forge feedback**
-- S0 AutoSync implementation is present; **not accepted until green CI on the current head**
-- S1 Version Policy / task impact implementation is present; **not yet fully CI verified**
-- S2 Release entity, Milestone association, feature gate, API and Roadmap UI are implemented; **not yet fully CI verified**
-- S3 ReleasePrepare / VerifyLanding client-server path and immutable Candidate snapshot are implemented; **not yet fully CI verified**
+- Current slice: **final verification and closure of S0–S6**
+- S0 AutoSync, S1 Version Policy/task impact, S2 Release/Roadmap, S3 Candidate/Prepare/Verify/Publish, S4 GitHub awareness/reconciliation, S5 Hotfix and S6 Planner/onboarding code paths are present in this branch
+- **No slice is accepted as complete until the exact current head has green CI and the remaining security/authority blockers are resolved**
 
 ## Initial repository findings
 
@@ -48,11 +46,10 @@ This log is maintained in the repository and updated in the same branch as imple
 
 ## Next actions
 
-1. Trigger CI on the exact current head and fix every build, migration, test, formatting, and platform failure before accepting S0–S4.
-2. Complete S4 verification and add any missing tests or corrections revealed by CI; keep GitHub feedback read-only.
-3. Continue S5: hotfix releases must start from the actual deployed SHA, with forward-port work tracked as ordinary tasks.
-4. Continue S6: release-aware Planner workflows, onboarding and a second project with a different version scheme.
-5. Complete the human-confirmed tag publication and workflow observation only after tag protection and production reviewers are verifiably configured.
+1. Finish the current CI matrix, correct its compiler/test failures, and trigger another run on the exact current branch head.
+2. Confirm EF model snapshot has no pending model changes and all application/API/CLI/web/worker suites pass on Linux, Windows and macOS.
+3. Complete the GitHub merge-authority path: remote landing reconciliation is read-only today, and GitHub PRs still require an external merge. The agent must be able to request/execute a validated merge through a server-authorized, policy-checked operation without bypassing branch protection.
+4. Verify GitHub tag rulesets and production Environment reviewers before enabling real publication.
 
 ## Blockers and decisions
 
@@ -521,6 +518,35 @@ The current head `1af82bbef762bf5225b2f68ecc1927f9abb379bc` has **not yet been v
 3. Reconcile any new main commits without overwriting changes; PR base is main and must be rechecked.
 4. Keep publication blocked until tag protection and production Environment reviewers can be verified with sufficient GitHub permissions. No tag or deployment has been created.
 5. Perform final review of the RemoteLandingProof path and confirm GitLand and external GitHub landing remain non-competing flows.
+
+
+
+## 2026-11-25 — CI follow-up for remote landing reconciliation
+
+**CI run:** [#45557017168](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45557017168)  
+**Tested head:** `bb69f36084d83d86d22a5f4a8c441698b8b433f8`  
+**Follow-up fix head:** `c2cc391b18f4fbf9a4db89320b89ff9e8729bdee`.
+
+### CI findings
+
+- The previous four compiler findings (invalid CR/LF char literals and missing `IBeaconDb.RemoteLandingProofs` forwarding) were fixed and no longer appear in this run's Linux compiler output.
+- Linux reported one remaining compiler error: `DeviceRemoteLandingReconciliationHandlerTests.cs(71,26)` could not resolve `AuditActorKind`.
+- Added `using Domain.Entities.Audit;` to that test file.
+- CI reported xUnit analyzer warning `xUnit2017` in `NativeAgentToolPolicyTests.cs`; replaced `Assert.True(collection.Contains(...))` with `Assert.Contains(...)`.
+- These changes are committed through head `c2cc391b18f4fbf9a4db89320b89ff9e8729bdee`. No CI run has yet validated that head.
+- The older run #45557017168 remains failed on the head it tested. Do not count its result as validation of the fixes.
+
+### Landing authority — current state
+
+- GitHub remote landing reconciliation is read-only: it proves an externally merged PR and records the immutable proof; it does not merge.
+- `GitLandExecutor` refuses Execute/Revert on GitHub origins, preventing local GitLand and GitHub from becoming competing merge authorities.
+- This avoids dual authorities but does **not yet meet the product goal of autonomous agent-led merge**: a GitHub PR still requires an external GitHub merge. This remains an explicit blocker. The next implementation must add a server-authorized merge request/execute operation with deterministic required-check/review/base/HEAD validation and must respect GitHub branch protection (no bypass).
+- Non-GitHub/local GitLand behavior remains separate.
+
+### Next validation step
+
+- Trigger CI on `c2cc391b18f4fbf9a4db89320b89ff9e8729bdee`.
+- Inspect all platform build outputs, EF pending-model gate, test modules, localization, and format checks. S0–S6 remain unaccepted until exact-head CI is green.
 
 ## Update format
 
