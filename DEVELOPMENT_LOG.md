@@ -805,3 +805,24 @@ Changes:
 Verification context:
 - CI #45714185084 (run 1643) is tied to earlier source/test head e0fb1f07. Linux completed successfully across build, model check, all test modules, TRX and format. At the last poll Windows and macOS had reached CLI tests with no reported failure. This run does not include the new capability code/tests.
 - A new full matrix must run on the latest journal-updated head.
+
+
+### Backward-compatible remote landing capability gate and API defense
+
+**Source/test head before this journal update:** acaa5b097dedbcd21bd148a1745e7acf5d063178
+
+A follow-up compatibility review showed that an older daemon advertising only git-auto-sync-v1 could ignore the new AutoSyncEnabled=false DTO field and treat a remote-landing-only target as a normal AutoSync target. The fix uses explicit protocol negotiation:
+
+- Added WorkstationCapabilities.RemoteLandingReconcileV1 (git-remote-landing-reconcile-v1).
+- WorkstationProbe advertises it only if task-branch Git workflow is supported and GitHub CLI (gh) is installed; the verifier needs gh to inspect the PR and prove its merge.
+- AutoSync-off target discovery returns a target only if the pinned device advertises RemoteLandingReconcileV1. Older AutoSyncV1-only workstations receive no remote-landing-only target.
+- ReconcileDeviceRemoteLandingHandler independently rejects AutoSync-off reconciliation without RemoteLandingReconcileV1, in addition to requiring an exact verified Landed attempt. The legacy AutoSyncV1 check remains for the loop transport itself.
+- The target-discovery test now first uses a legacy probe (git-sync-v1 + git-auto-sync-v1 + git-land-v1) and asserts no target; after upgrading the probe with the new capability, it asserts exactly the Beacon-managed Landed task is returned and the external Approved task without a LandingAttempt remains excluded.
+- Added an API-level legacy-daemon test: even with a fully verified Landed attempt, a device lacking the new capability receives Forbidden and the task/proof remain unchanged.
+- Added Domain capability negotiation tests; capability is advertised only with supported task branch workflow and gh present.
+
+### Verification state
+
+- CI #45714185084 (run 1643) is on the earlier source/test head e0fb1f07 and does not include capability negotiation. Linux completed all 24 steps successfully. Windows had reached CLI tests and macOS Web tests at the latest poll, with no reported failures.
+- The new capability commits and tests are not yet validated by CI. A fresh complete Linux/Windows/macOS matrix must run on the current journal-updated head.
+- No production tag/deploy or PR merge was performed.
