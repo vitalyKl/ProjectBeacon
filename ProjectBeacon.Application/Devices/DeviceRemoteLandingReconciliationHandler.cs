@@ -144,8 +144,9 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         // If Beacon created a landing attempt, the GitLand Execute command must have
         // completed with verified post-merge evidence before AutoSync may close the task.
         // A merged PR alone must not turn an ExecutePending/LandedUnverified attempt into
-        // a successful task completion. Projects that merge PRs outside Beacon have no
-        // LandingAttempt and continue through this externally-authorized reconciliation path.
+        // a successful task completion. External/manual PR merges have no LandingAttempt and
+        // may use this reconciliation path only when project AutoSync is enabled. When AutoSync
+        // is disabled, only a Beacon-managed, verified Landed attempt is eligible below.
         var latestLandingAttempt = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
             .Where(attempt => attempt.ProjectId == request.ProjectId && attempt.TaskId == request.TaskId)
             .OrderByDescending(attempt => attempt.CreatedAt)
