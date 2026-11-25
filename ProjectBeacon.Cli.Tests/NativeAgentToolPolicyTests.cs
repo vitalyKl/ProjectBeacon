@@ -39,8 +39,7 @@ public sealed class NativeAgentToolPolicyTests
     {
         Assert.False(NativeAgentToolPolicy.RequiresExclusiveWorktreeExecution(PipelineToolPolicy.ForgeRead));
         Assert.False(NativeAgentToolPolicy.IsPlanModeCommandExecutionBlocked("plan", PipelineToolPolicy.ForgeRead));
-        Assert.True(PipelineToolPolicy.InteractivePlanTools.Contains(
-            PipelineToolPolicy.ForgeRead, StringComparer.Ordinal));
+        Assert.Contains(PipelineToolPolicy.ForgeRead, PipelineToolPolicy.InteractivePlanTools);
         Assert.DoesNotContain(PipelineToolPolicy.ForgeRead, PipelineToolPolicy.PipelinePlanDeniedTools);
     }
 
