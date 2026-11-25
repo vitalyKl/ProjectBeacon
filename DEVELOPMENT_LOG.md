@@ -751,3 +751,13 @@ AutoSync is a repository synchronization preference (fetch/fast-forward and tags
 2. Verify daemon loop tests also cover AutoSync-off with remote-landing-only targets, including no GitSync execution and successful POST reconciliation.
 3. Complete deterministic GitHub API seam/integration coverage for merge preflight and lost-response recovery.
 4. Keep production publication blocked until an administrator confirms classic v* tag protection and required reviewers for the production environment.
+
+
+### Daemon-loop coverage added after the landing/AutoSync split
+
+**Implementation/test head before this journal update:** `33ceaa7e5989f52d66883d4feecdf125c33df073`
+
+- Added a narrow injectable remote-landing verifier to `DaemonAutoSyncLoop`; production default remains `AgentTaskGitHubRemoteLandingOperations.VerifyAsync`.
+- Added `DaemonAutoSyncLoopTests.ReconcilesVerifiedBeaconLandingWhenAutoSyncIsDisabledWithoutRunningGitSync`. It supplies an AutoSync-off target, fake verifier and fake HTTP API, and asserts one target GET, one reconciliation POST, exact merge evidence in the POST body, and no AutoSync cycle failure. The loop receives `GitSyncService = null` in this test, so an accidental normal GitSync call fails the test instead of being silently counted as a skip.
+- Full verification is still pending on the current slice. Previous CI #1641 runs on `bdd46d1a` and therefore does not include the AutoSync-independent code or this daemon-loop test. At the last poll Linux had completed successfully; Windows and macOS were in CLI tests.
+- The branch still does not perform a production tag, deploy or merge PR #230.
