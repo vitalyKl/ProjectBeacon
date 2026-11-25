@@ -204,18 +204,14 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             request.ProjectId,
             detailsJson: JsonSerializer.Serialize(new
             {
-                taskId = request.TaskId,
                 deviceId,
-                repository = proof.GitHubRepository,
-                pullRequestNumber = proof.PullRequestNumber,
-                pullRequestUrl = proof.PullRequestUrl,
                 sourceBranch = proof.SourceBranch,
                 sourceSha = proof.SourceSha,
                 targetBranch = proof.TargetBranch,
                 mergeCommitSha = proof.MergeCommitSha,
-                remoteBaseSha = proof.RemoteBaseSha,
+                targetHeadSha = proof.RemoteBaseSha,
                 reviewRunId = proof.ReviewRunId,
-                result = "TaskClosed"
+                resultCode = "TaskClosed"
             })));
 
         try
