@@ -189,6 +189,14 @@
             if (_ggufs.Count == 0)
                 Notifications.Add(L["NoGgufFiles"].Value, Severity.Info);
         }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(
+                exception,
+                "WorkstationCommandFailed",
+                "read GGUF scan result",
+                new { DeviceId = deviceId, Operation = "GGUF scan" });
+        }
         finally
         {
             _saving = false;
