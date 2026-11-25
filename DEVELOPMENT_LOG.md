@@ -659,3 +659,50 @@ Changed:
 2. Continue the server-authorized GitHub landing design. Current remote reconciliation is read-only and requires an external merge; don't create a competing local GitLand authority or give Actor a raw merge bypass.
 3. Have an administrator verify classic tag protection for `v*`, branch protection, and required reviewers for GitHub Environment `production` in GitHub Settings before any production publication test.
 4. Continue end-to-end acceptance of project settings, RLS/authorization, localization and release workflow failure states on an independent user project.
+
+
+## 2026-11-26 — CI #1640 corrections and GitHub-authoritative landing review
+
+**Branch:** `feat/release-management`  
+**CI run:** [#45626583688](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45626583688)  
+**Failed head:** `d05a71b963256f1b30af639b5f668acba8f07645`
+
+### CI findings
+
+The same two deterministic test failures reproduced on Linux, Windows and macOS:
+
+1. `IgnoreQueryFiltersAllowlistTests.ProductionTenantFilterBypasses_MatchReviewedPathAndCountAllowlist`: expected 8 calls for `DeviceRemoteLandingReconciliationHandler.cs`, actual source contains 9. Updated the reviewed count to 9. No query behavior was changed.
+2. `GitLand_ExecuteAndRevertOnGitHubOriginRequirePullRequestLanding`: the Execute test passed no preview target-head/candidate-tree evidence. The executor correctly rejected the malformed Execute before reaching its intended GitHub remote-base check. The test now forwards the exact `targetHeadSha` and `candidateTreeSha` returned by Preview, so it tests the intended `GitHubReviewBaseUnavailable` fail-closed path.
+
+### GitHub landing implementation review
+
+The current branch now contains `GitHubLandingMergeExecutor` and dispatches to it only for a server-issued `GitLand Execute` on a GitHub origin. Ordinary Actor tools still expose only PR status/ready; they do not expose merge. The executor:
+
+- derives repository/branch/PR from the pinned task worktree and rejects arbitrary origins, multiple push/fetch URLs, mirror mode and review-base mismatch;
+- requires clean task worktree and exact reviewed source SHA;
+- requires one matching open PR targeting the pinned base; rejects duplicates and a changed base;
+- reads the PR snapshot and required checks, repeats snapshot/task/base reads before mutation, and checks non-draft/open, mergeable, clean merge state, APPROVED review, exact PR head and passing non-empty required checks;
+- invokes GitHub's PR merge API with the exact expected head SHA and merge method `merge`; no admin/bypass flag is used, so GitHub-side protections still apply;
+- handles uncertain responses by re-reading PR state, then fetches the remote target and verifies the merge commit is reachable from the refreshed target;
+- returns merge evidence only after exact merge identity is confirmed. GitLand then requires the merge commit tree to match the immutable preview tree and runs the post-merge check before recording `landed`.
+
+GitHub merge API is now the only remote merge authority. Local GitLand ref-only Execute remains for non-GitHub repositories; it cannot mutate a GitHub target. GitHub remote Revert remains blocked and must be implemented as a new reviewed forward-fix task, not a protected-ref rewrite.
+
+### Corrections committed after failed run
+
+- `docs/ignore-query-filters.allowlist`: revised the single reviewed entry from 8 to 9 to match the nine constrained call sites.
+- `ProjectBeacon.Cli.Tests/GitLandExecutorTests.cs`: Execute test now carries exact Preview evidence into the authorized Execute payload.
+
+### Current verification state
+
+- Both reported causes were corrected. New exact-head CI is required; CI #1640 remains failed and is not retroactively green.
+- No production tag/deploy was run.
+- Repository rulesets query returned no rulesets; legacy tag protection and GitHub Environment `production` reviewers are still not verifiable with the current integration.
+- GitHub landing integration tests currently cover safe argument construction/response parsing and fail-closed GitLand routing. A successful live merge test against a protected disposable GitHub repository is still not available in CI and remains an acceptance gap.
+
+### Next
+
+1. Run full CI on the updated head and fix any remaining failures.
+2. Expand merge executor test coverage for stale base, changed PR head, missing approval, missing/failing required checks, duplicate PRs, API rejection, lost response/already-merged recovery, and successful response identity mismatch.
+3. Add an integration test using a disposable protected GitHub repository or a deterministic HTTP/API seam; do not rely on a live production repository.
+4. Confirm GitHub rules/reviewers in repository Settings before any release tag or deployment.
