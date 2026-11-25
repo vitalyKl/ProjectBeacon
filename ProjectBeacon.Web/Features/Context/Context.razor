@@ -36,6 +36,7 @@
 
 @if (_project is null)
 {
+    <ErrorState Message="@_error" />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
@@ -266,6 +267,8 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+            _error = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
         _project = current.Value;
         if (_project is not null)
             await Reload();
@@ -288,6 +291,11 @@ else
         var selectedConstraintId = _selectedConstraint?.Id;
         var constraints = await ListConstraints.HandleAsync(_project.Id);
         _constraints = constraints.Success ? constraints.Value!.ToList() : [];
+        if (!constraints.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                constraints, L["Context"].Value, L["Load"].Value,
+                new { ProjectId = _project.Id, Resource = "constraints" }));
+
         if (selectedConstraintId is { } constraintId)
         {
             _selectedConstraint = _constraints.FirstOrDefault(item => item.Id == constraintId);
@@ -300,10 +308,19 @@ else
                 var history = await ContentVersions.HandleAsync(
                     _project.Id, ContentTargetKind.Constraint, constraintId, _actor, 50);
                 _constraintHistory = history.Success ? history.Value!.ToList() : [];
+                if (!history.Success)
+                    Notifications.Warning(Notifications.FormatFailure(
+                        history, L["Context"].Value, L["Load"].Value,
+                        new { ProjectId = _project.Id, ConstraintId = constraintId, Resource = "constraint history" }));
             }
         }
+
         var revisions = await ListRevisions.HandleAsync();
         _revisions = revisions.Success ? revisions.Value!.ToList() : [];
+        if (!revisions.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                revisions, L["Context"].Value, L["Load"].Value,
+                new { Resource = "context revision history" }));
     }
 
     private async Task OnSectionKey(KeyboardEventArgs e, ContextSectionDto node)

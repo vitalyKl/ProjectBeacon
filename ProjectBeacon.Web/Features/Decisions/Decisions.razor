@@ -187,6 +187,8 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+            Notifications.Failure(current, L["Projects"].Value, L["Load"].Value);
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -200,6 +202,8 @@ else
             return;
         }
         var listed = await ListDecisions.HandleAsync(_project.Id);
+        if (!listed.Success)
+            Notifications.Failure(listed, L["Decisions"].Value, L["Load"].Value);
         _decisions = listed.Success ? listed.Value!.ToList() : [];
         if (_selected is not null)
             _selected = _decisions.FirstOrDefault(d => d.Id == _selected.Id);

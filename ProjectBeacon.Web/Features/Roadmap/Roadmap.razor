@@ -230,6 +230,8 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+            Notifications.Failure(current, L["Projects"].Value, L["Load"].Value);
         _project = current.Value;
         await Reload();
         _loading = false;
