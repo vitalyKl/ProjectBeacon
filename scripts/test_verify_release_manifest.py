@@ -2,9 +2,11 @@
 """Unit tests for release manifest tag-pattern validation."""
 from __future__ import annotations
 
+import subprocess
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
+from unittest.mock import patch
 
 from verify_release_manifest import (
     dotnet_regex_to_python,
@@ -17,10 +19,15 @@ from verify_release_manifest import (
 
 
 class ReleaseManifestSafetyTests(unittest.TestCase):
-    def test_regex_execution_is_terminated_after_the_configured_timeout(self) -> None:
-        text = "a" * 30000 + "b"
-        with self.assertRaises(SystemExit):
-            read_regex_version(text, r"^(?<version>a+)+$")
+    def test_regex_execution_timeout_fails_closed(self) -> None:
+        timeout = subprocess.TimeoutExpired(cmd="regex-worker", timeout=2.0)
+        stderr = StringIO()
+        with patch("verify_release_manifest.subprocess.run", side_effect=timeout) as run:
+            with redirect_stderr(stderr), self.assertRaises(SystemExit):
+                read_regex_version("version=1.2.3", r"version=(?<version>.+)")
+
+        self.assertEqual(2.0, run.call_args.kwargs["timeout"])
+        self.assertIn("execution limit", stderr.getvalue())
 
     def test_expected_validation_failures_do_not_emit_github_error_annotations(self) -> None:
         stderr = StringIO()
