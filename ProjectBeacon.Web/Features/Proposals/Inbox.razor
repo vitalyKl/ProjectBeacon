@@ -569,7 +569,7 @@ else
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
-            return string.Empty;
+            return L["InvalidProposalPayload"].Value;
         }
 
         return ExtractMarkdown(payload);

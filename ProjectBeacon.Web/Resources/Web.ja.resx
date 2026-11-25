@@ -3198,4 +3198,7 @@ orthstar</value>
   <data name="UiBackgroundOperationRecovered" xml:space="preserve">
     <value>{0} のバックグラウンド情報が再び利用可能になりました。</value>
   </data>
+  <data name="InvalidProposalPayload" xml:space="preserve">
+    <value>提案のデータ形式が正しくないため、内容を読み取れませんでした。受信トレイを更新するか、作成者に再送信を依頼してください。</value>
+  </data>
 </root>

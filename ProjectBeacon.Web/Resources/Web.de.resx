@@ -3190,4 +3190,7 @@ orthstar</value>
   <data name="UiBackgroundOperationRecovered" xml:space="preserve">
     <value>Die Hintergrunddaten im Bereich „{0}“ sind wieder verfügbar.</value>
   </data>
+  <data name="InvalidProposalPayload" xml:space="preserve">
+    <value>Der Inhalt dieses Vorschlags konnte nicht gelesen werden, da die Nutzdaten ungültig sind. Aktualisieren Sie den Posteingang oder bitten Sie den Autor, den Vorschlag erneut einzureichen.</value>
+  </data>
 </root>

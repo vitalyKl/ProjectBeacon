@@ -3180,4 +3180,7 @@
   <data name="UiBackgroundOperationRecovered" xml:space="preserve">
     <value>Фоновые данные раздела «{0}» снова доступны.</value>
   </data>
+  <data name="InvalidProposalPayload" xml:space="preserve">
+    <value>Не удалось прочитать содержимое предложения: данные имеют неверный формат. Обновите список или попросите автора отправить предложение повторно.</value>
+  </data>
 </root>

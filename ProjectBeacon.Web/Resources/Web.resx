@@ -3389,4 +3389,7 @@ No Beacon-hosted coding agent.</value>
   <data name="UiBackgroundOperationRecovered" xml:space="preserve">
     <value>Background information in {0} is available again.</value>
   </data>
+  <data name="InvalidProposalPayload" xml:space="preserve">
+    <value>This proposal's content could not be read because its payload is invalid. Refresh the inbox or ask the author to submit it again.</value>
+  </data>
 </root>

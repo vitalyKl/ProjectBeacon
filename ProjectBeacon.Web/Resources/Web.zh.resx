@@ -3198,4 +3198,7 @@ orthstar</value>
   <data name="UiBackgroundOperationRecovered" xml:space="preserve">
     <value>“{0}”中的后台数据已恢复可用。</value>
   </data>
+  <data name="InvalidProposalPayload" xml:space="preserve">
+    <value>提案数据格式无效，无法读取其内容。请刷新收件箱，或联系提交者重新提交。</value>
+  </data>
 </root>
