@@ -3,6 +3,7 @@ namespace ProjectBeacon.Application.Tests;
 using Application.Common;
 using Application.Devices;
 using Application.Projects;
+using Domain.Entities.Audit;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
