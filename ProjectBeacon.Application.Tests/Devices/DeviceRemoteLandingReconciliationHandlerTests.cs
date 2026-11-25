@@ -219,6 +219,49 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task RejectsAutoSyncOffReconciliationFromLegacyDaemonWithoutNewCapability()
+    {
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
+        using (TenantScope.EnterUnscoped())
+        {
+            var device = await _db.DaemonDevices.SingleAsync(
+                item => item.Id == setup.DeviceId, TestContext.Current.CancellationToken);
+            device.Heartbeat(
+                """{"capabilities":["git-sync-v1","git-auto-sync-v1","git-land-v1","git-land-integration-v1"]}""",
+                "{}");
+
+            var candidateTree = new string('5', 40);
+            var attempt = LandingAttempt.Start(
+                setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
+                "main", setup.SourceSha, new string('2', 40), new string('a', 64),
+                "Beacon-managed landing proof from a legacy daemon.");
+            attempt.RecordPreview(
+                "main", setup.RemoteBaseSha, candidateTree, new string('6', 64), 0, null);
+            attempt.MarkExecutePending();
+            attempt.RecordLanded(setup.MergeSha, candidateTree, 0, new string('7', 64));
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var result = await handler.HandleAsync(
+                setup.DeviceId, Request(setup), TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Equal(ErrorKind.Forbidden, result.Kind);
+            Assert.Contains("does not advertise", result.Error ?? string.Empty, StringComparison.Ordinal);
+
+            await using var verify = Factory().CreateDbContext();
+            var task = await verify.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == setup.TaskId, TestContext.Current.CancellationToken);
+            Assert.Equal(TaskItemStatus.InProgress, task.Status);
+            Assert.Equal(TaskPipelineStage.Approved, task.PipelineStage);
+            Assert.Empty(await verify.RemoteLandingProofs.AsNoTracking()
+                .Where(proof => proof.TaskId == setup.TaskId)
+                .ToListAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
     public async Task DoesNotCloseTaskWhilePipelineSessionIsActive()
     {
         var setup = await CreateApprovedTaskAsync(autoSyncEnabled: true, activeSession: true);
