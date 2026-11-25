@@ -219,8 +219,6 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.False(ReleasePreparePayload.MatchesSnapshot(prepared.Json, changed.Json));
     }
 
-
-
     [Fact]
     public async Task PreparedReleaseFreezesItsMilestoneTaskScope()
     {
