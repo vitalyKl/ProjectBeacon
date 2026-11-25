@@ -154,16 +154,15 @@ internal static class GitLandExecutor
         if (customMergeDrivers.ExitCode == 0 && !string.IsNullOrWhiteSpace(customMergeDrivers.StdOut))
             return BusinessFailure("CustomMergeDriversConfigured");
 
-        if (request.Action == "Execute" && isGitHubOrigin)
-            return await ExecuteGitHubLandingAsync(taskWorkspace, request, disabledFilters, ct);
-
-        var outcome = request.Action switch
-        {
-            "Preview" => await PreviewAsync(taskWorkspace, request, disabledFilters, ct),
-            "Execute" => await ExecuteLandingAsync(taskWorkspace, request, disabledFilters, ct),
-            "Revert" => await RevertAsync(taskWorkspace, request, disabledFilters, ct),
-            _ => (false, null, "GitLand action must be Preview, Execute, or Revert.")
-        };
+        var outcome = request.Action == "Execute" && isGitHubOrigin
+            ? await ExecuteGitHubLandingAsync(taskWorkspace, request, disabledFilters, ct)
+            : request.Action switch
+            {
+                "Preview" => await PreviewAsync(taskWorkspace, request, disabledFilters, ct),
+                "Execute" => await ExecuteLandingAsync(taskWorkspace, request, disabledFilters, ct),
+                "Revert" => await RevertAsync(taskWorkspace, request, disabledFilters, ct),
+                _ => (false, null, "GitLand action must be Preview, Execute, or Revert.")
+            };
 
         // Retention starts only after the executor itself confirms a landed result. A
         // post-merge failure (landed_unverified), a retryable/unknown outcome, or a revert
