@@ -586,6 +586,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ChatPart> ChatParts => _inner.ChatParts;
         public DbSet<EvalRun> EvalRuns => _inner.EvalRuns;
         public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
+        public DbSet<RemoteLandingProof> RemoteLandingProofs => _inner.RemoteLandingProofs;
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
         public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
@@ -669,6 +670,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ChatPart> ChatParts => _inner.ChatParts;
         public DbSet<EvalRun> EvalRuns => _inner.EvalRuns;
         public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
+        public DbSet<RemoteLandingProof> RemoteLandingProofs => _inner.RemoteLandingProofs;
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
         public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
