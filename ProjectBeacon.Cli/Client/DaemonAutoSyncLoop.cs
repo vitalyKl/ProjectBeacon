@@ -161,7 +161,7 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
     {
         if (string.IsNullOrWhiteSpace(value))
             return string.Empty;
-        var safe = value.Replace('\\r', ' ').Replace('\\n', ' ').Trim();
+        var safe = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
         return safe.Length <= 500 ? safe : safe[..500];
     }
 
