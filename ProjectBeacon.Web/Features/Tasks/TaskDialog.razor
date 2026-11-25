@@ -15,6 +15,10 @@
 <MudTextField @bind-Value="_title" Label="@L["Title"]" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
 @if (Task is null)
 {
+    @if (_kindLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_kindLoadErrorMessage</MudAlert>
+    }
     <MudSelect T="Guid?" @bind-Value="_kindId" Label="@L["TaskKinds"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
         @foreach (var kind in _kinds)
         {
@@ -74,6 +78,7 @@
     private Guid? _kindId;
     private Guid _userId;
     private List<TaskKindDto> _kinds = [];
+    private string? _kindLoadErrorMessage;
     private bool _saving;
 
     protected override async Task OnInitializedAsync()
@@ -86,8 +91,16 @@
             if (_userId != Guid.Empty)
             {
                 var listed = await ListKinds.HandleAsync(new ListTaskKindsCommand(_userId));
-                _kinds = listed.Success ? listed.Value!.ToList() : [];
-                _kindId = _kinds.FirstOrDefault(k => k.IsBuiltIn)?.Id ?? _kinds.FirstOrDefault()?.Id;
+                if (!listed.Success)
+                {
+                    _kindLoadErrorMessage = Notifications.FormatFailure(listed, L["Agents"].Value, L["Load"].Value);
+                }
+                else
+                {
+                    _kindLoadErrorMessage = null;
+                    _kinds = listed.Value!.ToList();
+                    _kindId = _kinds.FirstOrDefault(k => k.IsBuiltIn)?.Id ?? _kinds.FirstOrDefault()?.Id;
+                }
             }
             return;
         }
