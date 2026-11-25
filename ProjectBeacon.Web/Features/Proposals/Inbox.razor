@@ -515,9 +515,23 @@ else
             return;
         var versions = await ListContentVersions.HandleAsync(
             _project.Id, proposal.TargetKind, proposal.TargetId, _actor, 100);
-        var version = versions.Success
-            ? versions.Value!.FirstOrDefault(item => item.Revision == proposal.BaseRevision)
-            : null;
+        if (!versions.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(
+                versions,
+                L["ProposalInbox"].Value,
+                L["Load"].Value,
+                new
+                {
+                    ProjectId = _project.Id,
+                    ProposalId = proposal.Id,
+                    TargetId = proposal.TargetId,
+                    Resource = "base snapshot history"
+                }));
+            return;
+        }
+
+        var version = versions.Value!.FirstOrDefault(item => item.Revision == proposal.BaseRevision);
         if (version is null)
         {
             Notifications.Add(L["BaseSnapshotMissing"].Value, Severity.Warning);
