@@ -62,12 +62,20 @@
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-4" />
 }
+else if (_task is null && _taskLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_taskLoadErrorMessage" />
+}
 else if (_task is null)
 {
     <MudAlert Severity="Severity.Info">@L["TaskNotFound"]</MudAlert>
 }
 else
 {
+    @if (_taskLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_taskLoadErrorMessage</MudAlert>
+    }
     <header class="beacon-task-hero">
         <div>
             <div class="beacon-task-kicker">
@@ -176,6 +184,14 @@ else
             }
         </div>
     </header>
+    @if (_pipelineRefreshErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_pipelineRefreshErrorMessage</MudAlert>
+    }
+    @if (_gitSyncRestoreErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_gitSyncRestoreErrorMessage</MudAlert>
+    }
     @if (_pipeline?.Preflight?.RepositoryAutoSync is { } autoSyncStatus)
     {
         <MudAlert Severity="@(AutoSyncHasWarning(autoSyncStatus) ? Severity.Warning : Severity.Info)"
@@ -498,7 +514,8 @@ else
 
     [Parameter] public Guid TaskId { get; set; }
     private TaskItemDto? _task;
-    private TaskItemStatus _status = TaskItemStatus.Todo;
+    private string? _taskLoadErrorMessage;
+    private readonly UiBackgroundFailureTracker _taskLoadFailures = new();    private TaskItemStatus _status = TaskItemStatus.Todo;
     private bool _loading = true;
     private CancellationTokenSource? _pipelinePoll;
     private PipelineStateDto? _pipeline;
@@ -507,9 +524,14 @@ else
     private bool _canManageRepositorySync;
     private bool _gitSyncCommandPending;
     private bool _gitSyncCommandCancellable;
+    private string? _pipelineRefreshErrorMessage;
+    private string? _gitSyncRestoreErrorMessage;
+    private readonly UiBackgroundFailureTracker _pipelineRefreshFailures = new();
+    private readonly UiBackgroundFailureTracker _gitSyncRestoreFailures = new();
     private Guid? _gitSyncCommandId;
     private Guid? _gitSyncProjectId;
     private Guid? _gitSyncTargetDeviceId;
+    private WorkstationCommandDto? _gitSyncTerminalCommandAwaitingPipelineRefresh;
     private bool _isAdmin;
     private ActorContext _actorContext = ActorContext.Anonymous;
     private List<ProposalDto> _taskProposals = [];
@@ -712,15 +734,45 @@ else
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), ct);
+
+                if (_task is null && _taskLoadErrorMessage is not null)
+                {
+                    await TryRecoverTaskLoadAsync();
+                    if (_task is not null)
+                    {
+                        await ReloadPipeline(ct, isBackground: true);
+                        await ReloadSteps();
+                        await ReloadWorkspace();
+                        await RestorePendingGitSyncCommandAsync();
+                    }
+
+                    await InvokeAsync(StateHasChanged);
+                    continue;
+                }
+
                 var repositorySyncPending = _pipeline?.Preflight?.RepositorySyncInProgress == true
-                    || _gitSyncCommandPending;
+                    || _gitSyncCommandPending
+                    || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null
+                    || _pipelineRefreshErrorMessage is not null;
                 if ((_pipeline?.Stage is null or TaskPipelineStage.None or TaskPipelineStage.Closed or TaskPipelineStage.Cancelled)
                     && !repositorySyncPending)
                     continue;
 
                 try
                 {
-                    await ReloadPipeline(ct);
+                    if (!await ReloadPipeline(ct, isBackground: true))
+                    {
+                        await InvokeAsync(StateHasChanged);
+                        continue;
+                    }
+
+                    // A terminal result is not reported until a fresh preflight confirms
+                    // which workstation is currently selected for this task.
+                    if (_gitSyncTerminalCommandAwaitingPipelineRefresh is { } terminalAwaitingRefresh)
+                    {
+                        _gitSyncTerminalCommandAwaitingPipelineRefresh = null;
+                        ReportGitSyncTerminalCommand(terminalAwaitingRefresh);
+                    }
 
                     // Recover the command reference if the initial restore or a transient
                     // status lookup failed. Preflight is durable and project-scoped, so the
@@ -736,6 +788,12 @@ else
                     {
                         var current = await GetGitSyncCommand.HandleAsync(
                             projectId, commandId, _actorContext, ct);
+                        if (current.Success)
+                        {
+                            _gitSyncRestoreFailures.RecordSuccess();
+                            _gitSyncRestoreErrorMessage = null;
+                        }
+
                         if (current.Success && current.Value is { Status:
                             WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled } terminal)
                         {
@@ -751,9 +809,27 @@ else
                         }
                         else if (!current.Success)
                         {
-                            Logger.LogWarning(
-                                "Could not refresh GitSync command {CommandId} for task {TaskId}: {Error}",
-                                commandId, TaskId, current.Error);
+                            if (current.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
+                            {
+                                _gitSyncRestoreFailures.RecordSuccess();
+                                _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                                    current,
+                                    L["Tasks"].Value,
+                                    L["Read"].Value,
+                                    new { TaskId, ProjectId = projectId, CommandId = commandId });
+                            }
+                            else if (_gitSyncRestoreFailures.RecordFailure())
+                            {
+                                _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                                    current,
+                                    L["Tasks"].Value,
+                                    L["Read"].Value,
+                                    new { TaskId, ProjectId = projectId, CommandId = commandId });
+                            }
+                            else
+                                Logger.LogWarning(
+                                    "Transient GitSync command status read failure. TaskId={TaskId}, ProjectId={ProjectId}, CommandId={CommandId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                                    TaskId, projectId, commandId, current.ErrorCode ?? ErrorCodes.For(current.Kind), current.Error);
                             if (current.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
                             {
                                 _gitSyncCommandId = null;
@@ -782,8 +858,20 @@ else
                 }
                 catch (Exception exception)
                 {
-                    // A transient read failure must not stop repository or pipeline status polling.
-                    Logger.LogWarning(exception, "Task pipeline refresh failed. TaskId={TaskId}", TaskId);
+                    // Keep polling after transient failures, but surface one diagnostic when the
+                    // failure persists instead of silently leaving stale pipeline state on screen.
+                    if (_pipelineRefreshFailures.RecordFailure())
+                    {
+                        var diagnosticId = Notifications.LogException(
+                            exception,
+                            "refresh task pipeline and repository status",
+                            new { TaskId });
+                        _pipelineRefreshErrorMessage = Notifications.FormatDiagnosticMessage(
+                            "TaskPipelineRefreshUnavailable", diagnosticId);
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    else
+                        Logger.LogWarning(exception, "Transient task pipeline refresh failure; will retry. TaskId={TaskId}", TaskId);
                 }
             }
         }
@@ -798,10 +886,99 @@ else
         _pipelinePoll?.Dispose();
     }
 
+    private async Task TryRecoverTaskLoadAsync()
+    {
+        Result<TaskItemDto> result;
+        try
+        {
+            result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
+        }
+        catch (Exception exception)
+        {
+            if (_taskLoadFailures.RecordFailure())
+            {
+                var diagnosticId = Notifications.LogException(
+                    exception, "load task details", new { TaskId });
+                _taskLoadErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "TaskLoadUnavailable", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient task detail recovery exception. TaskId={TaskId}", TaskId);
+            return;
+        }
+
+        if (!result.Success)
+        {
+            var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+            var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                or ErrorCodes.NotFound or ErrorCodes.Conflict;
+            if (isPermanentFailure || _taskLoadFailures.RecordFailure())
+            {
+                if (isPermanentFailure)
+                    _taskLoadFailures.RecordSuccess();
+                _taskLoadErrorMessage = Notifications.FormatFailure(
+                    result, L["Tasks"].Value, L["Load"].Value, new { TaskId });
+            }
+            else
+                Logger.LogWarning(
+                    "Transient task detail recovery failed. TaskId={TaskId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                    TaskId, errorCode, result.Error);
+            return;
+        }
+
+        _taskLoadFailures.RecordSuccess();
+        _taskLoadErrorMessage = null;
+        _task = result.Value;
+        _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus)
+            ? parsedStatus
+            : TaskItemStatus.Todo;
+
+        if (_task is null)
+            return;
+
+        _canManageRepositorySync = await GetGitSyncCommand.CanAdministerAsync(_task.ProjectId, _actorContext);
+        var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
+        if (labels.Success)
+            _labels = labels.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                labels, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "labels" }));
+
+        var milestones = await ListMilestones.HandleAsync(
+            new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId), _actorContext));
+        if (milestones.Success)
+            _milestones = milestones.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                milestones, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "milestones" }));
+
+        await ReloadTaskProposals();
+    }
+
     private async Task Reload()
     {
-        var result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
-        _task = result.Success ? result.Value : null;
+        Result<TaskItemDto> result;
+        try
+        {
+            result = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(TaskId)));
+        }
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(
+                exception, "load task details", new { TaskId });
+            _taskLoadErrorMessage = Notifications.FormatDiagnosticMessage("TaskLoadUnavailable", diagnosticId);
+            return;
+        }
+        if (!result.Success)
+        {
+            _taskLoadErrorMessage = Notifications.FormatFailure(
+                result, L["Tasks"].Value, L["Load"].Value, new { TaskId });
+            return;
+        }
+
+        _taskLoadFailures.RecordSuccess();
+        _taskLoadErrorMessage = null;
+        _task = result.Value;
         _status = Enum.TryParse<TaskItemStatus>(_task?.Status, out var parsedStatus) ? parsedStatus : TaskItemStatus.Todo;
         if (_task is not null)
         {
@@ -809,9 +986,19 @@ else
                 _task.ProjectId, _actorContext);
 
             var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_task.ProjectId));
-            _labels = labels.Success ? labels.Value!.ToList() : [];
+            if (labels.Success)
+                _labels = labels.Value!.ToList();
+            else
+                Notifications.Warning(Notifications.FormatFailure(labels, L["Tasks"].Value, L["Load"].Value,
+                    new { TaskId, Resource = "labels" }));
+
             var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_task.ProjectId), _actorContext));
-            _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+            if (milestones.Success)
+                _milestones = milestones.Value!.ToList();
+            else
+                Notifications.Warning(Notifications.FormatFailure(milestones, L["Tasks"].Value, L["Load"].Value,
+                    new { TaskId, Resource = "milestones" }));
+
             await ReloadTaskProposals();
         }
     }
@@ -827,7 +1014,11 @@ else
         var proposals = await ListProposals.HandleAsync(
             new ListProposalsQuery(_task.ProjectId, TaskId: TaskId, Limit: 100),
             _actorContext);
-        _taskProposals = proposals.Success ? proposals.Value!.ToList() : [];
+        if (proposals.Success)
+            _taskProposals = proposals.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(proposals, L["Tasks"].Value, L["Load"].Value,
+                new { TaskId, Resource = "proposals" }));
     }
 
     private string TaskProposalStatus(ProposalStatus status) => status switch
@@ -988,6 +1179,12 @@ else
                 task.ProjectId,
                 _actorContext,
                 targetDeviceId: preflight.PipelineDeviceId);
+            if (pending.Success)
+            {
+                _gitSyncRestoreFailures.RecordSuccess();
+                _gitSyncRestoreErrorMessage = null;
+            }
+
             if (pending.Success && pending.Value is { } command
                 && command.DeviceId == preflight.PipelineDeviceId)
             {
@@ -996,34 +1193,122 @@ else
                 _gitSyncTargetDeviceId = command.DeviceId;
                 _gitSyncCommandPending = true;
                 _gitSyncCommandCancellable = command.Status == WorkstationCommandStatus.Pending;
+                _gitSyncRestoreErrorMessage = null;
+            }
+            else if (pending.Success)
+            {
+                // A successful query with no pending command does not prove that a previously
+                // reported command lookup failure has recovered while preflight still says Sync is active.
+                if (pending.Value is not null)
+                    _gitSyncRestoreErrorMessage = null;
             }
             else if (!pending.Success)
             {
-                Logger.LogWarning(
-                    "Could not restore pending GitSync command for task {TaskId}, project {ProjectId}: {Error}",
-                    TaskId, task.ProjectId, pending.Error);
-                if (pending.Kind == ErrorKind.Forbidden)
+                if (pending.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
                 {
-                    _canManageRepositorySync = false;
+                    _gitSyncRestoreFailures.RecordSuccess();
+                    _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                        pending,
+                        L["Tasks"].Value,
+                        L["Read"].Value,
+                        new { TaskId, ProjectId = task.ProjectId });
+                }
+                else if (_gitSyncRestoreFailures.RecordFailure())
+                {
+                    _gitSyncRestoreErrorMessage = Notifications.FormatFailure(
+                        pending,
+                        L["Tasks"].Value,
+                        L["Read"].Value,
+                        new { TaskId, ProjectId = task.ProjectId });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient pending GitSync command restore result failure. TaskId={TaskId}, ProjectId={ProjectId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        TaskId, task.ProjectId, pending.ErrorCode ?? ErrorCodes.For(pending.Kind), pending.Error);
+                if (pending.Kind is ErrorKind.Forbidden or ErrorKind.NotFound)
+                {
+                    _canManageRepositorySync = pending.Kind != ErrorKind.Forbidden && _canManageRepositorySync;
                     _gitSyncCommandId = null;
                     _gitSyncProjectId = null;
                     _gitSyncTargetDeviceId = null;
                     _gitSyncCommandPending = false;
+                    _gitSyncCommandCancellable = false;
                 }
             }
         }
         catch (Exception exception)
         {
-            Logger.LogWarning(exception,
-                "Could not restore pending GitSync command for task {TaskId}, project {ProjectId}",
-                TaskId, task.ProjectId);
+            if (_gitSyncRestoreFailures.RecordFailure())
+            {
+                var diagnosticId = Notifications.LogException(
+                    exception,
+                    "restore pending repository synchronization command",
+                    new { TaskId, ProjectId = task.ProjectId, DeviceId = preflight.PipelineDeviceId });
+                _gitSyncRestoreErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "GitSyncCommandRestoreFailed", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient pending GitSync command restore failure. TaskId={TaskId}, ProjectId={ProjectId}", TaskId, task.ProjectId);
         }
     }
 
-    private async Task ReloadPipeline(CancellationToken ct = default)
+    private async Task<bool> ReloadPipeline(CancellationToken ct = default, bool isBackground = false)
     {
-        var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)), ct);
-        _pipeline = result.Success ? result.Value : null;
+        try
+        {
+            var result = await GetPipeline.HandleAsync(new GetPipelineCommand(new GetPipelineRequest(TaskId)), ct);
+            if (!result.Success)
+            {
+                var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _pipelineRefreshFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _pipelineRefreshFailures.RecordSuccess();
+                    _pipelineRefreshErrorMessage = Notifications.FormatFailure(
+                        result,
+                        L["Tasks"].Value,
+                        L["Load"].Value,
+                        new { TaskId });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient task pipeline read failure. TaskId={TaskId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        TaskId, errorCode, result.Error);
+                return false;
+            }
+
+            _pipeline = result.Value;
+            _pipelineRefreshFailures.RecordSuccess();
+            _pipelineRefreshErrorMessage = null;
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _pipelineRefreshFailures.RecordFailure())
+            {
+                var diagnosticId = Notifications.LogException(
+                    exception,
+                    "refresh task pipeline",
+                    new { TaskId });
+                _pipelineRefreshErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "TaskPipelineRefreshUnavailable", diagnosticId);
+            }
+            else
+            {
+                Logger.LogWarning(
+                    exception,
+                    "Transient task pipeline read exception. TaskId={TaskId}; will retry.",
+                    TaskId);
+            }
+
+            return false;
+        }
     }
 
     private async Task ReloadWorkspace()
@@ -1032,7 +1317,14 @@ else
             return;
         var result = await WorkspaceIndex.HandleAsync(new WorkspaceIndexQuery(
             new WorkspaceIndexRequest(TaskId, Limit: 100)));
-        _workspaceSections = result.Success ? result.Value!.ToList() : [];
+        if (!result.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(
+                result, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "workspace" }));
+            return;
+        }
+
+        _workspaceSections = result.Value!.ToList();
         if (_selectedWorkspace is not null
             && _workspaceSections.Any(section => section.Key == _selectedWorkspace.Key))
             await OnReadWorkspaceSection(_selectedWorkspace.Key);
@@ -1106,10 +1398,21 @@ else
     private async Task ReloadSteps()
     {
         var result = await ListSteps.HandleAsync(new ListTaskStepsCommand(new ListTaskStepsRequest(TaskId)));
-        _steps = result.Success ? result.Value!.ToList() : [];
+        if (result.Success)
+            _steps = result.Value!.ToList();
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                result, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "checklist" }));
+
         var phases = await ListPhases.HandleAsync(new ListTaskPhasesCommand(TaskId));
-        _phases = phases.Success ? phases.Value!.ToList() : [];
-        _openPhaseId ??= _phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)?.Id ?? _phases.FirstOrDefault()?.Id;
+        if (phases.Success)
+        {
+            _phases = phases.Value!.ToList();
+            _openPhaseId ??= _phases.FirstOrDefault(p => p.Status == TaskPhaseStatus.Active)?.Id ?? _phases.FirstOrDefault()?.Id;
+        }
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                phases, L["Tasks"].Value, L["Load"].Value, new { TaskId, Resource = "phases" }));
     }
 
     private void TogglePhase(Guid id) => _openPhaseId = _openPhaseId == id ? null : id;
@@ -1336,7 +1639,8 @@ else
 
     private async Task OnSynchronizeRepository()
     {
-        if (!_canManageRepositorySync || _busy || _gitSyncBusy || _gitSyncCommandPending || _task is null
+        if (!_canManageRepositorySync || _busy || _gitSyncBusy || _gitSyncCommandPending
+            || _gitSyncTerminalCommandAwaitingPipelineRefresh is not null || _task is null
             || _pipeline?.Preflight is not { PipelineGitSyncSupported: true, PipelineDeviceId: { } deviceId })
             return;
 
@@ -1487,7 +1791,17 @@ else
         // The selected native workstation may change while GitSync is running. Re-read
         // preflight before reporting success: only a result for both the originally queued
         // target and the currently selected pipeline target can unblock this task.
-        await ReloadPipeline(ct);
+        if (!await ReloadPipeline(ct))
+        {
+            _gitSyncTerminalCommandAwaitingPipelineRefresh = command;
+            return;
+        }
+
+        ReportGitSyncTerminalCommand(command);
+    }
+
+    private void ReportGitSyncTerminalCommand(WorkstationCommandDto command)
+    {
         var currentTargetDeviceId = _pipeline?.Preflight?.PipelineDeviceId;
         if (_gitSyncTargetDeviceId is not { } targetDeviceId
             || targetDeviceId != command.DeviceId

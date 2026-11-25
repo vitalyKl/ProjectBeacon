@@ -3349,97 +3349,122 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>Wiederherstellen</value>
   </data>
-  <data name="AutoPullMode" xml:space="preserve">
+  <data name="ChatPollingUnavailable" xml:space="preserve">
+    <value>Live-Aktualisierungen des Chats sind vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
+  </data>
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+    <value>Der Aufgaben- und Repository-Status konnte nach mehreren Versuchen nicht aktualisiert werden. Die angezeigten Daten sind möglicherweise veraltet; die Aktualisierung wird automatisch fortgesetzt.</value>
+  </data>
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+    <value>Die ausstehende Repository-Synchronisierung konnte nicht wiederhergestellt werden. Prüfen Sie den Aufgaben- und Workstation-Status, bevor Sie eine weitere Synchronisierung starten.</value>
+  </data>
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
+    <value>Der Laufzeitstatus des Chat-Modells ist vorübergehend nicht verfügbar. Der Chat kann weiter verwendet werden, aber die Modellbereitschaft ist möglicherweise nicht aktuell.</value>
+  </data>
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
+    <value>Der Aufgabenkontext für diesen Chat konnte nicht geladen werden. Der Chat kann ohne diesen Kontext fortgesetzt werden.</value>
+  </data>
+  <data name="TaskLoadUnavailable" xml:space="preserve">
+    <value>Die Aufgabe konnte nicht geladen werden. Der Dienst für Aufgabendetails ist nicht verfügbar. Solange diese Seite geöffnet bleibt, wird automatisch erneut versucht. Diagnose-ID: {0}</value>
+  </data>
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+    <value>Die Workstation-Metriken konnten nicht geladen werden. Prüfen Sie die Verbindung der Workstation und versuchen Sie es erneut. Diagnose-ID: {0}</value>
+  </data>
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+    <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
+  </data>
+
+<data name="AutoPullMode" xml:space="preserve">
     <value>Automatische Checkout-Aktualisierung</value>
   </data>
-  <data name="AutoPullModeOff" xml:space="preserve">
+<data name="AutoPullModeOff" xml:space="preserve">
     <value>Aus — nur Status prüfen</value>
   </data>
-  <data name="AutoPullModeWhenSafe" xml:space="preserve">
+<data name="AutoPullModeWhenSafe" xml:space="preserve">
     <value>Wenn sicher — Fast-Forward eines sauberen Checkouts</value>
   </data>
-  <data name="AutoSyncIntervalMinutes" xml:space="preserve">
+<data name="AutoSyncIntervalMinutes" xml:space="preserve">
     <value>Intervall der Repository-Prüfung (Minuten)</value>
   </data>
-  <data name="AutoSyncHelp" xml:space="preserve">
+<data name="AutoSyncHelp" xml:space="preserve">
     <value>Projekt-Repositories werden im Hintergrund geprüft. Automatische Updates verwenden nur Fast-Forward und überschreiben keine lokalen Änderungen. Intervall: 2–120 Minuten.</value>
   </data>
-  <data name="RepositorySync" xml:space="preserve">
+<data name="RepositorySync" xml:space="preserve">
     <value>Status der Projekt-Repositories</value>
   </data>
-  <data name="RepositorySyncNotReported" xml:space="preserve">
+<data name="RepositorySyncNotReported" xml:space="preserve">
     <value>Diese Workstation hat noch keinen Repository-Status gemeldet.</value>
   </data>
-  <data name="RepoSyncError" xml:space="preserve">
+<data name="RepoSyncError" xml:space="preserve">
     <value>Synchronisierungsfehler: {0}</value>
   </data>
-  <data name="RepoSyncDiverged" xml:space="preserve">
+<data name="RepoSyncDiverged" xml:space="preserve">
     <value>Branches sind auseinander gelaufen</value>
   </data>
-  <data name="RepoSyncDetached" xml:space="preserve">
+<data name="RepoSyncDetached" xml:space="preserve">
     <value>Detached HEAD</value>
   </data>
-  <data name="RepoSyncNoUpstream" xml:space="preserve">
+<data name="RepoSyncNoUpstream" xml:space="preserve">
     <value>Kein Upstream konfiguriert</value>
   </data>
-  <data name="RepoSyncDirty" xml:space="preserve">
+<data name="RepoSyncDirty" xml:space="preserve">
     <value>Lokale Änderungen — nicht aktualisiert</value>
   </data>
-  <data name="RepoSyncActiveSessions" xml:space="preserve">
+<data name="RepoSyncActiveSessions" xml:space="preserve">
     <value>Snapshot-Sitzung aktiv — Update verschoben</value>
   </data>
-  <data name="RepoSyncGitLandActive" xml:space="preserve">
+<data name="RepoSyncGitLandActive" xml:space="preserve">
     <value>Git-Landing läuft — Update verschoben</value>
   </data>
-  <data name="RepoSyncCheckoutBusy" xml:space="preserve">
+<data name="RepoSyncCheckoutBusy" xml:space="preserve">
     <value>Checkout belegt — Update verschoben</value>
   </data>
-  <data name="RepoSyncPulled" xml:space="preserve">
+<data name="RepoSyncPulled" xml:space="preserve">
     <value>Automatisch aktualisiert: {0} Commits</value>
   </data>
-  <data name="RepoSyncBehind" xml:space="preserve">
+<data name="RepoSyncBehind" xml:space="preserve">
     <value>{0} Commits hinter Remote</value>
   </data>
-  <data name="RepoSyncUpToDate" xml:space="preserve">
+<data name="RepoSyncUpToDate" xml:space="preserve">
     <value>Aktuell</value>
   </data>
-  <data name="RepoSyncJustNow" xml:space="preserve">
+<data name="RepoSyncJustNow" xml:space="preserve">
     <value>Gerade eben</value>
   </data>
-  <data name="RepoSyncUpdatedMinutes" xml:space="preserve">
+<data name="RepoSyncUpdatedMinutes" xml:space="preserve">
     <value>Vor {0} Min. geprüft</value>
   </data>
-  <data name="RepoSyncNotGit" xml:space="preserve">
+<data name="RepoSyncNotGit" xml:space="preserve">
     <value>Kein Git-Repository</value>
   </data>
-  <data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
+<data name="RepoSyncCheckoutMutationActive" xml:space="preserve">
     <value>Andere Checkout-Operation läuft — Update verschoben</value>
   </data>
-  <data name="RepoSyncGitSyncBusy" xml:space="preserve">
+<data name="RepoSyncGitSyncBusy" xml:space="preserve">
     <value>GitSync läuft bereits — Prüfung verschoben</value>
   </data>
-  <data name="RepoSyncAuthenticationFailed" xml:space="preserve">
+<data name="RepoSyncAuthenticationFailed" xml:space="preserve">
     <value>Die Anmeldung am Remote-Repository ist fehlgeschlagen. Repository-Zugangsdaten prüfen.</value>
   </data>
-  <data name="RepoSyncFetchFailed" xml:space="preserve">
+<data name="RepoSyncFetchFailed" xml:space="preserve">
     <value>Abruf vom Remote fehlgeschlagen. Netzwerk, Remote-URL und Zugangsdaten prüfen.</value>
   </data>
-  <data name="RepoSyncTimeout" xml:space="preserve">
+<data name="RepoSyncTimeout" xml:space="preserve">
     <value>Zeitüberschreitung bei Git. Die automatische Synchronisierung versucht es erneut.</value>
   </data>
-  <data name="RepoSyncDiscoveryFailed" xml:space="preserve">
+<data name="RepoSyncDiscoveryFailed" xml:space="preserve">
     <value>Die Projektliste dieser Workstation konnte nicht aktualisiert werden.</value>
   </data>
-  <data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
+<data name="RepoSyncDirectoryUnavailable" xml:space="preserve">
     <value>Der Projektordner ist auf dieser Workstation nicht verfügbar.</value>
   </data>
-  <data name="RepoSyncRuntimeChanged" xml:space="preserve">
+<data name="RepoSyncRuntimeChanged" xml:space="preserve">
     <value>Das zugeordnete Projektverzeichnis wurde während der Synchronisierung geändert — Update verschoben</value>
   </data>
-  <data name="RepoSyncNoRemote" xml:space="preserve">
+<data name="RepoSyncNoRemote" xml:space="preserve">
     <value>Der Upstream verweist auf einen lokalen Branch, nicht auf ein Remote</value>
   </data>
-  <data name="RepoSyncPullDetails" xml:space="preserve">
+<data name="RepoSyncPullDetails" xml:space="preserve">
     <value>Automatisch aktualisiert {0}: {1} → {2}</value>
   </data>
 </root>

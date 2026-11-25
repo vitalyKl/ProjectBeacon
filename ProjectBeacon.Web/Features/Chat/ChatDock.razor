@@ -43,6 +43,14 @@
                         aria-label="@L["Close"].Value" />
                 </MudStack>
             </MudStack>
+            @if (_routeContextErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_routeContextErrorMessage</MudAlert>
+            }
+            @if (_waitingTasksErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">@_waitingTasksErrorMessage</MudAlert>
+            }
             @if (_waitingTasks.Count > 0)
             {
                 <MudAlert Severity="Severity.Warning" Dense="true" Variant="Variant.Outlined" Class="mb-2">
@@ -54,6 +62,22 @@
                         }
                     </MudStack>
                 </MudAlert>
+            }
+            @if (_sessionsLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionsLoadErrorMessage</MudAlert>
+            }
+            @if (_partsLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_partsLoadErrorMessage</MudAlert>
+            }
+            @if (_pollErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_pollErrorMessage</MudAlert>
+            }
+            @if (_proxyStatusErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_proxyStatusErrorMessage</MudAlert>
             }
             @if (_block == "folder")
             {
@@ -128,6 +152,9 @@
     private ChatSessionDto? _session;
     private List<ChatSessionDto> _sessions = [];
     private List<WaitingPipelineTaskDto> _waitingTasks = [];
+    private string? _waitingTasksErrorMessage;
+    private string? _routeContextErrorMessage;
+    private readonly UiBackgroundFailureTracker _waitingTasksFailures = new();
     private Guid? _contextTaskId;
     private string? _contextTaskTitle;
     private string _contextPageLabel = string.Empty;
@@ -141,6 +168,12 @@
     private bool _busy;
     private bool _aborting;
     private bool _failed;
+    private string? _sessionsLoadErrorMessage;
+    private string? _partsLoadErrorMessage;
+    private string? _pollErrorMessage;
+    private string? _proxyStatusErrorMessage;
+    private readonly UiBackgroundFailureTracker _pollFailures = new();
+    private readonly UiBackgroundFailureTracker _proxyStatusFailures = new();
     private CancellationTokenSource? _poll;
 
     protected override async Task OnInitializedAsync()
@@ -151,8 +184,14 @@
         if (actor.UserId is not null)
             _userId = actor.UserId.Value;
         var current = await CurrentProject.HandleAsync(actor);
+        if (!current.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value));
+            return;
+        }
         if (current.Value is null || _userId == Guid.Empty)
             return;
+
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
         {
@@ -164,7 +203,11 @@
                 if (chosen is not null)
                     _model = ChatModelSelection.ResolveBackendModelId(chosen.BackendType, chosen.Name, chosen.ProviderModelId);
             }
+            else if (!preferred.Success)
+                Notifications.Warning(Notifications.FormatFailure(preferred, L["Chat"].Value, L["Load"].Value));
         }
+        else
+            Notifications.Warning(Notifications.FormatFailure(registry, L["Agents"].Value, L["Load"].Value));
         await ReloadSessions();
         await ReloadRouteContext();
         await ReloadWaitingTasks();
@@ -196,24 +239,85 @@
         if (_userId == Guid.Empty)
             return;
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
-        _sessions = listed.Success ? listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList() : [];
+        if (!listed.Success)
+        {
+            _sessionsLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
+            return;
+        }
+
+        _sessionsLoadErrorMessage = null;
+        _sessions = listed.Value!.OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt).ToList();
         if (_session is not null)
             _session = _sessions.FirstOrDefault(x => x.Id == _session.Id) ?? _session;
     }
 
-    private async Task ReloadWaitingTasks()
+    private async Task ReloadWaitingTasks(bool isBackground = false)
     {
         if (_userId == Guid.Empty)
             return;
-        var result = await ListWaitingTasks.HandleAsync(
-            new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
-        _waitingTasks = result.Success ? result.Value!.ToList() : [];
+
+        try
+        {
+            var result = await ListWaitingTasks.HandleAsync(
+                new ListWaitingPipelineTasksCommand(new ListWaitingPipelineTasksRequest(_userId)));
+            if (!result.Success)
+            {
+                var errorCode = result.ErrorCode ?? ErrorCodes.For(result.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _waitingTasksFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _waitingTasksFailures.RecordSuccess();
+                    _waitingTasksErrorMessage = Notifications.FormatFailure(
+                        result,
+                        L["Chat"].Value,
+                        L["Load"].Value,
+                        new { UserId = _userId, Resource = "waiting pipeline tasks" });
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient waiting pipeline task list read failure. UserId={UserId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                        _userId, errorCode, result.Error);
+                return;
+            }
+
+            // Clear a permanent or previously reported background error on any successful poll.
+            _waitingTasksFailures.RecordSuccess();
+            _waitingTasksErrorMessage = null;
+            _waitingTasks = result.Value!.ToList();
+        }
+        catch (OperationCanceledException) when (_poll?.IsCancellationRequested == true)
+        {
+            // Component navigation/disposal is not a user-visible failure.
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _waitingTasksFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _waitingTasksFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(
+                    exception,
+                    "load waiting pipeline tasks for chat",
+                    new { UserId = _userId });
+                _waitingTasksErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "ChatWaitingTasksUnavailable",
+                    diagnosticId);
+            }
+            else
+                Logger.LogWarning(
+                    exception,
+                    "Transient waiting pipeline task list read exception; retrying. UserId={UserId}",
+                    _userId);
+        }
     }
 
     private async Task ReloadRouteContext()
     {
         _contextTaskId = null;
         _contextTaskTitle = null;
+        _routeContextErrorMessage = null;
         var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         var pageSegments = segments.Where(segment => !Guid.TryParse(segment, out _)).ToArray();
@@ -223,12 +327,39 @@
         if (segments.Length < 2 || !string.Equals(segments[0], "task", StringComparison.OrdinalIgnoreCase)
             || !Guid.TryParse(segments[1], out var taskId))
             return;
-        var task = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
-        if (!task.Success || task.Value is null)
-            return;
-        _contextTaskId = task.Value.Id;
-        _contextTaskTitle = task.Value.Title;
-        _contextPageLabel = $"{L["TaskDetail"].Value}: {task.Value.Title}";
+        try
+        {
+            var task = await GetTask.HandleAsync(new GetTaskCommand(new GetTaskRequest(taskId)));
+            if (!task.Success)
+            {
+                _routeContextErrorMessage = Notifications.FormatFailure(
+                    task, L["Tasks"].Value, L["Load"].Value, new { TaskId = taskId, Resource = "chat context" });
+                return;
+            }
+
+            if (task.Value is null)
+            {
+                _routeContextErrorMessage = L["ChatTaskContextUnavailable"].Value;
+                return;
+            }
+
+            _contextTaskId = task.Value.Id;
+            _contextTaskTitle = task.Value.Title;
+            _contextPageLabel = $"{L["TaskDetail"].Value}: {task.Value.Title}";
+        }
+        catch (Exception exception)
+        {
+            var diagnosticId = Notifications.LogException(
+                exception,
+                "load task context for chat",
+                new { TaskId = taskId });
+            _routeContextErrorMessage = Notifications.FormatDiagnosticMessage(
+                "ChatTaskContextUnavailable",
+                diagnosticId);
+        }
+
+        return;
+
     }
 
     private static string HumanizeRoute(string route)
@@ -250,11 +381,20 @@
         {
             _session = null;
             _parts = [];
+            _partsLoadErrorMessage = null;
+            _pollFailures.RecordSuccess();
+            _pollErrorMessage = null;
             return;
         }
         var selected = _sessions.FirstOrDefault(x => x.Id == sessionId);
         if (selected is null)
             return;
+        if (_session?.Id != selected.Id)
+        {
+            _pollFailures.RecordSuccess();
+            _pollErrorMessage = null;
+            _partsLoadErrorMessage = null;
+        }
         _session = selected;
         _failed = false;
         await ReloadParts();
@@ -281,6 +421,10 @@
             return;
         }
         _block = null;
+        _pollFailures.RecordSuccess();
+        _pollErrorMessage = null;
+        _sessionsLoadErrorMessage = null;
+        _partsLoadErrorMessage = null;
         _session = created.Value;
         _open = true;
         _draft = string.Empty;
@@ -348,15 +492,29 @@
         }
     }
 
-    private async Task ReloadParts()
+    private async Task<(bool Success, string? Error, string? ErrorCode)> ReloadParts(bool isBackground = false)
     {
         if (_session is null)
-            return;
+            return (true, null, null);
+
         var sessionId = _session.Id;
         var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
         if (_session?.Id != sessionId)
-            return;
-        _parts = parts.Success ? parts.Value!.ToList() : [];
+            return (true, null, null);
+
+        if (!parts.Success)
+        {
+            if (!isBackground)
+            {
+                _parts = [];
+                _partsLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = sessionId });
+            }
+            return (false, parts.Error, parts.ErrorCode ?? ErrorCodes.For(parts.Kind));
+        }
+
+        _partsLoadErrorMessage = null;
+        _parts = parts.Value!.ToList();
+        return (true, null, null);
     }
 
     // Two-stage live update, same as Chat.razor: the in-process ChatEventSignal wakes this loop the
@@ -375,7 +533,17 @@
             {
                 try
                 {
-                    await ReloadWaitingTasks();
+                    await ReloadWaitingTasks(isBackground: true);
+
+                    // Recover failed initial loads even while the dock is closed or has no
+                    // explicitly selected conversation. Opening the dock must not auto-select
+                    // a session; it only refreshes the available list.
+                    if (_sessionsLoadErrorMessage is not null)
+                        await ReloadSessions();
+
+                    if (_proxyStatusErrorMessage is not null)
+                        await LoadProxyStatus(isBackground: true);
+
                     if (!_open || _session is null)
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
@@ -387,12 +555,55 @@
                     if (!_open || _session?.Id != sessionId)
                         continue;
                     var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(sessionId, _userId)));
+                    var pollFailed = !session.Success;
+                    string? pollError = session.Error;
+                    string? pollErrorCode = session.ErrorCode ?? (session.Success ? null : ErrorCodes.For(session.Kind));
                     if (session.Success && _session?.Id == sessionId)
                         _session = session.Value;
                     if (_session?.Id != sessionId)
                         continue;
-                    await LoadProxyStatus();
-                    await ReloadParts();
+
+                    await LoadProxyStatus(isBackground: true);
+                    var parts = await ReloadParts(isBackground: true);
+                    if (!parts.Success)
+                    {
+                        pollFailed = true;
+                        pollError ??= parts.Error;
+                        pollErrorCode ??= parts.ErrorCode;
+                    }
+
+                    if (pollFailed)
+                    {
+                        if (pollErrorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                            or ErrorCodes.NotFound or ErrorCodes.Conflict)
+                        {
+                            _pollFailures.RecordSuccess();
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                        }
+                        else if (_pollFailures.RecordFailure())
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                        else
+                            Logger.LogWarning(
+                                "Transient chat dock poll result failure. SessionId={SessionId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                                sessionId, pollErrorCode, pollError);
+                    }
+                    else
+                    {
+                        // Clear permanent errors as soon as a subsequent refresh succeeds.
+                        _pollFailures.RecordSuccess();
+                        _pollErrorMessage = null;
+                    }
+
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (OperationCanceledException) when (_poll.Token.IsCancellationRequested)
@@ -401,7 +612,17 @@
                 }
                 catch (Exception ex)
                 {
-                    Logger.LogWarning(ex, "Chat dock poll iteration failed; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
+                    if (_pollFailures.RecordFailure())
+                    {
+                        var diagnosticId = Notifications.LogException(
+                            ex,
+                            "refresh chat dock session and message parts",
+                            new { SessionId = _session?.Id });
+                        _pollErrorMessage = Notifications.FormatDiagnosticMessage("ChatPollingUnavailable", diagnosticId);
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    else
+                        Logger.LogWarning(ex, "Transient chat dock refresh failure; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
                     try
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
@@ -424,11 +645,48 @@
 
     private string PhaseLabel => L[ChatPhase.LabelKey(Phase)].Value;
 
-    private async Task LoadProxyStatus()
+    private async Task LoadProxyStatus(bool isBackground = false)
     {
-        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
-        if (status.Success)
-            _proxy = status.Value;
+        try
+        {
+            var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+            if (status.Success)
+            {
+                _proxy = status.Value;
+                _proxyStatusFailures.RecordSuccess();
+                _proxyStatusErrorMessage = null;
+            }
+            else
+            {
+                var errorCode = status.ErrorCode ?? ErrorCodes.For(status.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _proxyStatusFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _proxyStatusFailures.RecordSuccess();
+                    _proxyStatusErrorMessage = Notifications.FormatFailure(
+                        status, L["Chat"].Value, L["Read"].Value);
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient chat dock runtime status result failure. ErrorCode={ErrorCode}, Detail={Detail}",
+                        errorCode, status.Error);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _proxyStatusFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(exception, "read chat dock model runtime status");
+                _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "ProxyStatusUnavailable", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient proxy status read failed; retrying.");
+        }
     }
 
     private async Task OnModelBound()

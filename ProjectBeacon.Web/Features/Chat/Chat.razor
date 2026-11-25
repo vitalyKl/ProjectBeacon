@@ -30,7 +30,11 @@
 <PageTitle>@L["Chat"]</PageTitle>
 <PageHeader Title="@L["Chat"]" />
 
-@if (_project is null)
+@if (_projectLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_projectLoadErrorMessage" />
+}
+else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
@@ -101,6 +105,22 @@ else
             }
         </div>
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel beacon-chat-pane">
+            @if (_sessionsLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_sessionsLoadErrorMessage</MudAlert>
+            }
+            @if (_partsLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_partsLoadErrorMessage</MudAlert>
+            }
+            @if (_pollErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_pollErrorMessage</MudAlert>
+            }
+            @if (_proxyStatusErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_proxyStatusErrorMessage</MudAlert>
+            }
             @if (_block == "folder")
             {
                 <MudAlert Severity="Severity.Info">@L["ChatNeedsFolder"]</MudAlert>
@@ -149,6 +169,7 @@ else
     private Guid _userId;
     private string? _block;
     private ProjectDto? _project;
+    private string? _projectLoadErrorMessage;
     private List<ChatSessionDto> _sessions = [];
     private ChatSessionDto? _selected;
     private List<ChatPartDto> _parts = [];
@@ -159,6 +180,12 @@ else
     private string _draft = string.Empty;
     private bool _busy;
     private bool _failed;
+    private string? _sessionsLoadErrorMessage;
+    private string? _partsLoadErrorMessage;
+    private string? _pollErrorMessage;
+    private string? _proxyStatusErrorMessage;
+    private readonly UiBackgroundFailureTracker _pollFailures = new();
+    private readonly UiBackgroundFailureTracker _proxyStatusFailures = new();
     private CancellationTokenSource? _poll;
 
     protected override async Task OnInitializedAsync()
@@ -167,9 +194,15 @@ else
         if (actor.UserId is not null)
             _userId = actor.UserId.Value;
         var current = await CurrentProject.HandleAsync(actor);
+        if (!current.Success)
+        {
+            _projectLoadErrorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+            return;
+        }
         _project = current.Value;
         if (_project is null)
             return;
+
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
         if (registry.Success)
         {
@@ -181,7 +214,11 @@ else
                 if (chosen is not null)
                     _model = ChatModelSelection.ResolveBackendModelId(chosen.BackendType, chosen.Name, chosen.ProviderModelId);
             }
+            else if (!preferred.Success)
+                Notifications.Warning(Notifications.FormatFailure(preferred, L["Chat"].Value, L["Load"].Value));
         }
+        else
+            Notifications.Warning(Notifications.FormatFailure(registry, L["Agents"].Value, L["Load"].Value));
         await LoadProxyStatus();
         await ReloadSessions();
         if (_sessions.Count > 0)
@@ -192,17 +229,38 @@ else
     private async Task ReloadSessions()
     {
         var listed = await ListSessions.HandleAsync(new ListChatSessionsCommand(new ListChatSessionsRequest(_userId)));
-        _sessions = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _sessionsLoadErrorMessage = Notifications.FormatFailure(listed, L["Chat"].Value, L["Load"].Value);
+            return;
+        }
+
+        _sessionsLoadErrorMessage = null;
+        _sessions = listed.Value!.ToList();
     }
 
     private async Task Select(ChatSessionDto session)
     {
+        if (_selected?.Id != session.Id)
+        {
+            _pollFailures.RecordSuccess();
+            _pollErrorMessage = null;
+        }
         _selected = session;
+        _partsLoadErrorMessage = null;
         var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(session.Id, _userId)));
         // The user may have switched sessions while the fetch was in flight; never apply stale parts.
         if (_selected?.Id != session.Id)
             return;
-        _parts = parts.Success ? parts.Value!.ToList() : [];
+        if (!parts.Success)
+        {
+            _parts = [];
+            _partsLoadErrorMessage = Notifications.FormatFailure(parts, L["Chat"].Value, L["Load"].Value, new { SessionId = session.Id });
+            return;
+        }
+
+        _partsLoadErrorMessage = null;
+        _parts = parts.Value!.ToList();
     }
 
     private Task OnSessionKeyDown(KeyboardEventArgs args, ChatSessionDto session)
@@ -312,6 +370,8 @@ else
         var result = await AbortChat.HandleAsync(new AbortChatCommand(new AbortChatRequest(_selected.Id, _userId)));
         if (result.Success)
             _selected = result.Value;
+        else
+            Notifications.Failure(result, L["Chat"].Value, L["Cancel"].Value);
     }
 
     // Two-stage live update: the in-process ChatEventSignal wakes this loop the moment a part is
@@ -331,9 +391,21 @@ else
             {
                 try
                 {
+                    // Recover the session list and runtime status after an initial load failure.
+                    // Do not create a conversation or change an existing explicit selection.
+                    if (_sessionsLoadErrorMessage is not null)
+                        await ReloadSessions();
+
+                    if (_selected is null && _sessions.FirstOrDefault() is { } firstSession)
+                        await Select(firstSession);
+
+                    if (_proxyStatusErrorMessage is not null)
+                        await LoadProxyStatus(isBackground: true);
+
                     if (_selected is null)
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
+                        await InvokeAsync(StateHasChanged);
                         continue;
                     }
                     // Capture the id before the waits and fetches: a session switch in flight must
@@ -343,12 +415,57 @@ else
                     if (_selected?.Id != sessionId)
                         continue;
                     var session = await GetSession.HandleAsync(new GetChatSessionCommand(new GetChatSessionRequest(sessionId, _userId)));
+                    var pollFailed = !session.Success;
+                    string? pollError = session.Error;
+                    string? pollErrorCode = session.ErrorCode ?? (session.Success ? null : ErrorCodes.For(session.Kind));
                     if (session.Success && session.Value!.Id == sessionId && _selected?.Id == sessionId)
                         _selected = session.Value;
+
                     var parts = await ListParts.HandleAsync(new ListChatPartsCommand(new ListChatPartsRequest(sessionId, _userId)));
                     if (parts.Success && _selected?.Id == sessionId)
                         _parts = parts.Value!.ToList();
-                    await LoadProxyStatus();
+                    else if (!parts.Success)
+                    {
+                        pollFailed = true;
+                        pollError ??= parts.Error;
+                        pollErrorCode ??= parts.ErrorCode ?? ErrorCodes.For(parts.Kind);
+                    }
+                    else
+                        _partsLoadErrorMessage = null;
+
+                    if (pollFailed)
+                    {
+                        if (pollErrorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                            or ErrorCodes.NotFound or ErrorCodes.Conflict)
+                        {
+                            _pollFailures.RecordSuccess();
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                        }
+                        else if (_pollFailures.RecordFailure())
+                            _pollErrorMessage = Notifications.FormatFailure(
+                                pollError,
+                                L["Chat"].Value,
+                                pollErrorCode,
+                                L["Refresh"].Value,
+                                new { SessionId = sessionId });
+                        else
+                            Logger.LogWarning(
+                                "Transient chat poll result failure. SessionId={SessionId}, ErrorCode={ErrorCode}, Detail={Detail}",
+                                sessionId, pollErrorCode, pollError);
+                    }
+                    else
+                    {
+                        // A permanent authorization/target error also needs to clear after recovery.
+                        _pollFailures.RecordSuccess();
+                        _pollErrorMessage = null;
+                    }
+
+                    await LoadProxyStatus(isBackground: true);
                     await InvokeAsync(StateHasChanged);
                 }
                 catch (OperationCanceledException) when (_poll.Token.IsCancellationRequested)
@@ -357,9 +474,19 @@ else
                 }
                 catch (Exception ex)
                 {
-                    // Transient failures (a DB timeout surfaces as a TaskCanceledException) must not
-                    // kill the loop: back off and retry.
-                    Logger.LogWarning(ex, "Chat poll iteration failed; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
+                    // Keep transient failures out of the notification stream. After three consecutive
+                    // failures, show one diagnostic banner; a successful poll clears it.
+                    if (_pollFailures.RecordFailure())
+                    {
+                        var diagnosticId = Notifications.LogException(
+                            ex,
+                            "refresh chat session and message parts",
+                            new { SessionId = _selected?.Id });
+                        _pollErrorMessage = Notifications.FormatDiagnosticMessage("ChatPollingUnavailable", diagnosticId);
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    else
+                        Logger.LogWarning(ex, "Transient chat refresh failure; retrying in {Delay}s.", (int)PollSafetyNet.TotalSeconds);
                     try
                     {
                         await Task.Delay(PollSafetyNet, _poll.Token);
@@ -390,11 +517,48 @@ else
         _ => Color.Default
     };
 
-    private async Task LoadProxyStatus()
+    private async Task LoadProxyStatus(bool isBackground = false)
     {
-        var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
-        if (status.Success)
-            _proxy = status.Value;
+        try
+        {
+            var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
+            if (status.Success)
+            {
+                _proxy = status.Value;
+                _proxyStatusFailures.RecordSuccess();
+                _proxyStatusErrorMessage = null;
+            }
+            else
+            {
+                var errorCode = status.ErrorCode ?? ErrorCodes.For(status.Kind);
+                var isPermanentFailure = errorCode is ErrorCodes.Unauthorized or ErrorCodes.Forbidden
+                    or ErrorCodes.NotFound or ErrorCodes.Conflict;
+                if (!isBackground || isPermanentFailure || _proxyStatusFailures.RecordFailure())
+                {
+                    if (!isBackground || isPermanentFailure)
+                        _proxyStatusFailures.RecordSuccess();
+                    _proxyStatusErrorMessage = Notifications.FormatFailure(
+                        status, L["Chat"].Value, L["Read"].Value);
+                }
+                else
+                    Logger.LogWarning(
+                        "Transient chat runtime status result failure. ErrorCode={ErrorCode}, Detail={Detail}",
+                        errorCode, status.Error);
+            }
+        }
+        catch (Exception exception)
+        {
+            if (!isBackground || _proxyStatusFailures.RecordFailure())
+            {
+                if (!isBackground)
+                    _proxyStatusFailures.RecordSuccess();
+                var diagnosticId = Notifications.LogException(exception, "read chat model runtime status");
+                _proxyStatusErrorMessage = Notifications.FormatDiagnosticMessage(
+                    "ProxyStatusUnavailable", diagnosticId);
+            }
+            else
+                Logger.LogWarning(exception, "Transient proxy status read failed; retrying.");
+        }
     }
 
     private async Task OnModelBound()
