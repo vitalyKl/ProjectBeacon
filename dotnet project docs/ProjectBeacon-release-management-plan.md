@@ -265,3 +265,28 @@ CI [#45626583688](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4562658
 Обе причины исправлены после failed run: count обновлён до 9; Execute test передаёт точные значения из Preview. Этот запуск остаётся failed; нужен новый CI для актуального HEAD.
 
 Оставшийся acceptance gap: сейчас нет успешного live integration test на отдельном protected GitHub repository; следует усилить deterministic API seam/tests для stale PR/base, approvals, required checks, duplicates, API rejection, lost-response recovery и mismatch. Production release protections (classic `v*` tag protection и required reviewers Environment `production`) всё ещё не подтверждены; не публиковать production tag и не запускать deploy до административной проверки.
+
+
+## Дополнение — Landing не должен зависеть от включения AutoSync (26 ноября 2026)
+
+В ходе проверки GitHub-authoritative landing обнаружена независимая настройка, ошибочно влиявшая на завершение задач. AutoSync по умолчанию выключен и отвечает за фоновый fetch/fast-forward и синхронизацию тегов. Он не должен блокировать фиксацию уже выполненного Beacon-managed landing.
+
+Исправления находятся в feat/release-management, PR #230:
+
+- Discovery endpoint теперь возвращает device-bound project root при включённом AutoSync либо при наличии точной Beacon LandingAttempt в verified Landed state, совпадающей с последним успешным Review (ReviewRunId, workstation, source SHA, target branch).
+- DTO передаёт AutoSyncEnabled явно. Daemon пропускает обычный GitSync и tag sync при false, но продолжает отдельную remote-landing verification для возвращённых LandingAttempt.
+- Reconciliation API при AutoSync=false принимает только Beacon-managed LandingAttempt в точном Landed state с совпадающим Review, source SHA, target branch и merge commit. Внешний PR без LandingAttempt по-прежнему требует AutoSync=true.
+- LandingAttempt в ExecutePending, LandedUnverified, Failed либо с несовпадающими данными не может закрыть задачу. Сохраняются привязка к workstation, Approve verdict, последняя Review proof, отсутствие активной pipeline session и idempotent RemoteLandingProof.
+- Security allowlist обновлён: DeviceAutoSyncTargetsHandler.cs — 8 IgnoreQueryFilters call sites; DeviceRemoteLandingReconciliationHandler.cs — 9.
+- Добавлены тесты: target discovery при выключенном AutoSync и exact verified Landed Attempt; успешная reconciliation для Beacon-managed landing с AutoSync=false. Существующий отрицательный тест сохраняет отказ внешнего landing без LandingAttempt при AutoSync=false.
+
+**Текущее состояние проверки:** CI #45712282443 (run 1641) запущен на более ранней вершине bdd46d1a и не покрывает этот срез. На момент записи все три платформы продолжали тесты без ошибок; нужен новый cross-platform CI на полном текущем implementation head после фиксации журнала.
+
+Это исправление не включает обычную синхронизацию при AutoSync=false. Оно только позволяет довести Beacon-managed удалённый merge до подтверждённого RemoteLandingProof и закрытия задачи. Production tag/deploy не запускался.
+
+### Оставшееся
+
+1. Запустить полный CI на точной вершине после этого изменения и обработать возможные ошибки.
+2. Добавить/проверить daemon loop test для remote-landing-only target при AutoSync=false: отсутствие вызовов GitSync и успешный POST reconciliation.
+3. Завершить deterministic GitHub merge executor coverage и protected-repository acceptance.
+4. До production публикации администратор должен подтвердить classic v* tag protection и required reviewers Environment production.
