@@ -244,7 +244,15 @@
                 return null;
             }
 
-            if (got.Value!.Status is WorkstationCommandStatus.Succeeded
+            if (got.Value is null)
+            {
+                _initializationCommandReadError = Notifications.FormatFailure(
+                    L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.Unclassified,
+                    L["Read"].Value, new { DeviceId = _deviceId, CommandId = commandId, Operation = "project initialization" });
+                return null;
+            }
+
+            if (got.Value.Status is WorkstationCommandStatus.Succeeded
                 or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
 
