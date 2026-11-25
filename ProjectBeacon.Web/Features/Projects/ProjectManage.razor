@@ -222,6 +222,7 @@ else
                     <MudTextField T="string" @bind-Value="_versionCalendarFormat"
                                   Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
                                   Label="@L["ProjectVersionCalendarFormat"]"
+                                  HelperText="@L["ProjectVersionCalendarFormatHelp"]"
                                   Variant="Variant.Outlined" Margin="Margin.Dense" />
                 }
                 <MudTextField T="string" @bind-Value="_versionTagPattern"
