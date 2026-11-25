@@ -85,6 +85,12 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
                 "The project Git policy is invalid; remote landing reconciliation is disabled.");
 
+        if (!gitPolicy.AutoSyncEnabled
+            && !WorkstationCapabilities.Supports(
+                device.ProbeJson, WorkstationCapabilities.RemoteLandingReconcileV1))
+            return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
+                "This workstation does not advertise the AutoSync-independent remote landing protocol.");
+
         var runtimeAttached = await db.ProjectRuntimes.IgnoreQueryFilters().AsNoTracking()
             .AnyAsync(runtime => runtime.ProjectId == request.ProjectId
                 && runtime.DeviceId == deviceId, ct);
