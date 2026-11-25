@@ -559,3 +559,30 @@ For every subsequent work session append:
 - the next concrete action.
 
 Do not mark an item complete because code was merely drafted or written. A completed item requires verified behavior and recorded checks.
+
+
+## 2026-11-25 — CI formatting correction
+
+**Branch:** `feat/release-management`  
+**Head before:** `079ffaf7aad9427a1a26f4962e4b1fa41dbc4efa`  
+**Source-fix commit:** `f5cd1bd51a528e23685f21aa81be83be0f0ff360`
+
+### CI findings on exact prior head
+
+- CI run [#45560509847](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45560509847) completed with failure on Windows, Linux and macOS.
+- All three platform jobs completed Restore, Build, EF pending-model check, and all seven test modules successfully.
+- The only failure reported by all three jobs was `dotnet format ProjectBeacon.sln --verify-no-changes`: lines 481–499 of `ReleasePublishExecutor.cs` had one extra indentation level (4 spaces).
+- Web tests reported 3 PostgreSQL persistence tests skipped because `BEACON_TEST_SKIP_POSTGRES=1`; this is an explicit skip, not a passing integration run. Linux separately initialized PostgreSQL for its test lane, but the test command still carried the skip flag.
+- Corrected only the 19 formatter-reported lines in `ReleasePublishExecutor.cs`; no behavior was changed.
+
+### Verification state
+
+- Source correction is committed; no claim of green CI is made.
+- The repository CI workflow intentionally does not run for PR `synchronize`; a new explicit workflow-dispatch or PR-ready event is required.
+- Next: trigger a fresh CI run on the exact post-fix head, inspect all platform outcomes, and handle any newly exposed failures.
+
+### Remaining blockers
+
+- Landing authority / autonomous GitHub merge is still unresolved: reconciliation records a completed remote merge but does not execute one.
+- GitHub tag protections and Production Environment required reviewers remain unverified. No production tag or deployment is permitted.
+- Local .NET SDK and ProjectBeacon MCP/Context7 are unavailable in this execution environment; validation must be based on the GitHub Actions runs, with their actual skips and limitations recorded.
