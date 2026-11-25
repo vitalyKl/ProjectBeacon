@@ -12,18 +12,23 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
     private readonly GitSyncService _gitSync;
     private readonly IDaemonRuntimeState _state;
     private readonly DaemonTiming _timing;
+    private readonly Func<string, Guid, DeviceRemoteLandingTargetDto, CancellationToken,
+        Task<AgentTaskGitHubRemoteLandingOperations.VerificationResult>> _verifyRemoteLanding;
     private readonly Dictionary<Guid, string> _lastStates = [];
 
     public DaemonAutoSyncLoop(
         DaemonDependencies deps,
         GitSyncService gitSync,
         IDaemonRuntimeState state,
-        DaemonTiming timing)
+        DaemonTiming timing,
+        Func<string, Guid, DeviceRemoteLandingTargetDto, CancellationToken,
+            Task<AgentTaskGitHubRemoteLandingOperations.VerificationResult>>? verifyRemoteLanding = null)
     {
         _http = deps.Http;
         _gitSync = gitSync;
         _state = state;
         _timing = timing;
+        _verifyRemoteLanding = verifyRemoteLanding ?? AgentTaskGitHubRemoteLandingOperations.VerifyAsync;
     }
 
     public async Task RunAsync(CancellationToken ct)
@@ -133,7 +138,7 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
         foreach (var remoteLanding in target.RemoteLandings ?? [])
         {
             ct.ThrowIfCancellationRequested();
-            var verification = await AgentTaskGitHubRemoteLandingOperations.VerifyAsync(
+            var verification = await _verifyRemoteLanding(
                 target.LocalRoot, target.ProjectId, remoteLanding, ct);
             if (verification.Request is null)
             {
