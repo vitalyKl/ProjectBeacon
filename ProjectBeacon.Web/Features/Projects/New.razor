@@ -119,7 +119,7 @@
         return Task.CompletedTask;
     }
 
-    private static string ProjectsRootOf(DaemonDeviceDto? device)
+    private string ProjectsRootOf(DaemonDeviceDto? device)
     {
         if (device is null || string.IsNullOrWhiteSpace(device.WorkstationJson))
             return "";
@@ -130,8 +130,13 @@
                 ? p.GetString() ?? ""
                 : "";
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            Notifications.ReportException(
+                exception,
+                "WorkstationSettingsInvalid",
+                "read workstation projects root",
+                new { DeviceId = device.Id });
             return "";
         }
     }

@@ -23,7 +23,10 @@
 
 @if (_project is null)
 {
-    <ErrorState Message="@_errorMessage" />
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <ErrorState Message="@_errorMessage" />
+    }
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else

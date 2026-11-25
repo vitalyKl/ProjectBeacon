@@ -36,7 +36,10 @@
 
 @if (_project is null)
 {
-    <ErrorState Message="@_error" />
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
@@ -46,7 +49,10 @@ else
     {
         <LoadingState />
     }
-    <ErrorState Message="@_error" />
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
 
     <div class="beacon-split-3">
         <div>
