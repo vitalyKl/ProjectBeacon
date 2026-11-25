@@ -23,6 +23,7 @@
 
 @if (_project is null)
 {
+    <ErrorState Message="@_errorMessage" />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
@@ -30,6 +31,10 @@ else
     @if (_loading)
     {
         <LoadingState />
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <ErrorState Message="@_errorMessage" />
     }
     else if (_reports.Count == 0)
     {
@@ -73,13 +78,19 @@ else
     private ReportDto? _open;
     private bool _busy;
     private bool _loading = true;
+    private string? _errorMessage;
     private static readonly JsonSerializerOptions SnapshotJson = new() { PropertyNameCaseInsensitive = true };
 
     protected override async Task OnInitializedAsync()
     {
         var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
-        _project = current.Value;
-        await Reload();
+        if (!current.Success)
+            _errorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+        else
+        {
+            _project = current.Value;
+            await Reload();
+        }
         _loading = false;
     }
 
@@ -88,7 +99,15 @@ else
         if (_project is null)
             return;
         var listed = await ListReports.HandleAsync(new ListReportsRequest(_project.Id));
-        _reports = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _errorMessage = Notifications.FormatFailure(listed, L["Reports"].Value, L["Load"].Value);
+            _reports = [];
+            return;
+        }
+
+        _errorMessage = null;
+        _reports = listed.Value!.ToList();
     }
 
     private async Task Generate()

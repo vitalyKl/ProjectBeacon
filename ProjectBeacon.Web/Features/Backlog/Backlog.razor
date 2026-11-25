@@ -96,8 +96,16 @@ else
     {
         _actorContext = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actorContext);
-        _project = current.Value;
-        await LoadTasks();
+        if (!current.Success)
+        {
+            _error = true;
+            _errorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+        }
+        else
+        {
+            _project = current.Value;
+            await LoadTasks();
+        }
         _loading = false;
     }
 
@@ -122,8 +130,17 @@ else
         _tasks = listed.Value!.ToList();
         var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_project.Id));
         _labels = labels.Success ? labels.Value!.ToList() : [];
+        if (!labels.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                labels, L["Backlog"].Value, L["Load"].Value,
+                new { ProjectId = _project.Id, Resource = "labels" }));
+
         var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id), _actorContext));
         _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        if (!milestones.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                milestones, L["Backlog"].Value, L["Load"].Value,
+                new { ProjectId = _project.Id, Resource = "milestones" }));
     }
 
     private void NavigateToTask(Guid taskId) => Navigation.NavigateTo($"/task/{taskId}");

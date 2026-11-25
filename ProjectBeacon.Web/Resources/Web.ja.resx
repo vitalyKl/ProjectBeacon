@@ -24,7 +24,7 @@
   <data name="Cancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
-  <data name="Close" xml:space="preserve">
+<data name="Close" xml:space="preserve">
     <value>閉じる</value>
   </data>
 <data name="Confirm" xml:space="preserve">
@@ -918,7 +918,7 @@
 <data name="Constraints" xml:space="preserve">
     <value>制約</value>
   </data>
-  <data name="Activate" xml:space="preserve">
+<data name="Activate" xml:space="preserve">
     <value>有効化</value>
   </data>
 <data name="Reject" xml:space="preserve">
@@ -2336,7 +2336,7 @@ orthstar</value>
     <value>このプロジェクトにネイティブ実行環境のワークステーションが割り当てられていません。</value>
   </data>
   <data name="PipelineNativeWorkstationOffline" xml:space="preserve">
-    <value>このタスクに固定されたネイティブワークステーションはオフラインです。</value>
+    <value>プロジェクトのネイティブワークステーションはオフラインです。</value>
   </data>
   <data name="PipelineNoPlannerModelConfigured" xml:space="preserve">
     <value>Planner ロールのモデルが設定されていません。</value>
@@ -3195,193 +3195,7 @@ orthstar</value>
   <data name="Read" xml:space="preserve">
     <value>読み取り</value>
   </data>
-  <data name="WorkstationUpdateProgress" xml:space="preserve">
-    <value>更新処理を引き渡しました。ワークステーションの再起動と新しいバージョンの報告を待っています。</value>
-  </data>
-  <data name="Fail" xml:space="preserve">
-    <value>失敗として記録</value>
-  </data>
-  <data name="Reopen" xml:space="preserve">
-    <value>再開</value>
-  </data>
-  <data name="Request" xml:space="preserve">
-    <value>リクエスト</value>
-  </data>
-  <data name="TimeZoneSaveFailed" xml:space="preserve">
-    <value>タイムゾーン設定を保存できませんでした。もう一度お試しください。問題が続く場合は、診断 ID をサポートにお知らせください。</value>
-  </data>
-  <data name="Enable" xml:space="preserve">
-    <value>有効にする</value>
-  </data>
-  <data name="Verify" xml:space="preserve">
-    <value>確認</value>
-  </data>
-  <data name="Disable" xml:space="preserve">
-    <value>無効にする</value>
-  </data>
-  <data name="Change" xml:space="preserve">
-    <value>変更</value>
-  </data>
-  <data name="Initialize" xml:space="preserve">
-    <value>初期化</value>
-  </data>
-  <data name="FolderListingInvalid" xml:space="preserve">
-    <value>ワークステーションから読み取れないディレクトリ一覧が返されました。ワークステーションのログを確認して、もう一度お試しください。</value>
-  </data>
-  <data name="SynchronizeRepository" xml:space="preserve">
-    <value>リポジトリを同期</value>
-  </data>
-  <data name="SubtaskFailedOpenActivity" xml:space="preserve">
-    <value>エージェントセッションの実行中にサブタスクが失敗しました。上のセッションアクティビティを展開すると、失敗の詳細と診断 ID を確認できます。</value>
-  </data>
-  <data name="PipelinePatchConflict" xml:space="preserve">
-    <value>プロジェクトファイルが変更されたか、編集内容が競合しているため、エージェントの変更を適用できませんでした。分離された作業ツリーは保持されています。コマンド結果を確認し、競合を解決してから再試行してください。</value>
-  </data>
-  <data name="UiOperationAuthenticationRequired" xml:space="preserve">
-    <value>{0} で「{1}」を実行するには、もう一度サインインしてください。</value>
-  </data>
-  <data name="UiOperationUnavailable" xml:space="preserve">
-    <value>サービスが一時的に利用できないため、{0} で「{1}」を完了できませんでした。後でもう一度お試しください。診断 ID: {2}</value>
-  </data>
-  <data name="LandingReasonWorkspaceUnavailable" xml:space="preserve">
-    <value>このマージに必要なワークステーションまたはタスクの作業ツリーを利用できません。ワークステーションを再接続して、もう一度お試しください。</value>
-  </data>
-  <data name="LandingReasonTaskWorktreeChanged" xml:space="preserve">
-    <value>タスクブランチが最新の Review で確認されたリビジョンと一致しなくなりました。タスクブランチを更新し、Review を再実行して、新しい Preview を要求してください。</value>
-  </data>
-  <data name="LandingReasonReviewEvidenceChanged" xml:space="preserve">
-    <value>Preview 後に承認、Review 結果、または固定されたチェックコマンドが変更されました。マージを実行する前に Review を再実行し、新しい Preview を要求してください。</value>
-  </data>
-  <data name="LandingReasonTargetBranchChanged" xml:space="preserve">
-    <value>Preview 後にターゲットブランチまたはそのチェックアウトが変更されたか、安全に確認できませんでした。ターゲットブランチの状態を更新し、新しい Preview を要求してください。</value>
-  </data>
-  <data name="LandingReasonGitConfigurationInvalid" xml:space="preserve">
-    <value>Git 設定またはワークステーション環境がランディング要件を満たしていません。プロジェクトの Git ポリシー、remote、filter、Git のバージョンを確認してください。</value>
-  </data>
-  <data name="LandingReasonCandidateBuildFailed" xml:space="preserve">
-    <value>マージ候補を作成または検証できませんでした。マージ結果と設定済みの ReviewCheckCommand を確認し、Preview を再実行してください。</value>
-  </data>
-  <data name="LandingReasonProtectedChangesDetected" xml:space="preserve">
-    <value>変更に保護対象またはプロジェクト外のパスが含まれるか、設定済みの上限を超えているか、許可されていないシンボリックリンクまたはサブモジュールが含まれています。変更範囲と Git ポリシーを確認してください。</value>
-  </data>
-  <data name="LandingReasonLandingRecoveryFailed" xml:space="preserve">
-    <value>ランディング処理の状態を安全に照合できませんでした。ターゲットブランチはすでに変更されている可能性があります。再試行する前にターゲットブランチと試行の詳細を確認してください。</value>
-  </data>
-  <data name="LandingReasonRevertFailed" xml:space="preserve">
-    <value>マージを安全に取り消せなかったか、revert コミットを検証できませんでした。再試行する前にターゲットブランチを確認してください。</value>
-  </data>
-  <data name="LandingReasonCommandQueueFailed" xml:space="preserve">
-    <value>ワークステーションがランディングコマンドを受け付けませんでした。オンラインで GitLand に対応していることを確認し、再試行する前にランディング状態を更新してください。</value>
-  </data>
-  <data name="LandingReasonManualActionRequired" xml:space="preserve">
-    <value>プロジェクトポリシーにより、このランディング操作は人が手動で実行または再試行する必要があります。</value>
-  </data>
-  <data name="LandingReasonTaskApprovalRequired" xml:space="preserve">
-    <value>Execute をキューに入れるまで、タスクは Approved の状態を維持する必要があります。新しいランディングを要求する前に Review を再実行して承認してください。</value>
-  </data>
-  <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
-    <value>マージはすでにターゲットブランチに反映されている可能性がありますが、マージ後の検証に失敗したか、結果を確認できませんでした。revert を要求する前にターゲットを確認してください。</value>
-  </data>
-  <data name="LandingReasonUnknown" xml:space="preserve">
-    <value>ランディング処理が、画面で認識できない理由を返しました。ワークステーションのログを確認し、診断 ID をサポートに伝えてください。</value>
-  </data>
-  <data name="WorkstationUpdateReportedVersion" xml:space="preserve">
-    <value>ワークステーションが再起動し、バージョン {0} を報告しました。</value>
-  </data>
-  <data name="WorkstationCommandFailed" xml:space="preserve">
-    <value>予期しないエラーが発生したため、ワークステーションのコマンドを完了できませんでした。</value>
-  </data>
-  <data name="WorkstationCommandCancelled" xml:space="preserve">
-    <value>ワークステーションが操作をキャンセルしました: {0}。</value>
-  </data>
-  <data name="PipelinePreflightReasonUnknown" xml:space="preserve">
-    <value>ワークステーションから、画面で認識できない起動事前チェックの理由が返されました。タスクを更新し、問題が続く場合はワークステーションのログを確認してください。</value>
-  </data>
-  <data name="GitSyncReasonUnknown" xml:space="preserve">
-    <value>ワークステーションから、画面で認識できないリポジトリ同期エラーの理由が返されました。コマンドの詳細を確認し、下記の診断 ID をサポートにお知らせください。</value>
-  </data>
-  <data name="GitSyncTechnicalDetails" xml:space="preserve">
-    <value>Git の技術的な詳細</value>
-  </data>
-  <data name="WorkstationCommandsLoadFailed" xml:space="preserve">
-    <value>ワークステーションのコマンド履歴を読み込めませんでした。このセクションを再読み込みして、もう一度お試しください。</value>
-  </data>
-  <data name="WorkstationSettingsInvalid" xml:space="preserve">
-    <value>ワークステーションから読み取り不能な形式の設定が返されました。ワークステーションのデータを更新し、問題が続く場合はログを確認してください。</value>
-  </data>
-  <data name="WorkstationProbeInvalid" xml:space="preserve">
-    <value>ワークステーションから読み取り不能な形式の診断情報が返されました。診断情報を更新し、問題が続く場合はログを確認してください。</value>
-  </data>
-  <data name="InviteTokenMissing" xml:space="preserve">
-    <value>招待リンクに招待トークンが含まれていません。招待メールに記載された完全なリンクを開いてください。</value>
-  </data>
-  <data name="InviteInvalidOrExpired" xml:space="preserve">
-    <value>この招待は無効か、有効期限切れ、または使用済みです。招待者に新しい招待を依頼してください。</value>
-  </data>
-  <data name="ResetTokenMissing" xml:space="preserve">
-    <value>パスワードリセットリンクにトークンがありません。新しいリセットリンクをリクエストして、もう一度開いてください。</value>
-  </data>
-  <data name="InviteEmailMismatch" xml:space="preserve">
-    <value>{0} で「{1}」を実行できませんでした。この招待は別のメールアドレス宛てに送信されています。招待されたアドレスでサインインするか、招待者に招待内容の更新を依頼してください。</value>
-  </data>
-  <data name="PipelineWorkstationHistoryAmbiguous" xml:space="preserve">
-    <value>このタスクは複数のワークステーションで実行されています。ローカルのタスク作業ツリーの場所を安全に特定できません。続行する前に作業ツリーを確認するか、明示的に移行してください。</value>
-  </data>
-  <data name="PipelineWorkstationNotAttached" xml:space="preserve">
-    <value>このタスクに固定されたワークステーションはプロジェクトに接続されていません。再接続するか、タスク作業ツリーを明示的に移行してください。自動的な切り替えは行いません。</value>
-  </data>
-  <data name="PipelineWorkstationNotNative" xml:space="preserve">
-    <value>このタスクに固定されたワークステーションが native runtime を報告しなくなりました。native runtime を復元するか、タスク作業ツリーを明示的に移行してください。</value>
-  </data>
-  <data name="GitSyncStatusRefreshFailed" xml:space="preserve">
-    <value>リポジトリの同期は継続している可能性がありますが、状態を更新できませんでした。ワークステーションでコマンドがまだ実行中の可能性があります。再試行する前にコマンド履歴を確認してください。</value>
-  </data>
-  <data name="PipelineActivitySnapshotInvalid" xml:space="preserve">
-    <value>パイプラインのアクティビティスナップショットを読み取れませんでした。最新のアクティビティ情報が不完全な可能性があります。</value>
-  </data>
-<data name="GitSyncCancelPendingConfirm" xml:space="preserve"><value>このリポジトリ同期リクエストをキャンセルしますか？ワークステーションがコマンドを取得する前に限りキャンセルできます。</value></data>
-<data name="GitSyncCancelledBeforeStart" xml:space="preserve"><value>ワークステーションで開始される前に、リポジトリ同期リクエストがキャンセルされました。</value></data>
-<data name="GitSyncPendingExpired" xml:space="preserve"><value>10 分以内にワークステーションが取得しなかったため、リポジトリ同期リクエストの有効期限が切れました。</value></data>
-  <data name="GitSyncCancelFailed" xml:space="preserve">
-    <value>リポジトリ同期リクエストのキャンセルを確認できませんでした。再試行する前にタスクを更新して状態を確認してください。</value>
-  </data>
-  <data name="UiGitSyncAlreadyClaimed" xml:space="preserve">
-    <value>{0} でリポジトリ同期をキャンセルできません。ワークステーションがすでにコマンドを取得しています。実行中の Git 操作はサーバーから停止できません。完了を待って結果を確認してください。</value>
-  </data>
-  <data name="FolderBrowseFailed" xml:space="preserve">
-    <value>ワークステーションのフォルダーを参照できませんでした。ワークステーションがオンラインで、選択したルートが利用可能であることを確認してください。</value>
-  </data>
-  <data name="ProjectSwitcherLoadFailed" xml:space="preserve">
-    <value>利用可能なプロジェクトを読み込めませんでした。ページを再読み込みして、もう一度お試しください。</value>
-  </data>
-  <data name="Recover" xml:space="preserve">
-    <value>復旧</value>
-  </data>
-  <data name="ChatPollingUnavailable" xml:space="preserve">
-    <value>チャットのライブ更新は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
-  </data>
-  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
-    <value>複数回試行してもタスクとリポジトリの状態を更新できませんでした。表示中の状態は古い可能性があります。更新は自動的に再開されます。</value>
-  </data>
-  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
-    <value>保留中のリポジトリ同期コマンドとの接続を復元できませんでした。同期を再実行する前に、タスクとワークステーションの状態を確認してください。</value>
-  </data>
-  <data name="ProxyStatusUnavailable" xml:space="preserve">
-    <value>チャットモデルの実行状態を一時的に取得できません。チャットは引き続き使用できますが、モデルの準備状態が古い可能性があります。</value>
-  </data>
-  <data name="ChatTaskContextUnavailable" xml:space="preserve">
-    <value>このチャットのタスクコンテキストを読み込めませんでした。コンテキストなしで会話を続けることができます。</value>
-  </data>
-  <data name="TaskLoadUnavailable" xml:space="preserve">
-    <value>タスクを読み込めませんでした。タスク詳細サービスを利用できません。このページを開いている間、自動的に再試行します。診断 ID: {0}</value>
-  </data>
-  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
-    <value>ワークステーションのメトリクスを読み込めませんでした。接続を確認して、もう一度お試しください。診断 ID: {0}</value>
-  </data>
-  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
-    <value>入力待ちのタスク一覧は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
-  </data>
-  <data name="InvalidRepoPatchPayload" xml:space="preserve">
-    <value>リポジトリパッチのデータ形式が正しくないため、読み取れませんでした。</value>
+  <data name="UiBackgroundOperationRecovered" xml:space="preserve">
+    <value>{0} のバックグラウンド情報が再び利用可能になりました。</value>
   </data>
 </root>
