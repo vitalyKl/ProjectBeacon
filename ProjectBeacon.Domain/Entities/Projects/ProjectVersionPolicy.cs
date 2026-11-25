@@ -367,7 +367,7 @@ public static class ProjectVersionPolicyCatalog
             };
             if (token is null)
             {
-                if (character is '%' or '\\' or '\'' or '"')
+                if (character is not ('.' or '-' or '/' or '_' or ' ' or ':' or 'T' or 'Z'))
                     return false;
                 index++;
                 continue;
