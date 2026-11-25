@@ -3368,13 +3368,14 @@
 <data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Календарная версия</value></data>
 <data name="ProjectVersionComponentCount" xml:space="preserve"><value>Количество числовых компонентов (1–8)</value></data>
 <data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Формат календарной версии (инвариантный формат даты .NET)</value></data>
+<data name="ProjectVersionCalendarFormatHelp" xml:space="preserve"><value>Используйте обязательные токены yyyy, MM, dd и необязательные HH, mm, ss. Допустимые разделители: . - / _ пробел : T Z. Примеры: yyyy.MM.dd, yyyyMMdd, yyyy-MM-ddTHH:mm:ssZ.</value></data>
 <data name="ProjectVersionTagPattern" xml:space="preserve"><value>Шаблон Git-тега</value></data>
 <data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Используйте ровно один маркер {version}, например v{version}.</value></data>
 <data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>Разрешить prerelease-версии SemVer</value></data>
 <data name="ProjectOfficialVersion" xml:space="preserve"><value>Официальная версия проекта (источник истины — Beacon)</value></data>
 <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Начальная официальная версия</value></data>
 <data name="ProjectVersionSources" xml:space="preserve"><value>Файлы-проекции версии</value></data>
-<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>Одна запись на строку: относительный/путь|Xml, Json, Toml или Regex|селектор. XML использует XPath, JSON — JSON Pointer, TOML — путь из ключей через точку, Regex — именованную группу 'version' или группу 1. Файлы должны находиться внутри workspace проекта.</value></data>
+<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>Одна запись на строку: относительный/путь|Xml, Json, Toml или Regex|селектор. XML поддерживает только пути к элементам: абсолютный (/Project/PropertyGroup/Version) или от любого потомка (//Version); предикаты, атрибуты, функции, wildcard и пространства имён не поддерживаются. JSON использует JSON Pointer; TOML — путь ключей через точку; Regex — выражение .NET с именованной группой 'version' или группой захвата 1. Для подготовки Candidate нужен хотя бы один источник; его можно добавить позже, если пока требуется только планировать релизы. Файлы должны находиться внутри workspace проекта.</value></data>
 <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Изменять политику версии могут только Owner и Admin проекта.</value></data>
 <data name="ProjectVersionSave" xml:space="preserve"><value>Сохранить политику версии</value></data>
 <data name="ProjectVersionSaved" xml:space="preserve"><value>Политика версии сохранена</value></data>
