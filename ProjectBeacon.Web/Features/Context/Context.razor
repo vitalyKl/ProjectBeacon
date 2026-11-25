@@ -130,7 +130,7 @@ else
             {
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
                     <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_sectionHistory.Count})")">
-                        @if (_sectionHistory.Count == 0)
+                        @if (_sectionHistory.Count == 0 && _sectionHistoryErrorMessage is null)
                         {
                             <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
                         }
@@ -234,7 +234,7 @@ else
     {
         <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
             <MudExpansionPanel Text="@($"{L["ContentHistory"]}: {_selectedConstraint.Body}")">
-                @if (_constraintHistory.Count == 0)
+                @if (_constraintHistory.Count == 0 && _constraintHistoryErrorMessage is null)
                 {
                     <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
                 }
