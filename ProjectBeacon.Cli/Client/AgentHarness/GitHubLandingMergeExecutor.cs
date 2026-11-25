@@ -89,8 +89,6 @@ internal static class GitHubLandingMergeExecutor
         var remoteBase = await ReadRemoteBaseAsync(context, originUrls[0], ct);
         if (remoteBase.Sha is null)
             return Failed(remoteBase.ErrorCode ?? "GitHubReviewBaseUnavailable");
-        if (!string.Equals(remoteBase.Sha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
-            return Failed("GitHubReviewBaseAdvanced");
 
         var safePath = NativeCommandRunner.BuildSafePath(
             Environment.GetEnvironmentVariable("PATH"), context.WorktreeRoot);
@@ -128,6 +126,11 @@ internal static class GitHubLandingMergeExecutor
                     context, originUrls[0], repository, ghPath, merged[0], expectedSourceSha, ct);
             return Failed("GitHubOpenPullRequestNotFound");
         }
+
+        // An open PR can be merged only against the exact immutable base pinned when
+        // the task branch was created. A changed base requires integrate + Review again.
+        if (!string.Equals(remoteBase.Sha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
+            return Failed("GitHubReviewBaseAdvanced");
 
         var pullRequest = openPullRequests[0];
         var snapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
@@ -175,11 +178,11 @@ internal static class GitHubLandingMergeExecutor
         var blockers = AgentTaskGitHubPullRequestOperations.GetMergeBlockers(
             context,
             expectedSourceSha,
-            worktreeClean: true,
+            true,
             confirmedBase.Sha,
             view,
             headMatches,
-            baseUnchanged: true,
+            true,
             checkList,
             checksPassed);
         if (blockers.Count > 0)
@@ -311,10 +314,23 @@ internal static class GitHubLandingMergeExecutor
                 snapshot.View.MergedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var mergedAt))
             return Unknown("GitHubMergeAlreadyExistsButCouldNotBeVerified");
 
+        if (!string.Equals(snapshot.View.Url, pullRequest.Url, StringComparison.Ordinal))
+            return Unknown("GitHubMergedPullRequestIdentityMismatch");
+        var checks = await AgentTaskGitHubPullRequestOperations.ReadRequiredChecksAsync(
+            ghPath, context.WorktreeRoot, repository, pullRequest.Number, ct);
+        if (checks.Error is not null || checks.Checks is not { Count: > 0 }
+            || checks.Checks.Any(check => !string.Equals(check.Bucket, "pass", StringComparison.OrdinalIgnoreCase)))
+            return Unknown("GitHubMergedRequiredChecksNotVerified");
+
         var fetched = await FetchAndVerifyMergeAsync(
             context, remoteUrl, snapshot.View.MergeCommitSha!, ct);
         if (fetched.Sha is null)
             return Unknown(fetched.ErrorCode ?? "GitHubMergedCommitNotReachable");
+        var pinnedBaseReachable = await AgentTaskGitOperations.Git(
+            context.RepositoryRoot, context.DisabledFilters, ct,
+            "merge-base", "--is-ancestor", context.BaseSha, fetched.Sha);
+        if (!AgentTaskGitOperations.Succeeded(pinnedBaseReachable))
+            return Unknown("GitHubPinnedReviewBaseNotReachable");
 
         return new MergeExecution(
             new MergeResult(repository, pullRequest.Number, snapshot.View.Url,
