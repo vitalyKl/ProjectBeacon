@@ -181,7 +181,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     {
         using (TenantScope.EnterUnscoped())
         {
-            var user = User.Create("remote-landing", $"remote-{Guid.NewGuid():N}@beacon.local", "hash");
+            var user = User.Create($"remote-landing-{Guid.NewGuid():N}", $"remote-{Guid.NewGuid():N}@beacon.local", "hash");
             var org = Org.Create("Remote landing");
             _db.Users.Add(user);
             _db.Orgs.Add(org);
