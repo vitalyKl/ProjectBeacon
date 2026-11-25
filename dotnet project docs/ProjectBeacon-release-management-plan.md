@@ -324,3 +324,20 @@ After the server and target-discovery regression tests, the workstation loop now
 - Репозитории, где branch rules требуют Merge Queue, пока не поддержаны; stacked PR тоже не поддержан.
 - Нельзя принимать enqueued за Landed или создавать RemoteLandingProof до реального состояния MERGED и проверки merge commit/tree/post-merge command.
 - Для поддержки async/queue нужны durable merge request UUID/recovery, состояние ожидания в LandingAttempt/UI, poller на workstation или сервере, и финальная проверка точного PR/source/base/merge commit. Нужны тесты pending → enqueued → merged, rejected/failed и lost response.
+
+
+### Backward-compatible protocol capability for AutoSync-off landing targets
+
+Обнаружен риск для старых workstation daemon: старый клиент с git-auto-sync-v1 может получить новую форму target DTO, проигнорировать неизвестное поле AutoSyncEnabled и выполнить старый безусловный GitSync loop.
+
+Добавлена отдельная capability git-remote-landing-reconcile-v1:
+- Новая версия WorkstationProbe рекламирует её только при наличии поддерживаемого task-branch Git workflow.
+- Discovery выдаёт AutoSync-off remote-landing-only targets только устройствам, рекламирующим эту capability.
+- Reconciliation API независимо отклоняет AutoSync-off запросы от клиентов без неё.
+- Обычные AutoSync-enabled targets по-прежнему доступны по прежней AutoSyncV1 capability.
+- Тест сначала выполняет discovery со старым git-auto-sync-v1-only probe и ожидает пустой список, затем обновляет capabilities и ожидает ровно один Beacon-managed Landed target. Внешний Approved task без LandingAttempt не возвращается.
+- Добавлен Domain test capability negotiation и обновлены reconciliation test fixtures.
+
+Так AutoSync=false не может случайно привести к фоновой синхронизации у старого daemon. Обычный fetch/fast-forward и tag sync остаются отключёнными; новая capability разрешает только отдельный proof/reconciliation path.
+
+Точный source/test head до обновления журнала: `eb3de7a5121e52fbc01aba134c3f493d0cbb5082`. CI #45714185084 выполнялся на предыдущем e0fb1f07: Linux завершился успешно, Windows/macOS дошли до CLI без ошибок на момент последней проверки, однако новый capability code/tests этим запуском не покрыты. После фиксации журнала нужен новый полный Linux/Windows/macOS CI.
