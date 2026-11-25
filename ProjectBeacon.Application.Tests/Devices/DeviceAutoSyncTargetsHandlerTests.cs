@@ -6,6 +6,8 @@ using Application.Projects;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
+using Domain.Entities.Tasks;
+using Domain.Entities.Evals;
 using Domain.Enums;
 using Infrastructure.Data;
 using Microsoft.Data.Sqlite;
@@ -102,6 +104,95 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             var secondTarget = Assert.Single(second.Value!);
             Assert.Equal(enabledProjectId, secondTarget.ProjectId);
             Assert.Equal(secondRoot, secondTarget.LocalRoot);
+        }
+    }
+
+    [Fact]
+    public async Task ReturnsBeaconManagedVerifiedLandingWhenAutoSyncIsDisabled()
+    {
+        Guid deviceId;
+        Guid projectId;
+        Guid taskId;
+        Guid reviewRunId;
+        string sourceSha;
+        const string localRoot = "/workspace/beacon-managed-landing";
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var user = User.Create("beacon-landing", "beacon-landing@beacon.local", "hash");
+            var org = Org.Create("Beacon landing without AutoSync");
+            _db.Users.Add(user);
+            _db.Orgs.Add(org);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var project = Project.Create("AutoSync disabled", null, org.Id);
+            project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
+                0, [], 200, 20_000, "Off", autoSyncEnabled: false));
+            _db.Projects.Add(project);
+            _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            projectId = project.Id;
+
+            var created = await new CreateDeviceHandler(Factory()).HandleAsync(
+                new CreateDeviceCommand(new CreateDeviceRequest("landing-device", "fp-landing-device", user.Id)),
+                TestContext.Current.CancellationToken);
+            Assert.True(created.Success, created.Error);
+            deviceId = created.Value!.Id;
+            var device = await _db.DaemonDevices.SingleAsync(
+                item => item.Id == deviceId, TestContext.Current.CancellationToken);
+            device.Heartbeat(
+                """{"capabilities":["git-sync-v1","git-auto-sync-v1"]}""", "{}");
+            _db.ProjectRuntimes.Add(ProjectRuntime.Create(projectId, deviceId, localRoot));
+
+            var task = TaskItem.Create("Beacon-managed merge", projectId, description: "Reviewed task.");
+            task.PinPipelineDevice(deviceId);
+            task.StartPipeline();
+            task.EnterExecuting();
+            task.EnterReview();
+            task.SetApproved();
+            _db.Tasks.Add(task);
+            taskId = task.Id;
+
+            var review = ReviewRun.Start(
+                projectId, taskId, ReviewerType.Agent, targetRunId: Guid.NewGuid());
+            review.SetCheckCommandHash(new string('a', 64));
+            sourceSha = new string('1', 40);
+            review.CompleteCheck(
+                "Review check passed.", "review-artifact",
+                sourceSha, new string('2', 40), deviceId, "main");
+            _db.ReviewRuns.Add(review);
+            reviewRunId = review.Id;
+            _db.ReviewVerdicts.Add(ReviewVerdict.Create(
+                taskId, projectId, ReviewVerdictKind.Approve, "Approved."));
+
+            var candidateTree = new string('4', 40);
+            var landingAttempt = LandingAttempt.Start(
+                projectId, taskId, reviewRunId, user.Id, deviceId,
+                "main", sourceSha, new string('2', 40), new string('a', 64),
+                "Beacon verified the exact GitHub merge.");
+            landingAttempt.RecordPreview(
+                "main", new string('3', 40), candidateTree, new string('5', 64), 0, null);
+            landingAttempt.MarkExecutePending();
+            landingAttempt.RecordLanded(
+                new string('6', 40), candidateTree, 0, new string('7', 64));
+            _db.LandingAttempts.Add(landingAttempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        using (TenantScope.EnterUnscoped())
+        {
+            var handler = new GetDeviceAutoSyncTargetsHandler(Factory());
+            var result = await handler.HandleAsync(deviceId, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            var target = Assert.Single(result.Value!);
+            Assert.Equal(projectId, target.ProjectId);
+            Assert.Equal(localRoot, target.LocalRoot);
+            Assert.False(target.AutoSyncEnabled);
+            var landing = Assert.Single(target.RemoteLandings!);
+            Assert.Equal(taskId, landing.TaskId);
+            Assert.Equal(reviewRunId, landing.ReviewRunId);
+            Assert.Equal(sourceSha, landing.SourceSha);
         }
     }
 
