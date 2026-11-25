@@ -341,3 +341,17 @@ After the server and target-discovery regression tests, the workstation loop now
 Так AutoSync=false не может случайно привести к фоновой синхронизации у старого daemon. Обычный fetch/fast-forward и tag sync остаются отключёнными; новая capability разрешает только отдельный proof/reconciliation path.
 
 Точный source/test head до обновления журнала: `eb3de7a5121e52fbc01aba134c3f493d0cbb5082`. CI #45714185084 выполнялся на предыдущем e0fb1f07: Linux завершился успешно, Windows/macOS дошли до CLI без ошибок на момент последней проверки, однако новый capability code/tests этим запуском не покрыты. После фиксации журнала нужен новый полный Linux/Windows/macOS CI.
+
+
+### Capability negotiation protects older workstation daemons
+
+Добавлена отдельная workstation capability `git-remote-landing-reconcile-v1` для AutoSync-independent remote-landing path.
+
+- Новая WorkstationProbe рекламирует capability только при поддерживаемом task-branch Git workflow и установленном GitHub CLI `gh`.
+- При AutoSync=false discovery выдаёт remote-landing-only target только устройству с новой capability. Старые daemon с одним `git-auto-sync-v1` не увидят такую цель и не смогут обработать неизвестное поле `AutoSyncEnabled=false` по старому безусловному Sync path.
+- Reconciliation API повторно требует capability при AutoSync=false, даже если клиент обошёл discovery endpoint и прислал прямой запрос. Дополнительно остаётся требование exact verified `LandingAttemptStatus.Landed`.
+- Target-discovery test проверяет legacy probe → пустой target list, затем новую capability → ровно один Beacon-managed Landed task; внешний Approved task без LandingAttempt остаётся исключён.
+- API test проверяет, что legacy workstation не может закрыть задачу при AutoSync=false даже с валидным LandingAttempt; задача остаётся InProgress/Approved и RemoteLandingProof не создаётся.
+- Добавлен unit test для Supports(RemoteLandingReconcileV1).
+
+**Проверка:** CI #45714185084 на предыдущем source/test head `e0fb1f07` не включает capability gate. Linux завершился успешно, Windows/macOS находились в более поздних CLI/Web тестах без видимых ошибок. Для этого compatibility slice обязателен новый полный CI на текущем implementation head после обновления журнала.
