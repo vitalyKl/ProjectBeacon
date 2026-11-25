@@ -266,7 +266,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var device = await _db.DaemonDevices.SingleAsync(
                 item => item.Id == deviceId, TestContext.Current.CancellationToken);
             device.Heartbeat(
-                """{"capabilities":["git-sync-v1","git-auto-sync-v1"]}""", "{}");
+                """{"capabilities":["git-sync-v1","git-auto-sync-v1","git-land-v1","git-land-integration-v1","git-remote-landing-reconcile-v1"]}""", "{}");
             _db.ProjectRuntimes.Add(ProjectRuntime.Create(project.Id, deviceId, "/workspace/project"));
             var task = TaskItem.Create("Merged via PR", project.Id, description: "Change under review.");
             task.PinPipelineDevice(deviceId);
