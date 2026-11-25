@@ -784,3 +784,24 @@ CI run #1641 is still tied to the older bdd46d1a head; run #1642 was queued for 
 - Current GitHub documentation states that this synchronous endpoint does not support merge queues or stacked pull requests and recommends the asynchronous merge API. The async API can use merge_action=default to select a configured merge queue, but an "enqueued" result is not a completed merge; the PR must be checked later for actual MERGED state. Reference: https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request-asynchronously.
 - Therefore direct GitHub PR merge is implemented, but repositories configured to require merge queue or stacked-PR landing are not yet supported. Do not describe GitHub landing as fully compatible with every branch-protection mode.
 - Implementing async/queue support needs durable merge-request identity/recovery, an explicit queued/pending UI state, and polling/reconciliation that records RemoteLandingProof only after the PR actually reaches MERGED and its merge commit/tree/post-check are verified. An enqueued result must never mark LandingAttempt as Landed.
+
+
+### Backward-compatible capability negotiation for AutoSync-off remote landing
+
+**Implementation/test head before this journal update:** eb3de7a5121e52fbc01aba134c3f493d0cbb5082
+
+A compatibility review found that a workstation on the older git-auto-sync-v1 protocol could deserialize the extended target DTO while ignoring AutoSyncEnabled=false, then enter the legacy unconditional GitSync path. That could unexpectedly fetch/fast-forward when the project had AutoSync disabled.
+
+Changes:
+
+- Added WorkstationCapabilities.RemoteLandingReconcileV1 with wire value git-remote-landing-reconcile-v1.
+- Current WorkstationProbe advertises it only when the daemon has a supported Git task-branch workflow (same prerequisites as GitLand).
+- DeviceAutoSyncTargetsHandler returns an AutoSync-off, remote-landing-only target only when the pinned device advertises RemoteLandingReconcileV1. Legacy AutoSyncV1-only devices receive no such target.
+- ReconcileDeviceRemoteLandingHandler independently rejects AutoSync-off reconciliation from a device without the new capability; the prior exact LandingAttempt= L​​anded / Review/source/device/target/merge checks still apply.
+- Updated the positive AutoSync-off discovery test to first query as a legacy daemon and assert an empty result, then advertise the new capability and assert that only the Beacon-managed Landed task is returned. The external Approved task without a LandingAttempt remains excluded.
+- Updated reconciliation fixtures to advertise the new capability and added a Domain capability unit test for legacy vs new protocol support.
+- This is a capability gate, not a change to the AutoSync preference: AutoSync=false still performs no normal branch fetch/fast-forward and no tag synchronization.
+
+Verification context:
+- CI #45714185084 (run 1643) is tied to earlier source/test head e0fb1f07. Linux completed successfully across build, model check, all test modules, TRX and format. At the last poll Windows and macOS had reached CLI tests with no reported failure. This run does not include the new capability code/tests.
+- A new full matrix must run on the latest journal-updated head.
