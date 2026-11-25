@@ -26,6 +26,30 @@ MANIFEST = ROOT / ".beacon" / "release.json"
 VERSION_TOKEN = "{version}"
 MAX_MANIFEST_BYTES = 256 * 1024
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
+REGEX_TIMEOUT_SECONDS = 1.0
+
+# Run Python's backtracking regex engine in a child process. A Python thread
+# timeout cannot stop catastrophic backtracking, whereas subprocess.run does.
+REGEX_WORKER = r"""
+import json
+import re
+import sys
+
+payload = json.load(sys.stdin)
+try:
+    match = re.search(payload["pattern"], payload["text"])
+except re.error as exc:
+    print(json.dumps({"error": f"invalid regex: {exc}"}))
+    raise SystemExit(0)
+if match is None:
+    print(json.dumps({"error": "Regex version selector did not match"}))
+elif "version" in match.groupdict():
+    print(json.dumps({"value": match.group("version")}))
+elif match.lastindex:
+    print(json.dumps({"value": match.group(1)}))
+else:
+    print(json.dumps({"error": "Regex selector must provide a named 'version' group or capture group 1"}))
+"""
 
 # Keep this grammar in sync with ProjectVersionPolicyCatalog. The release gate
 # accepts a portable XPath location-path subset evaluated identically by .NET
@@ -37,7 +61,12 @@ XML_LOCATION_PATH = re.compile(
 
 
 def fail(message: str) -> "NoReturn":
-    print(f"::error::{message}", file=sys.stderr)
+    # Keep the GitHub workflow annotation for real release-gate failures, but
+    # don't emit workflow commands when this module is imported by unit tests.
+    if __name__ == "__main__":
+        print(f"::error::{message}", file=sys.stderr)
+    else:
+        print(message, file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -162,19 +191,34 @@ def dotnet_regex_to_python(selector: str) -> str:
 
 
 def read_regex_version(text: str, selector: str) -> str:
+    pattern = dotnet_regex_to_python(selector)
     try:
-        match = re.search(dotnet_regex_to_python(selector), text)
-    except re.error as exc:
-        fail(f"Regex version selector is invalid: {exc}")
-    if match is None:
-        fail("Regex version selector did not match")
-    if "version" in match.groupdict():
-        value = match.group("version")
-    elif match.lastindex:
-        value = match.group(1)
-    else:
-        fail("Regex selector must provide a named 'version' group or capture group 1")
-    if not value:
+        completed = subprocess.run(
+            [sys.executable, "-I", "-c", REGEX_WORKER],
+            input=json.dumps({"pattern": pattern, "text": text}),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=REGEX_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        fail(f"Regex version selector exceeded the {REGEX_TIMEOUT_SECONDS:g}s execution limit")
+    if completed.returncode != 0:
+        fail(
+            "Regex version selector worker failed: "
+            + completed.stderr.strip()[:800]
+        )
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        fail("Regex version selector worker returned invalid JSON")
+    if not isinstance(result, dict):
+        fail("Regex version selector worker returned an invalid result")
+    if "error" in result:
+        fail(str(result["error"]))
+    value = result.get("value")
+    if not isinstance(value, str) or not value.strip():
         fail("Regex version capture is empty")
     return value.strip()
 
