@@ -80,7 +80,7 @@ public sealed class DaemonAutoSyncLoopTests
         var verifyCalls = 0;
         var loop = new DaemonAutoSyncLoop(
             deps,
-            gitSync: null!,
+            null!,
             state,
             timing,
             (root, verifiedProjectId, landing, _) =>
@@ -99,8 +99,9 @@ public sealed class DaemonAutoSyncLoopTests
         Assert.Equal(1, api.TargetRequests);
         Assert.Equal(1, api.ReconciliationRequests);
         Assert.Equal(1, verifyCalls);
-        Assert.NotNull(api.ReconciliationBody);
-        using var posted = JsonDocument.Parse(api.ReconciliationBody);
+        var reconciliationBody = api.ReconciliationBody;
+        Assert.NotNull(reconciliationBody);
+        using var posted = JsonDocument.Parse(reconciliationBody!);
         Assert.Equal(projectId, posted.RootElement.GetProperty("projectId").GetGuid());
         Assert.Equal(taskId, posted.RootElement.GetProperty("taskId").GetGuid());
         Assert.Equal(mergeSha, posted.RootElement.GetProperty("mergeCommitSha").GetString());
