@@ -482,6 +482,46 @@ No release tag or production deployment was created. No SaaS Control Plane or bi
 3. Add further Roadmap/API tests if CI identifies gaps.
 4. Verify GitHub tag rulesets and production Environment reviewers before enabling real publication.
 
+
+
+## 2026-11-25 — Remote GitHub landing reconciliation and CI compiler fixes
+
+**Branch head after fixes:** `1af82bbef762bf5225b2f68ecc1927f9abb379bc`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230), open, ready for review, unmerged.
+
+### Remote landing reconciliation added
+
+- Added immutable `RemoteLandingProof` evidence bound to project, task, pinned workstation, latest Review run, GitHub repository/PR, exact task source SHA, merge commit, target branch, fetched remote base SHA, and merge/verification timestamps.
+- Extended the AutoSync target endpoint to include remote-landing candidates only when the task is pinned to the authenticated device, is Approved/InProgress, has no Ready/Active/WaitingForUser sessions, has the latest successful landing Review proof for the same device/source/base, and the latest verdict is Approve.
+- Added read-only workstation verification: inspect the exact task worktree and clean reviewed HEAD, inspect the single configured GitHub origin, read the matching merged PR, fetch the configured target branch, prove the merge commit is an ancestor of the fetched remote base, re-read the PR to prevent stale-snapshot races, and recheck the local task worktree.
+- The verifier never pushes, marks a PR ready, merges, or updates the target branch. It only reports a verified external GitHub merge to the server.
+- Added device-only reconciliation API. The server independently revalidates device token/capability, project/runtime attachment, project AutoSync policy, persistent task workstation pin, latest Review proof and approval, and absence of active sessions before atomically storing the proof and closing the task.
+- Added EF configuration, migration, model snapshot, DI registration, endpoint and tests. Updated `docs/ignore-query-filters.allowlist` with the exact reviewed bypass counts for the two new handlers.
+
+### CI run #45555763535 — compiler findings
+
+Run [#45555763535](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45555763535) tested head `2b0e7fb33c54e5f8e988cc3c232289896a608f17` and failed on Linux, Windows and macOS Build steps.
+
+Exact compiler findings:
+1. `DaemonAutoSyncLoop.cs(164)`: invalid multi-character C# literals used for CR/LF clipping.
+2. `GitLandExecutor.cs(114)`: invalid multi-character C# literals used for CR/LF splitting.
+3. `FinishWorkHandlerTests.RivalCommittingDb` and `CommentSaveFailingDb`: test doubles did not implement the newly added `IBeaconDb.RemoteLandingProofs` member.
+
+All three causes have been corrected:
+- Replaced the double-escaped literals with valid `'\\r'` and `'\\n'` C# char literals.
+- Added the missing DbSet forwarding member to both test doubles.
+- Scanned every C# file in the 21-file diff since the earlier compile checkpoint for the same doubled CR/LF char-literal pattern; no other occurrences were found.
+
+The current head `1af82bbef762bf5225b2f68ecc1927f9abb379bc` has **not yet been validated by CI**. The historical run remains failed and must not be represented as a green check. Local .NET build is not available in this environment.
+
+### Next actions
+
+1. Trigger CI on exact head `1af82bbef762bf5225b2f68ecc1927f9abb379bc`.
+2. Fix any remaining compile/test/model/format failures and repeat until green on the exact head.
+3. Reconcile any new main commits without overwriting changes; PR base is main and must be rechecked.
+4. Keep publication blocked until tag protection and production Environment reviewers can be verified with sufficient GitHub permissions. No tag or deployment has been created.
+5. Perform final review of the RemoteLandingProof path and confirm GitLand and external GitHub landing remain non-competing flows.
+
 ## Update format
 
 For every subsequent work session append:
