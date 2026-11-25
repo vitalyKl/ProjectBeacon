@@ -440,7 +440,7 @@ else
         }
     }
 
-    private static string ContextSnapshotMarkdown(string json)
+    private string ContextSnapshotMarkdown(string json)
     {
         try
         {
@@ -457,7 +457,7 @@ else
         }
         catch (System.Text.Json.JsonException)
         {
-            return string.Empty;
+            return L["SnapshotPreviewUnavailable"].Value;
         }
     }
 

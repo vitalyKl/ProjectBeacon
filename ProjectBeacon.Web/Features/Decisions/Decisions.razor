@@ -299,7 +299,7 @@ else
         }
     }
 
-    private static string DecisionSnapshotMarkdown(string json)
+    private string DecisionSnapshotMarkdown(string json)
     {
         try
         {
@@ -315,7 +315,7 @@ else
         }
         catch (System.Text.Json.JsonException)
         {
-            return string.Empty;
+            return L["SnapshotPreviewUnavailable"].Value;
         }
     }
 

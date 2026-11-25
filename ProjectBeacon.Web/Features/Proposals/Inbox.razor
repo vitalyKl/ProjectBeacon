@@ -587,7 +587,7 @@ else
         }
         catch (JsonException)
         {
-            return string.Empty;
+            return L["SnapshotPreviewUnavailable"].Value;
         }
     }
 
@@ -615,12 +615,12 @@ else
         }
     }
 
-    private static string ExtractSnapshotMarkdown(string json, ContentTargetKind targetKind) =>
+    private string ExtractSnapshotMarkdown(string json, ContentTargetKind targetKind) =>
         targetKind == ContentTargetKind.ContextSection
             ? FormatContextSectionPreview(ExtractContextSectionTitle(json), ExtractContextSectionBody(json))
             : ExtractMarkdown(json);
 
-    private static string ExtractMarkdown(string json)
+    private string ExtractMarkdown(string json)
     {
         try
         {
@@ -662,7 +662,7 @@ else
         }
         catch (JsonException)
         {
-            return string.Empty;
+            return L["InvalidProposalPayload"].Value;
         }
     }
 

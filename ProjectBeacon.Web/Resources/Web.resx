@@ -3392,4 +3392,7 @@ No Beacon-hosted coding agent.</value>
   <data name="InvalidProposalPayload" xml:space="preserve">
     <value>This proposal's content could not be read because its payload is invalid. Refresh the inbox or ask the author to submit it again.</value>
   </data>
+  <data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>The saved snapshot could not be previewed because its data is invalid.</value>
+  </data>
 </root>

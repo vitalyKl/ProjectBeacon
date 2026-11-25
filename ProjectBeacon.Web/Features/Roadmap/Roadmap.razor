@@ -303,7 +303,7 @@ else
         }
     }
 
-    private static string MilestoneSnapshotDescription(string json)
+    private string MilestoneSnapshotDescription(string json)
     {
         try
         {
@@ -314,7 +314,7 @@ else
         }
         catch (System.Text.Json.JsonException)
         {
-            // The title/id remains visible; a damaged snapshot cannot be previewed.
+            return L["SnapshotPreviewUnavailable"].Value;
         }
 
         return string.Empty;

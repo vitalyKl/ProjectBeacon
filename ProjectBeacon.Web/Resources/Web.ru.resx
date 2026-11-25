@@ -3183,4 +3183,7 @@
   <data name="InvalidProposalPayload" xml:space="preserve">
     <value>Не удалось прочитать содержимое предложения: данные имеют неверный формат. Обновите список или попросите автора отправить предложение повторно.</value>
   </data>
+  <data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>Не удалось показать сохранённую версию: данные имеют неверный формат.</value>
+  </data>
 </root>

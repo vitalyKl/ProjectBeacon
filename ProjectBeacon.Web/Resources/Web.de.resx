@@ -3193,4 +3193,7 @@ orthstar</value>
   <data name="InvalidProposalPayload" xml:space="preserve">
     <value>Der Inhalt dieses Vorschlags konnte nicht gelesen werden, da die Nutzdaten ungültig sind. Aktualisieren Sie den Posteingang oder bitten Sie den Autor, den Vorschlag erneut einzureichen.</value>
   </data>
+  <data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>Die gespeicherte Version kann nicht angezeigt werden, da ihre Daten ungültig sind.</value>
+  </data>
 </root>
