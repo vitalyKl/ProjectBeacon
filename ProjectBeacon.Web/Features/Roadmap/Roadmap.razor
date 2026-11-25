@@ -186,7 +186,11 @@ else
                 }
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
                     <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_milestoneHistory.Count})")">
-                        @if (_milestoneHistory.Count == 0)
+                        @if (_milestoneHistoryErrorMessage is not null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">@_milestoneHistoryErrorMessage</MudAlert>
+                        }
+                        @if (_milestoneHistory.Count == 0 && _milestoneHistoryErrorMessage is null)
                         {
                             <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
                         }
@@ -228,6 +232,7 @@ else
     private Guid? _editingId;
     private MilestoneDto? _open;
     private List<ContentVersionDto> _milestoneHistory = [];
+    private string? _milestoneHistoryErrorMessage;
     private bool _detailOpen;
     private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
     private string? _editName;
@@ -411,14 +416,22 @@ else
         if (_project is null)
         {
             _milestoneHistory = [];
+            _milestoneHistoryErrorMessage = null;
             return;
         }
 
         var history = await ContentVersions.HandleAsync(
             _project.Id, ContentTargetKind.Milestone, milestoneId, _actor, 50);
-        _milestoneHistory = history.Success ? history.Value!.ToList() : [];
-        if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history, L["Roadmap"].Value, L["Load"].Value), Severity.Warning);
+        if (history.Success)
+        {
+            _milestoneHistory = history.Value!.ToList();
+            _milestoneHistoryErrorMessage = null;
+        }
+        else
+        {
+            _milestoneHistory = [];
+            _milestoneHistoryErrorMessage = Notifications.FormatFailure(history, L["Roadmap"].Value, L["Load"].Value);
+        }
     }
 
     private async Task RestoreMilestoneVersion(ContentVersionDto version)
