@@ -101,7 +101,11 @@ else
             {
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-2">
                     <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_projectDescriptionHistory.Count})")" Expanded="true">
-                        @if (_projectDescriptionHistory.Count == 0)
+                        @if (_projectDescriptionHistoryErrorMessage is not null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">@_projectDescriptionHistoryErrorMessage</MudAlert>
+                        }
+                        @if (_projectDescriptionHistory.Count == 0 && _projectDescriptionHistoryErrorMessage is null)
                         {
                             <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
                         }
@@ -377,6 +381,7 @@ else
     private int _projectRevision;
     private bool _showProjectDescriptionHistory;
     private List<ContentVersionDto> _projectDescriptionHistory = [];
+    private string? _projectDescriptionHistoryErrorMessage;
     private Guid? _folderDeviceId;
     private string _folderPath = string.Empty;
     private GitSyncResultDto? _gitSyncResult;
@@ -641,9 +646,14 @@ else
         var history = await ContentVersions.HandleAsync(
             projectId, ContentTargetKind.ProjectDescription, projectId, _actor, 50);
         if (history.Success)
+        {
             _projectDescriptionHistory = history.Value!.ToList();
+            _projectDescriptionHistoryErrorMessage = null;
+        }
         else
-            Notifications.Add(Notifications.FormatFailure(history, L["ProjectSettings"].Value, L["Load"].Value), Severity.Warning);
+        {
+            _projectDescriptionHistoryErrorMessage = Notifications.FormatFailure(history, L["ProjectSettings"].Value, L["Load"].Value);
+        }
     }
 
     private async Task RestoreProjectDescriptionVersion(ContentVersionDto version)
