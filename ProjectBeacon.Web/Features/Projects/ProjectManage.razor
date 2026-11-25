@@ -640,8 +640,9 @@ else
         _showProjectDescriptionHistory = true;
         var history = await ContentVersions.HandleAsync(
             projectId, ContentTargetKind.ProjectDescription, projectId, _actor, 50);
-        _projectDescriptionHistory = history.Success ? history.Value!.ToList() : [];
-        if (!history.Success)
+        if (history.Success)
+            _projectDescriptionHistory = history.Value!.ToList();
+        else
             Notifications.Add(Notifications.FormatFailure(history, L["ProjectSettings"].Value, L["Load"].Value), Severity.Warning);
     }
 
