@@ -3,14 +3,32 @@
 from __future__ import annotations
 
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 
 from verify_release_manifest import (
     dotnet_regex_to_python,
+    fail,
     is_safe_git_tag_name,
     read_regex_version,
     read_xml_version,
     validate_tag_pattern,
 )
+
+
+class ReleaseManifestSafetyTests(unittest.TestCase):
+    def test_regex_execution_is_terminated_after_the_configured_timeout(self) -> None:
+        text = "a" * 30000 + "b"
+        with self.assertRaises(SystemExit):
+            read_regex_version(text, r"^(?<version>a+)+$")
+
+    def test_expected_validation_failures_do_not_emit_github_error_annotations(self) -> None:
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit):
+            fail("expected invalid test input")
+
+        self.assertIn("expected invalid test input", stderr.getvalue())
+        self.assertNotIn("::error::", stderr.getvalue())
 
 
 class ReleaseManifestProjectionTests(unittest.TestCase):
