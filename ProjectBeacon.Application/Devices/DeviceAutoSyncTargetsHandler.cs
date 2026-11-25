@@ -55,7 +55,10 @@ public sealed class GetDeviceAutoSyncTargetsHandler
 
             var remoteLandings = await ListRemoteLandingTargetsAsync(
                 db, runtime.ProjectId, deviceId, policy.AutoSyncEnabled, ct);
-            if (!policy.AutoSyncEnabled && remoteLandings.Count == 0)
+            if (!policy.AutoSyncEnabled
+                && (remoteLandings.Count == 0
+                    || !WorkstationCapabilities.Supports(
+                        device.ProbeJson, WorkstationCapabilities.RemoteLandingReconcileV1)))
                 continue;
 
             targets.Add(new DeviceAutoSyncTargetDto(
