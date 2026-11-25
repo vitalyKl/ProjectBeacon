@@ -706,3 +706,48 @@ GitHub merge API is now the only remote merge authority. Local GitLand ref-only 
 2. Expand merge executor test coverage for stale base, changed PR head, missing approval, missing/failing required checks, duplicate PRs, API rejection, lost response/already-merged recovery, and successful response identity mismatch.
 3. Add an integration test using a disposable protected GitHub repository or a deterministic HTTP/API seam; do not rely on a live production repository.
 4. Confirm GitHub rules/reviewers in repository Settings before any release tag or deployment.
+
+
+## 2026-11-26 — Decouple verified GitHub landing reconciliation from project AutoSync
+
+**Source head after this slice:** d68881c656d3de3f44bb41ea98974a56123750ff  
+**Previous CI:** [#45712282443](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45712282443), run 1641, validates earlier head bdd46d1a7a359edada5e06fd67a580ddb7b63a14; it does not include this slice.
+
+### Finding
+
+Project Git policy defaults AutoSyncEnabled=false. Before this fix, both target discovery and the remote reconciliation API treated that preference as a global remote-landing kill switch. As a result, a server-authorized Beacon GitHub landing could pass its own GitLand Execute and persist LandingAttemptStatus.Landed, but the workstation's background loop would never discover the task to record its RemoteLandingProof and close it.
+
+AutoSync is a repository synchronization preference (fetch/fast-forward and tags); it must not disable completion of a landing already initiated and verified by Beacon.
+
+### Changes
+
+- DeviceAutoSyncTargetsHandler now returns device-bound project roots when either:
+  - project AutoSync is enabled, or
+  - AutoSync is disabled but the pinned task has a latest successful Review/Approve and an exact LandingAttemptStatus.Landed matching the Review run, device, source SHA and target branch.
+- A project with AutoSync disabled and no verified Beacon LandingAttempt is still omitted. External/manual PR merges therefore do not silently become enabled when AutoSync is off.
+- DeviceAutoSyncTargetDto carries an explicit AutoSyncEnabled flag. The daemon skips GitSyncService.ExecuteAsync and tag sync when false, but always runs the separate remote-landing verifier for any returned tasks.
+- ReconcileDeviceRemoteLandingHandler now requires a valid project Git policy. With AutoSync disabled, it accepts only an exact Beacon-managed attempt already in verified Landed state. Without an attempt, AutoSync must be enabled. Existing device binding, task pin, latest Review/Approve, remote PR identity, merge ancestry, active-session and idempotency checks remain in force.
+- Updated security allowlist rationale: DeviceAutoSyncTargetsHandler.cs has eight reviewed query-filter bypasses; DeviceRemoteLandingReconciliationHandler.cs has nine.
+- Added ReturnsBeaconManagedVerifiedLandingWhenAutoSyncIsDisabled to target discovery tests. Updated ReconcilesWhenBeaconLandingAttemptIsLandedForTheExactMerge to run with AutoSync disabled. The existing negative test still verifies that an external landing without a Beacon attempt is rejected when AutoSync is off.
+
+### Safety boundaries
+
+- AutoSync disabled still means no background fetch/fast-forward and no tag sync.
+- Only the workstation pinned to the task can report the merge.
+- A Beacon attempt in ExecutePending, LandedUnverified, Failed or any state other than exact Landed is not discoverable for completion.
+- The API independently revalidates the exact merge SHA against the immutable LandingAttempt and the latest approved Review.
+- External PR reconciliation with no LandingAttempt remains available only for projects that explicitly enable AutoSync.
+- No production tag or deployment was created.
+
+### Verification
+
+- New discovery and reconciliation tests are committed. The project IgnoreQueryFilters allowlist is updated to the exact source count.
+- CI #1641 is running on prior head bdd46d1a; at the last poll it had no failures, Linux was at formatting verification, and Windows/macOS were still running Application tests. It does not validate this AutoSync-independent landing change.
+- A new full cross-platform CI run is required on current head d68881c6.
+
+### Next
+
+1. Run full CI on exact current HEAD and fix failures before accepting this slice.
+2. Verify daemon loop tests also cover AutoSync-off with remote-landing-only targets, including no GitSync execution and successful POST reconciliation.
+3. Complete deterministic GitHub API seam/integration coverage for merge preflight and lost-response recovery.
+4. Keep production publication blocked until an administrator confirms classic v* tag protection and required reviewers for the production environment.
