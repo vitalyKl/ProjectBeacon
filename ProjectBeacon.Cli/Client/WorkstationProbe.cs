@@ -66,9 +66,9 @@ public static class WorkstationProbe
                 {
                     capabilities.Add(WorkstationCapabilities.GitLandV1);
                     capabilities.Add(WorkstationCapabilities.GitLandIntegrationV1);
-                    capabilities.Add(WorkstationCapabilities.RemoteLandingReconcileV1);
                     if (Which("gh") is not null)
                     {
+                        capabilities.Add(WorkstationCapabilities.RemoteLandingReconcileV1);
                         capabilities.Add(WorkstationCapabilities.ReleasePrepareV1);
                         capabilities.Add(WorkstationCapabilities.ReleasePublishV1);
                     }
