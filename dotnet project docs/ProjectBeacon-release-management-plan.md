@@ -290,3 +290,13 @@ CI [#45626583688](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4562658
 2. Добавить/проверить daemon loop test для remote-landing-only target при AutoSync=false: отсутствие вызовов GitSync и успешный POST reconciliation.
 3. Завершить deterministic GitHub merge executor coverage и protected-repository acceptance.
 4. До production публикации администратор должен подтвердить classic v* tag protection и required reviewers Environment production.
+
+
+### Daemon-loop coverage for AutoSync-off landing reconciliation
+
+After the server and target-discovery regression tests, the workstation loop now also has deterministic coverage:
+
+- The remote-landing verifier is an injectable dependency with the production implementation as its default; this provides a deterministic test seam without changing production verification behavior.
+- Added a daemon-loop test with an AutoSync-disabled target, a fake verifier and HTTP handler. It asserts target discovery and remote reconciliation POST occur once, the exact merge SHA is posted, and no normal GitSync path is invoked.
+- The test intentionally passes no GitSync service; if the AutoSync-off branch accidentally starts fetch/fast-forward or tag synchronization, the test fails.
+- Current implementation/test head before the journal update: `33ceaa7e5989f52d66883d4feecdf125c33df073`. The prior CI #45712282443 covers only `bdd46d1a`, so it cannot validate this slice. A new Linux/Windows/macOS run is required.
