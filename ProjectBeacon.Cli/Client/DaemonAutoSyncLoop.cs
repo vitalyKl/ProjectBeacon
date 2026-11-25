@@ -71,7 +71,9 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
             if (target.ProjectId == Guid.Empty || string.IsNullOrWhiteSpace(target.LocalRoot))
                 continue;
 
-            await SynchronizeProjectAsync(target, ct);
+            if (target.AutoSyncEnabled)
+                await SynchronizeProjectAsync(target, ct);
+            await SynchronizeRemoteLandingsAsync(target, ct);
         }
     }
 
@@ -123,6 +125,11 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
                 $"AutoSync project {target.ProjectId}: fetched {tags.NewTags} new tag(s).");
         }
 
+
+    }
+
+    private async Task SynchronizeRemoteLandingsAsync(DeviceAutoSyncTargetDto target, CancellationToken ct)
+    {
         foreach (var remoteLanding in target.RemoteLandings ?? [])
         {
             ct.ThrowIfCancellationRequested();
