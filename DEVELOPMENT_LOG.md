@@ -622,3 +622,40 @@ Changed:
 1. Trigger and inspect CI on the exact current head.
 2. Fix any failures before changing the branch head again.
 3. Continue with a server-authorized GitHub landing workflow that respects branch protection, then verify release publication protection and end-to-end product acceptance.
+
+
+## 2026-11-25 — Cross-platform CI passed; release-gate and settings hardening
+
+**Validated commit:** `9878489da6c71a8f337c7cab8989524666298b68`  
+**CI:** [#45582326452](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45582326452), run 1636  
+**Result:** all three platform jobs completed successfully.
+
+### Exact CI result
+
+- Linux `build-test-linux`: success — restore, build, EF model check, release-manifest Python tests, API/Application/CLI/Domain/Infrastructure/Web/Worker test modules, TRX guards and `dotnet format`.
+- Windows `build-test (windows-latest)`: success — build, EF model check, all seven .NET test modules and `dotnet format`.
+- macOS `build-test (macos-latest)`: success — build, EF model check, all seven .NET test modules and `dotnet format`.
+- The run was triggered on the exact `9878489d` head. The next follow-up commits below are not covered by this CI run and need their own CI.
+- Expected negative-case tests in the Python release-gate suite were printing GitHub `::error::` workflow annotations despite passing. This is a log-noise defect, not a test failure; it is corrected below.
+
+### Follow-up hardening committed after the validated head
+
+- `scripts/verify_release_manifest.py`: Python regex evaluation now runs in an isolated child interpreter with a 2-second hard timeout. This prevents catastrophic backtracking from hanging a release workflow indefinitely. The subprocess uses explicit UTF-8 input/output and does not invoke a shell.
+- The release validator retains workflow error annotations when executed as the production script, but imported unit tests now write expected validation failures as ordinary stderr text; they no longer produce misleading GitHub error annotations.
+- Added Python tests for timeout fail-closed behavior and for the absence of workflow-command annotations during expected unit-test failures.
+- Project settings now document the actual supported XML location-path subset and portable Calendar token/separator set. All five UI locales (en/ru/de/ja/zh) explain that a version source is required before Candidate preparation but may be configured later when the project only plans Releases.
+- Calendar format field now displays its dedicated localized help text.
+- These follow-up changes are committed on `feat/release-management`; current branch HEAD after the updates recorded here is `65f6eae80afd9b947b63ac6476dfdd7958ee1810`.
+
+### Publication protection inspection
+
+- GitHub `GET /repos/vitalyKl/ProjectBeacon/rulesets` and `?includes_parents=true` both returned an empty array. There are no repository or inherited repository rulesets visible to this integration.
+- Classic branch protection returned HTTP 403 (integration lacks access); tag-protection endpoints and the Environment listing are not exposed by this connector. Therefore classic `v*` tag protection and required reviewers for `production` remain unknown, not confirmed absent or present.
+- No production tag was created and no deployment was started.
+
+### Remaining blockers and next steps
+
+1. Run a fresh CI on the latest branch head `65f6eae8`; previous success on `9878489d` is not evidence for the follow-up commits.
+2. Continue the server-authorized GitHub landing design. Current remote reconciliation is read-only and requires an external merge; don't create a competing local GitLand authority or give Actor a raw merge bypass.
+3. Have an administrator verify classic tag protection for `v*`, branch protection, and required reviewers for GitHub Environment `production` in GitHub Settings before any production publication test.
+4. Continue end-to-end acceptance of project settings, RLS/authorization, localization and release workflow failure states on an independent user project.
