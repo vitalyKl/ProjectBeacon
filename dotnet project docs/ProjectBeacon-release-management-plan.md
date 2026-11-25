@@ -246,3 +246,22 @@ CI [#45582326452](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4558232
 2. Разработать один server-authorized GitHub landing executor, который уважает branch protection, reviews и required checks. Текущая reconciliation функция read-only и может только записать уже выполненное внешнее merge.
 3. Администратору проверить legacy tag protection, branch protection и reviewers Production Environment.
 4. Продолжить user-project acceptance: права, RLS, локализация, ошибки workflow и настройки проекта.
+
+
+## Дополнение — GitHub-authoritative landing и исправление CI (26 ноября 2026)
+
+В актуальной реализации PR #230 добавлен серверно-авторизованный remote merge path:
+
+- Только доверенная команда `GitLand Execute`, поставленная сервером после LandingAttempt/Review proof, может инициировать GitHub merge. Агентская команда `git_pr` не получила действие `merge`; Actor не может самостоятельно вызвать merge.
+- Для GitHub-origin executor повторно строит точный Candidate; проверяет task worktree, review base, origin identity, уникальный PR, точный PR head, approvals, mergeability, required checks и clean merge state; перед mutation ещё раз сверяет PR/task/base.
+- Вызов GitHub PR merge API закреплён за ожидаемым SHA (`sha=...`) и не использует admin/bypass. GitHub branch protection остаётся финальным серверным gate.
+- После merge проверяются статус PR, merge commit, достижимость из обновлённой удалённой target-ветки и неизменность reviewed task head. Затем GitLand сверяет tree с immutable Preview и исполняет post-merge check. Неопределённый результат остаётся recoverable; локальный GitLand не переписывает GitHub protected refs.
+- Revert GitHub-origin намеренно не реализуется через force/ref mutation: исправление должно быть новой reviewed forward-fix задачей.
+
+CI [#45626583688](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45626583688) на HEAD `d05a71b9` выявил две одинаковые на трёх ОС тестовые ошибки:
+1. Allowlist ожидал 8, в `DeviceRemoteLandingReconciliationHandler.cs` фактически 9 ограниченных `IgnoreQueryFilters` вызовов.
+2. GitLand тест не передал доказательства Preview (`targetHeadSha`, `candidateTreeSha`) и проверял ошибку до intended GitHub remote check.
+
+Обе причины исправлены после failed run: count обновлён до 9; Execute test передаёт точные значения из Preview. Этот запуск остаётся failed; нужен новый CI для актуального HEAD.
+
+Оставшийся acceptance gap: сейчас нет успешного live integration test на отдельном protected GitHub repository; следует усилить deterministic API seam/tests для stale PR/base, approvals, required checks, duplicates, API rejection, lost-response recovery и mismatch. Production release protections (classic `v*` tag protection и required reviewers Environment `production`) всё ещё не подтверждены; не публиковать production tag и не запускать deploy до административной проверки.
