@@ -207,7 +207,6 @@ else if (_error)
         {
             _error = true;
             _errorMessage = Notifications.FormatFailure(listed, L["Board"].Value, L["Load"].Value);
-            _allTasks = [];
             _container?.Refresh();
             return;
         }
