@@ -142,6 +142,26 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                 "The latest pipeline review verdict must still be Approve.", ErrorKind.Conflict);
 
+        // If Beacon created a landing attempt, the GitLand Execute command must have
+        // completed with verified post-merge evidence before AutoSync may close the task.
+        // A merged PR alone must not turn an ExecutePending/LandedUnverified attempt into
+        // a successful task completion. Projects that merge PRs outside Beacon have no
+        // LandingAttempt and continue through this externally-authorized reconciliation path.
+        var latestLandingAttempt = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
+            .Where(attempt => attempt.ProjectId == request.ProjectId && attempt.TaskId == request.TaskId)
+            .OrderByDescending(attempt => attempt.CreatedAt)
+            .ThenByDescending(attempt => attempt.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestLandingAttempt is not null
+            && (latestLandingAttempt.Status != LandingAttemptStatus.Landed
+                || latestLandingAttempt.ReviewRunId != request.ReviewRunId
+                || !string.Equals(latestLandingAttempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(latestLandingAttempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal)
+                || !string.Equals(latestLandingAttempt.MergeCommitSha, request.MergeCommitSha, StringComparison.OrdinalIgnoreCase)))
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                "The Beacon landing attempt has not reached a verified Landed state for this exact GitHub merge. Resolve the landing attempt before closing the task.",
+                ErrorKind.Conflict);
+
         var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
             .AnyAsync(session => session.ProjectId == request.ProjectId
                 && session.TaskId == request.TaskId
