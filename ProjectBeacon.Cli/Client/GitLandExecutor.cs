@@ -99,9 +99,7 @@ internal static class GitLandExecutor
             return BusinessFailure("GitFilterConfigurationUnavailable");
         var disabledFilters = filters.Filters!;
 
-        // GitHub is the authoritative merge executor for GitHub-origin repositories.
-        // Preview remains available, but a local ref-only GitLand Execute/Revert would
-        // create a second, competing landing authority and bypass branch protection.
+        var isGitHubOrigin = false;
         if (request.Action is "Execute" or "Revert")
         {
             var origin = await Git(
@@ -112,7 +110,10 @@ internal static class GitLandExecutor
             {
                 var originUrls = origin.StdOut.Split(
                     ['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (AgentTaskGitOperations.HasGitHubOrigin(originUrls))
+                isGitHubOrigin = AgentTaskGitOperations.HasGitHubOrigin(originUrls);
+                // Reverting a GitHub merge requires a new reviewed PR. Never mutate a
+                // protected remote target through the local GitLand ref-revert path.
+                if (isGitHubOrigin && request.Action == "Revert")
                     return BusinessFailure("GitHubRemoteRequiresPullRequest");
             }
             else if (origin.ExitCode != 2)
@@ -152,6 +153,9 @@ internal static class GitLandExecutor
             return BusinessFailure("MergeDriverInspectionFailed");
         if (customMergeDrivers.ExitCode == 0 && !string.IsNullOrWhiteSpace(customMergeDrivers.StdOut))
             return BusinessFailure("CustomMergeDriversConfigured");
+
+        if (request.Action == "Execute" && isGitHubOrigin)
+            return await ExecuteGitHubLandingAsync(taskWorkspace, request, disabledFilters, ct);
 
         var outcome = request.Action switch
         {
@@ -250,6 +254,109 @@ internal static class GitLandExecutor
             }), null)
         };
     }
+
+    private static async Task<(bool Ok, string? Result, string? Error)> ExecuteGitHubLandingAsync(
+        AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
+    {
+        if (!string.Equals(request.TargetBranch, request.ReviewBaseBranch, StringComparison.Ordinal))
+            return BusinessFailure("GitHubRemoteTargetMismatch");
+        if (!IsGitSha(request.TargetHeadSha) || !IsGitSha(request.TargetTreeSha))
+            return BusinessFailure("ExecutePreviewEvidenceMissing");
+
+        // Rebuild the exact candidate and rerun ReviewCheck before asking GitHub to
+        // merge. A server-authorized Execute can never rely on stale preview evidence.
+        var candidate = await BuildCandidateAsync(workspace, request, filters, ct);
+        if (candidate.Status != "previewed")
+            return BusinessFailure(candidate.ErrorCode ?? "CandidateNoLongerValid");
+        if (!string.Equals(candidate.TargetBranch, request.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(candidate.TargetHeadSha, request.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(candidate.CandidateTreeSha, request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
+            return BusinessFailure("CandidateChangedAfterPreview");
+
+        var projectRelativePath = Path.GetRelativePath(workspace.RecoveryPath, workspace.ProjectRoot)
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+        var context = new AgentTaskGitOperations.GitContext(
+            request.TaskId,
+            workspace.RepositoryRoot,
+            workspace.RecoveryPath,
+            workspace.ProjectRoot,
+            projectRelativePath == "." ? string.Empty : projectRelativePath,
+            workspace.BranchName,
+            workspace.BaseBranch,
+            workspace.BaseSha,
+            workspace.RecoveryPath + ".beacon.json",
+            filters);
+
+        var merge = await GitHubLandingMergeExecutor.MergeAsync(
+            context, request.TargetBranch, request.SourceSha, ct);
+        if (merge.CompletionUnknown)
+            return ExecuteUnknown(request, null, merge.ErrorCode ?? "GitHubMergeOutcomeUnknown");
+        if (merge.ErrorCode is not null || merge.Result is null)
+            return BusinessFailure(merge.ErrorCode ?? "GitHubMergeFailed");
+
+        // The GitHub merge commit is accepted only when its immutable tree is exactly
+        // the tree reviewed by Beacon and the post-merge check still passes.
+        var mergeTree = await Git(
+            workspace.RepositoryRoot, filters, CancellationToken.None,
+            "rev-parse", "--verify", merge.Result.MergeCommitSha + "^{tree}");
+        if (!Succeeded(mergeTree)
+            || !string.Equals(mergeTree.StdOut.Trim(), request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
+        {
+            return LandedUnverified(
+                request, merge.Result.MergeCommitSha, null, null, "GitHubMergeTreeMismatch");
+        }
+
+        var postMerge = await RunPostMergeCheckAsync(
+            workspace, request, merge.Result.MergeCommitSha, request.TargetTreeSha!,
+            filters, CancellationToken.None);
+        if (postMerge.ErrorCode is not null || postMerge.ExitCode != 0
+            || !IsSha256(postMerge.OutputHash))
+        {
+            return LandedUnverified(
+                request,
+                merge.Result.MergeCommitSha,
+                postMerge.ExitCode,
+                postMerge.OutputHash,
+                postMerge.ErrorCode ?? "PostMergeCheckFailed");
+        }
+
+        return (true, JsonSerializer.Serialize(new
+        {
+            status = "landed",
+            targetBranch = request.TargetBranch,
+            sourceSha = request.SourceSha,
+            targetHeadSha = request.TargetHeadSha,
+            candidateTreeSha = request.TargetTreeSha,
+            mergeCommitSha = merge.Result.MergeCommitSha,
+            postMergeCheckExitCode = postMerge.ExitCode,
+            postMergeCheckOutputHash = postMerge.OutputHash,
+            githubRepository = merge.Result.Repository,
+            pullRequestNumber = merge.Result.PullRequestNumber,
+            pullRequestUrl = merge.Result.PullRequestUrl,
+            remoteBaseSha = merge.Result.RemoteBaseSha,
+            mergedAtUtc = merge.Result.MergedAtUtc
+        }), null);
+    }
+
+    private static (bool Ok, string? Result, string? Error) LandedUnverified(
+        Request request,
+        string mergeCommitSha,
+        int? postMergeCheckExitCode,
+        string? postMergeCheckOutputHash,
+        string errorCode) =>
+        (true, JsonSerializer.Serialize(new
+        {
+            status = "landed_unverified",
+            targetBranch = request.TargetBranch,
+            sourceSha = request.SourceSha,
+            targetHeadSha = request.TargetHeadSha,
+            candidateTreeSha = request.TargetTreeSha,
+            mergeCommitSha,
+            postMergeCheckExitCode,
+            postMergeCheckOutputHash,
+            errorCode
+        }), null);
 
     private static async Task<(bool Ok, string? Result, string? Error)> ExecuteLandingAsync(
         AgentTaskWorktree workspace, Request request, string[] filters, CancellationToken ct)
