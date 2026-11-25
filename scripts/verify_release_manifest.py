@@ -27,6 +27,14 @@ VERSION_TOKEN = "{version}"
 MAX_MANIFEST_BYTES = 256 * 1024
 MAX_SOURCE_BYTES = 2 * 1024 * 1024
 
+# Keep this grammar in sync with ProjectVersionPolicyCatalog. The release gate
+# accepts a portable XPath location-path subset evaluated identically by .NET
+# XPathSelectElement and Python ElementTree.
+XML_LOCATION_PATH = re.compile(
+    r"^(?:/[A-Za-z_][A-Za-z0-9_.-]*(?:/[A-Za-z_][A-Za-z0-9_.-]*)*"
+    r"|//[A-Za-z_][A-Za-z0-9_.-]*(?:/[A-Za-z_][A-Za-z0-9_.-]*)*)$"
+)
+
 
 def fail(message: str) -> "NoReturn":
     print(f"::error::{message}", file=sys.stderr)
@@ -101,21 +109,33 @@ def read_xml_version(text: str, selector: str) -> str:
         root = ET.fromstring(text)
     except ET.ParseError as exc:
         fail(f"XML version source is invalid: {exc}")
-    if not isinstance(selector, str) or not selector.startswith("/"):
-        fail("XML version selector must be an absolute element path")
-    parts = [part for part in selector.split("/") if part]
-    if parts and parts[0] == root.tag:
-        parts = parts[1:]
-    current = root
-    for part in parts:
-        # ElementTree supports simple child paths. Unsupported XPath syntax is
-        # intentionally rejected here instead of being interpreted differently
-        # by the build gate and Beacon.
-        if any(token in part for token in ("[", "]", "@", "(", ")", "|", "*")):
-            fail(f"XML selector uses XPath syntax not supported by the release CI gate: {selector!r}")
-        current = current.find(part)
-        if current is None:
-            fail(f"XML version selector did not match an element: {selector!r}")
+    if not isinstance(selector, str) or not XML_LOCATION_PATH.fullmatch(selector):
+        fail(
+            "XML selector must be an absolute or descendant element path "
+            "(for example '/Project/PropertyGroup/Version' or '//Version'); "
+            "predicates, attributes, axes, functions, wildcards, and namespace prefixes are not supported"
+        )
+
+    if selector.startswith("//"):
+        parts = selector[2:].split("/")
+        matches = [element for element in root.iter() if element.tag == parts[0]]
+        for part in parts[1:]:
+            matches = [child for parent in matches for child in parent.findall(part)]
+            if not matches:
+                break
+        current = matches[0] if matches else None
+    else:
+        parts = selector[1:].split("/")
+        if parts and parts[0] == root.tag:
+            parts = parts[1:]
+        current = root
+        for part in parts:
+            current = current.find(part) if current is not None else None
+            if current is None:
+                break
+
+    if current is None:
+        fail(f"XML version selector did not match an element: {selector!r}")
     value = (current.text or "").strip()
     if not value:
         fail("XML version element is empty")
@@ -133,9 +153,17 @@ def read_toml_version(document: Any, selector: str) -> str:
     return str(current).strip()
 
 
+def dotnet_regex_to_python(selector: str) -> str:
+    # Beacon stores .NET regular expressions. Translate common named capture
+    # and backreference syntax while leaving (?<=...) / (?<!...) lookbehinds intact.
+    translated = re.sub(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>", r"(?P<\1>", selector)
+    translated = re.sub(r"\\k<([A-Za-z_][A-Za-z0-9_]*)>", r"(?P=\1)", translated)
+    return translated.replace(r"\z", r"\Z")
+
+
 def read_regex_version(text: str, selector: str) -> str:
     try:
-        match = re.search(selector, text)
+        match = re.search(dotnet_regex_to_python(selector), text)
     except re.error as exc:
         fail(f"Regex version selector is invalid: {exc}")
     if match is None:
