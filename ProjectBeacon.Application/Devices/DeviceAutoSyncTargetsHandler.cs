@@ -7,7 +7,7 @@ using Domain.Common;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
-/// Returns only AutoSync-enabled roots already bound to the authenticated device.
+/// Returns authenticated device roots that need repository AutoSync and/or exact remote-landing reconciliation.
 /// The device token is the authorization boundary; no arbitrary project/path can be requested.
 /// </summary>
 public sealed class GetDeviceAutoSyncTargetsHandler
@@ -50,8 +50,7 @@ public sealed class GetDeviceAutoSyncTargetsHandler
         {
             if (string.IsNullOrWhiteSpace(runtime.LocalRoot)
                 || !ProjectGitPolicyCatalog.TryRead(
-                    runtime.GitPolicyJson, runtime.GitPolicyRevision, out var policy)
-                || !policy.AutoSyncEnabled)
+                    runtime.GitPolicyJson, runtime.GitPolicyRevision, out var policy))
                 continue;
 
             var remoteLandings = await ListRemoteLandingTargetsAsync(
