@@ -207,3 +207,42 @@ Domain/Python tests добавлены. Это сознательное огра
 **Состояние проверки:** focused Python smoke check прошёл на абсолютном/descendant XML path и .NET named group/backreference. CI [#45580698958](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45580698958) проверяет предыдущий head и не покрывает эти коммиты. Текущий implementation head после обновления журнала: `9878489da6c71a8f337c7cab8989524666298b68`. Срез не считается принятым до нового CI на точном head.
 
 **Оставшиеся блокеры:** (1) GitHub-authoritative landing пока read-only и не умеет инициировать server-authorized merge с сохранением branch protection; (2) tag rulesets `v*` и required reviewers для Environment `production` не подтверждены; (3) после CI требуется полный user-project acceptance, включая localization/RLS/error states. Не создавать production tag и не запускать deployment до снятия блокера (2).
+
+
+## Дополнение — результаты кроссплатформенного CI и hardening (25 ноября 2026)
+
+### Подтверждение предыдущего среза
+
+CI [#45582326452](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45582326452), run 1636, успешно завершился на точном implementation commit `9878489da6c71a8f337c7cab8989524666298b68`:
+
+- Linux: Build, EF model check, Python release-manifest tests, все семь .NET test modules, TRX guards и `dotnet format` — success.
+- Windows: Build, EF model check, все семь .NET test modules и `dotnet format` — success.
+- macOS: Build, EF model check, все семь .NET test modules и `dotnet format` — success.
+
+Это подтверждает XML/Calendar selector parity fixes и добавленные к ним Domain/Python regression tests. Не переносить этот результат на последующие коммиты.
+
+### Последующие изменения, требующие отдельного CI
+
+После проверенного commit реализовано:
+
+- Python Regex version selector исполняется в отдельном изолированном child process с fail-closed timeout 2 секунды, без shell. Это защищает tag-triggered release workflow от неограниченного catastrophic backtracking.
+- subprocess использует явный UTF-8, чтобы поведение не зависело от локали Windows/macOS.
+- Workflow error annotation `::error::` выводится только при прямом запуске release-gate script; импортированные unit tests не создают ложные красные аннотации для ожидаемых негативных сценариев.
+- Добавлены unit tests на обработку timeout и отсутствие workflow-команд в stderr unit tests.
+- Project settings получили точные локализованные (en/ru/de/ja/zh) подсказки для поддерживаемых XML/Calendar форматов и требований к source перед Candidate. Пустой список source остаётся допустимым для предварительного планирования Release, но Prepare явно требует минимум один source.
+- Calendar-поле показывает выделенную локализованную подсказку.
+
+Текущая реализационная вершина на момент обновления плана: `3eed9283cb5997ada0d31138903e27fdf922979b` (журнал последнего состояния); source/test head перед journal-only commit: `65f6eae80afd9b947b63ac6476dfdd7958ee1810`. Новый CI должен быть запущен для полного текущего head.
+
+### Release protection: что установлено, а что неизвестно
+
+- GitHub API для repository rulesets, включая `includes_parents=true`, вернул пустой список.
+- Чтение классической branch protection недоступно текущей интеграции (403); legacy tag protection и настройки GitHub Environment `production` коннектор не предоставляет.
+- Следовательно, наличие классической защиты `v*` и required reviewers для `production` не установлено. Это остаётся ручным административным блокером. Production tag/deploy запрещён до проверки через GitHub Settings.
+
+### Остаток
+
+1. Запустить CI на актуальной вершине ветки и отдельно проверить timeout/encoding/локализационные изменения.
+2. Разработать один server-authorized GitHub landing executor, который уважает branch protection, reviews и required checks. Текущая reconciliation функция read-only и может только записать уже выполненное внешнее merge.
+3. Администратору проверить legacy tag protection, branch protection и reviewers Production Environment.
+4. Продолжить user-project acceptance: права, RLS, локализация, ошибки workflow и настройки проекта.
