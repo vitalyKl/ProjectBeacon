@@ -3363,4 +3363,7 @@
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Список задач, ожидающих вашего ответа, временно недоступен. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>Не удалось прочитать патч репозитория: его данные имеют неверный формат.</value>
+  </data>
 </root>

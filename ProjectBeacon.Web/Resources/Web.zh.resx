@@ -3381,4 +3381,7 @@ orthstar</value>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>等待您处理的任务列表暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>仓库补丁的数据格式无效，无法读取。</value>
+  </data>
 </root>

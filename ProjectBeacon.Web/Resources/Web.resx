@@ -3572,4 +3572,7 @@ No Beacon-hosted coding agent.</value>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>The list of tasks waiting for your input is temporarily unavailable. The chat remains usable; the page will retry automatically.</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>The repository patch could not be read because its payload is invalid.</value>
+  </data>
 </root>

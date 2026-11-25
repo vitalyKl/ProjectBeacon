@@ -3373,4 +3373,7 @@ orthstar</value>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>Der Repository-Patch konnte nicht gelesen werden, da seine Daten ungültig sind.</value>
+  </data>
 </root>

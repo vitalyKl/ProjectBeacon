@@ -3381,4 +3381,7 @@ orthstar</value>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>入力待ちのタスク一覧は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>リポジトリパッチのデータ形式が正しくないため、読み取れませんでした。</value>
+  </data>
 </root>
