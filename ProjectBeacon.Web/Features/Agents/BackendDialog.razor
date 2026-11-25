@@ -122,7 +122,11 @@
             for (var i = 0; i < 40; i++)
             {
                 var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, UserId)));
-                if (!got.Success) break;
+                if (!got.Success)
+                {
+                    Notifications.Failure(got, L["Agents"].Value, L["Read"].Value);
+                    return;
+                }
                 if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed)
                 {
                     finished = got.Value;
