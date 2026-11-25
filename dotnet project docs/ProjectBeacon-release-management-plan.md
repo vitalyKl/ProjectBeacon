@@ -300,3 +300,14 @@ After the server and target-discovery regression tests, the workstation loop now
 - Added a daemon-loop test with an AutoSync-disabled target, a fake verifier and HTTP handler. It asserts target discovery and remote reconciliation POST occur once, the exact merge SHA is posted, and no normal GitSync path is invoked.
 - The test intentionally passes no GitSync service; if the AutoSync-off branch accidentally starts fetch/fast-forward or tag synchronization, the test fails.
 - Current implementation/test head before the journal update: `33ceaa7e5989f52d66883d4feecdf125c33df073`. The prior CI #45712282443 covers only `bdd46d1a`, so it cannot validate this slice. A new Linux/Windows/macOS run is required.
+
+
+### Negative discovery coverage when AutoSync is disabled
+
+Обновлённый target-discovery regression test создаёт два Approved task на одном устройстве и проекте с AutoSync=false:
+- Beacon-managed task с точным LandingAttempt=Landed и последним Review proof должен быть возвращён для reconciliation;
+- внешний/ручной task с успешным Review и Approve, но без LandingAttempt, должен быть исключён.
+
+Тест проверяет, что AutoSync-off discovery не расширяет право на закрытие задач для любого Approved PR. Дополнительно DaemonAutoSyncLoop test подтверждает, что для AutoSync-off target вызывается remote-landing POST и не вызываются GitSync/tag-sync операции.
+
+Точная source/test вершина до обновления журнала: `7b0c811ebdc3040c0de7dfcddb0f8d8028efaf94`. Предыдущие CI #1641/#1642 не покрывают эту вершину; требуется новый полный Linux/Windows/macOS CI после фиксации журнала.
