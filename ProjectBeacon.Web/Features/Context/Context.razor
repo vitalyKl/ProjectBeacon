@@ -34,7 +34,11 @@
     }
 </PageHeader>
 
-@if (_project is null)
+@if (_projectLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_projectLoadErrorMessage" />
+}
+else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
@@ -50,7 +54,7 @@ else
     <div class="beacon-split-3">
         <div>
             <MudText Typo="Typo.h6" Class="mb-3">@L["Sections"]</MudText>
-            @if (_nodes.Count == 0)
+            @if (_nodes.Count == 0 && _error is null)
             {
                 <EmptyState>@L["NoSectionsYet"]</EmptyState>
             }
@@ -78,6 +82,10 @@ else
                 </MudPaper>
             }
 
+            @if (_deletedSectionsErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_deletedSectionsErrorMessage</MudAlert>
+            }
             @if (_deletedSections.Count > 0)
             {
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
@@ -114,6 +122,10 @@ else
                 <MarkdownEditor @bind-Value="_body" Label="@L["Content"]" Lines="8" Class="mt-2" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy" OnClick="Save">@L["Save"]</MudButton>
             </MudPaper>
+            @if (_sectionHistoryErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_sectionHistoryErrorMessage</MudAlert>
+            }
             @if (_selectedNode is not null)
             {
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
@@ -167,6 +179,10 @@ else
                 {
                     <div class="mt-4"><MarkdownView Text="@_preview" /></div>
                 }
+                @if (_revisionsErrorMessage is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_revisionsErrorMessage</MudAlert>
+                }
                 @foreach (var revision in _revisions.Take(5))
                 {
                     <MudText Typo="Typo.caption" Class="mt-1"><LocalTime Value="revision.CreatedAt" Format="u" /> · @revision.TokenEstimate · @ShortHash(revision.CompiledHash)</MudText>
@@ -185,6 +201,10 @@ else
             <MudSelectItem Value="ConstraintKind.Compliance">@L["KindCompliance"]</MudSelectItem>
         </MudSelect>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="AddConstraint">@L["Create"]</MudButton>
+        @if (_constraintsErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_constraintsErrorMessage</MudAlert>
+        }
         <MudList T="string" Dense="true" Class="mt-2">
             @foreach (var c in _constraints)
             {
@@ -206,6 +226,10 @@ else
         </MudList>
     </MudPaper>
 
+    @if (_constraintHistoryErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_constraintHistoryErrorMessage</MudAlert>
+    }
     @if (_selectedConstraint is not null)
     {
         <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
@@ -254,6 +278,12 @@ else
     private bool _loading = true;
     private bool _busy;
     private string? _error;
+    private string? _projectLoadErrorMessage;
+    private string? _deletedSectionsErrorMessage;
+    private string? _constraintsErrorMessage;
+    private string? _constraintHistoryErrorMessage;
+    private string? _sectionHistoryErrorMessage;
+    private string? _revisionsErrorMessage;
     private int _budget = 8000;
     private List<ContextRevisionDto> _revisions = [];
     private List<ConstraintDto> _constraints = [];
@@ -266,6 +296,13 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+        {
+            _projectLoadErrorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+            _loading = false;
+            return;
+        }
+
         _project = current.Value;
         if (_project is not null)
             await Reload();
@@ -276,34 +313,73 @@ else
     {
         if (_project is null) return;
         var nodes = await ListNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
-        _nodes = nodes.Success ? nodes.Value!.ToList() : [];
-        if (!nodes.Success)
+        if (nodes.Success)
+        {
+            _nodes = nodes.Value!.ToList();
+            _error = null;
+        }
+        else
+        {
             _error = Notifications.FormatFailure(nodes, L["Context"].Value, L["Load"].Value);
+        }
+
         var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
-        _deletedSections = deleted.Success
-            ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.ContextSection).ToList()
-            : [];
-        if (!deleted.Success)
-            Notifications.Add(Notifications.FormatFailure(deleted, L["Context"].Value, L["Load"].Value), Severity.Warning);
+        if (deleted.Success)
+        {
+            _deletedSections = deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.ContextSection).ToList();
+            _deletedSectionsErrorMessage = null;
+        }
+        else
+        {
+            _deletedSectionsErrorMessage = Notifications.FormatFailure(deleted, L["Context"].Value, L["Load"].Value);
+        }
+
         var selectedConstraintId = _selectedConstraint?.Id;
         var constraints = await ListConstraints.HandleAsync(_project.Id);
-        _constraints = constraints.Success ? constraints.Value!.ToList() : [];
-        if (selectedConstraintId is { } constraintId)
+        if (constraints.Success)
+        {
+            _constraints = constraints.Value!.ToList();
+            _constraintsErrorMessage = null;
+        }
+        else
+        {
+            _constraintsErrorMessage = Notifications.FormatFailure(constraints, L["Context"].Value, L["Load"].Value);
+        }
+
+        if (constraints.Success && selectedConstraintId is { } constraintId)
         {
             _selectedConstraint = _constraints.FirstOrDefault(item => item.Id == constraintId);
             if (_selectedConstraint is null)
             {
                 _constraintHistory = [];
+                _constraintHistoryErrorMessage = null;
             }
             else
             {
                 var history = await ContentVersions.HandleAsync(
                     _project.Id, ContentTargetKind.Constraint, constraintId, _actor, 50);
-                _constraintHistory = history.Success ? history.Value!.ToList() : [];
+                if (history.Success)
+                {
+                    _constraintHistory = history.Value!.ToList();
+                    _constraintHistoryErrorMessage = null;
+                }
+                else
+                {
+                    _constraintHistoryErrorMessage = Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value);
+                }
             }
         }
+
         var revisions = await ListRevisions.HandleAsync();
-        _revisions = revisions.Success ? revisions.Value!.ToList() : [];
+        if (revisions.Success)
+        {
+            _revisions = revisions.Value!.ToList();
+            _revisionsErrorMessage = null;
+        }
+        else
+        {
+            _revisionsErrorMessage = Notifications.FormatFailure(revisions, L["Context"].Value, L["Load"].Value);
+        }
     }
 
     private async Task OnSectionKey(KeyboardEventArgs e, ContextSectionDto node)
@@ -350,9 +426,16 @@ else
 
         var history = await ContentVersions.HandleAsync(
             _project.Id, ContentTargetKind.ContextSection, node.Id, _actor, 50);
-        _sectionHistory = history.Success ? history.Value!.ToList() : [];
-        if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value), Severity.Warning);
+        if (history.Success)
+        {
+            _sectionHistory = history.Value!.ToList();
+            _sectionHistoryErrorMessage = null;
+        }
+        else
+        {
+            _sectionHistory = [];
+            _sectionHistoryErrorMessage = Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value);
+        }
     }
 
     private async Task RestoreDeletedSection(DeletedContentTargetDto deleted)
@@ -485,9 +568,16 @@ else
         _selectedConstraint = constraint;
         var history = await ContentVersions.HandleAsync(
             _project.Id, ContentTargetKind.Constraint, constraint.Id, _actor, 50);
-        _constraintHistory = history.Success ? history.Value!.ToList() : [];
-        if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value), Severity.Warning);
+        if (history.Success)
+        {
+            _constraintHistory = history.Value!.ToList();
+            _constraintHistoryErrorMessage = null;
+        }
+        else
+        {
+            _constraintHistory = [];
+            _constraintHistoryErrorMessage = Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value);
+        }
     }
 
     private async Task RestoreConstraintVersion(ContentVersionDto version)
