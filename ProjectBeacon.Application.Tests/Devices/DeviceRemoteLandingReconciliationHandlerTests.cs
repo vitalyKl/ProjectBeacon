@@ -188,7 +188,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     [Fact]
     public async Task ReconcilesWhenBeaconLandingAttemptIsLandedForTheExactMerge()
     {
-        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: true);
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
         using (TenantScope.EnterUnscoped())
         {
             var candidateTree = new string('5', 40);
