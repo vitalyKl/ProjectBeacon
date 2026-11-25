@@ -190,3 +190,20 @@
 ### Следующий шаг
 
 Сначала добиться зелёного CI на точной post-fix вершине PR #230. После этого продолжать реализацию и тестирование единого GitHub-authoritative landing path. План не меняет исходные продуктовые границы: без SaaS Control Plane, биллинга и обязательного Release Management для всех проектов.
+
+
+## Дополнение — согласование валидаторов политики версии и CI (25 ноября 2026)
+
+В ходе ревизии S1/S3 обнаружено, что API принимал часть XML XPath и календарных форматов, которые tag-triggered release workflow не мог обработать тем же способом. Кроме того, Beacon хранит .NET regex syntax, а Python release gate изначально не понимал именованные группы .NET.
+
+Исправления находятся в рабочей ветке `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230):
+
+- XML: policy validation и Python release gate теперь согласованы на переносимом XPath location-path subset: абсолютные пути (`/Project/PropertyGroup/Version`) и descendant paths (`//Version`). Предикаты, атрибуты, функции, axes, wildcard и namespace prefixes отклоняются при сохранении policy.
+- Calendar: ограничен переносимым набором токенов `yyyy`, `MM`, `dd`, необязательными `HH`, `mm`, `ss` и literal separators `.`, `-`, `/`, `_`, пробел, `:`, `T`, `Z`. Остальные .NET custom date tokens отклоняются до ReleasePrepare.
+- Regex: release gate преобразует обычные .NET named groups, named backreferences и абсолютный конец строки в соответствующий Python syntax.
+
+Domain/Python tests добавлены. Это сознательное ограничение общего переносимого подмножества, а не заявление о поддержке полного XPath/.NET Regex/.NET DateTime grammar в Python workflow. Полная проверка parity для TOML и расширенного regex dialect остаётся отдельным пунктом.
+
+**Состояние проверки:** focused Python smoke check прошёл на абсолютном/descendant XML path и .NET named group/backreference. CI [#45580698958](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45580698958) проверяет предыдущий head и не покрывает эти коммиты. Текущий implementation head после обновления журнала: `9878489da6c71a8f337c7cab8989524666298b68`. Срез не считается принятым до нового CI на точном head.
+
+**Оставшиеся блокеры:** (1) GitHub-authoritative landing пока read-only и не умеет инициировать server-authorized merge с сохранением branch protection; (2) tag rulesets `v*` и required reviewers для Environment `production` не подтверждены; (3) после CI требуется полный user-project acceptance, включая localization/RLS/error states. Не создавать production tag и не запускать deployment до снятия блокера (2).
