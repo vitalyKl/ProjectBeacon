@@ -776,3 +776,11 @@ The test asserts exactly one remote landing target, preventing ordinary external
 The new daemon-loop test is in ProjectBeacon.Cli.Tests/DaemonAutoSyncLoopTests.cs. It injects the remote-landing verifier and a fake HTTP handler, passes no GitSyncService, and asserts a single reconcile POST without any AutoSync cycle failure. This covers the full background branch where AutoSyncEnabled=false.
 
 CI run #1641 is still tied to the older bdd46d1a head; run #1642 was queued for 15ac31a9 before this last regression assertion. Neither validates source/test head 7b0c811e. Trigger a fresh full matrix on the final journal-updated HEAD.
+
+
+### GitHub merge queue / stacked PR limitation identified
+
+- The current GitHubLandingMergeExecutor calls the synchronous REST endpoint PUT /repos/{owner}/{repo}/pulls/{number}/merge with exact head SHA and merge_method=merge.
+- Current GitHub documentation states that this synchronous endpoint does not support merge queues or stacked pull requests and recommends the asynchronous merge API. The async API can use merge_action=default to select a configured merge queue, but an "enqueued" result is not a completed merge; the PR must be checked later for actual MERGED state. Reference: https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request-asynchronously.
+- Therefore direct GitHub PR merge is implemented, but repositories configured to require merge queue or stacked-PR landing are not yet supported. Do not describe GitHub landing as fully compatible with every branch-protection mode.
+- Implementing async/queue support needs durable merge-request identity/recovery, an explicit queued/pending UI state, and polling/reconciliation that records RemoteLandingProof only after the PR actually reaches MERGED and its merge commit/tree/post-check are verified. An enqueued result must never mark LandingAttempt as Landed.
