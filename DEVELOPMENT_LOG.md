@@ -586,3 +586,39 @@ Do not mark an item complete because code was merely drafted or written. A compl
 - Landing authority / autonomous GitHub merge is still unresolved: reconciliation records a completed remote merge but does not execute one.
 - GitHub tag protections and Production Environment required reviewers remain unverified. No production tag or deployment is permitted.
 - Local .NET SDK and ProjectBeacon MCP/Context7 are unavailable in this execution environment; validation must be based on the GitHub Actions runs, with their actual skips and limitations recorded.
+
+
+## 2026-11-25 — Align version-source validation with the release CI gate
+
+**Branch:** `feat/release-management`  
+**Head before this slice:** `216bf097ccbd7ee54cb211ecad92edc7aec2dfaa`  
+**Head after source and test changes:** `0fb8f2246433bb68cf8e2b0eae80411b3527aa09`
+
+### Findings and changes
+
+The policy API accepted source selectors that the production release workflow could not evaluate consistently. This could allow a Version Policy save and ReleasePrepare to succeed, only for the tag-triggered release workflow to reject the same source at publication time.
+
+Changed:
+
+- `ProjectBeacon.Domain/Entities/Projects/ProjectVersionPolicy.cs`: XML selectors are now validated as the same portable absolute/descendant location-path subset used by the release gate. Examples: `/Project/PropertyGroup/Version` and `//Version`. Predicates, attribute selectors, axes, functions, wildcards and namespace prefixes fail at policy validation rather than at tag publication.
+- The Calendar scheme now accepts the portable format subset shared with Python: one `yyyy`, `MM` and `dd`, optional one `HH`, `mm`, `ss`, and literal separators `.`, `-`, `/`, `_`, space, `:`, `T`, `Z`. Unsupported .NET-only date tokens are rejected when saving the policy.
+- `scripts/verify_release_manifest.py`: XML reader now evaluates both absolute and descendant location paths in document order. Regex reader translates common .NET named capture groups `(?<name>...)`, named backreferences `\\k<name>`, and the absolute-end anchor `\\z` to their Python equivalents.
+- Added Domain tests for supported/unsupported XML and Calendar selectors, and Python tests for XML selection plus .NET regex group/backreference translation.
+
+### Verification
+
+- A focused Python smoke check of the XML location-path and .NET named-group translation logic returned the expected four-component version for absolute paths, descendant paths, named groups and named backreferences.
+- The repository CI run [#45580698958](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45580698958) is still running on the earlier head `216bf097ccbd7ee54cb211ecad92edc7aec2dfaa`; it does **not** include this slice.
+- No local .NET SDK is available here. The current source/tests are not marked accepted until a fresh CI run validates exact head `0fb8f2246433bb68cf8e2b0eae80411b3527aa09`.
+
+### Remaining compatibility work
+
+- TOML parsing and the broader .NET/Python regular-expression dialect still need a dedicated parity audit. The changes above fix the concrete named-group mismatch but do not claim full equivalence of both engines.
+- GitHub-authoritative remote merge execution remains a blocker: current reconciliation records an externally completed merge but does not execute one.
+- GitHub tag rulesets and required reviewers for the `production` Environment remain unverified; no production tag/deployment is permitted.
+
+### Next
+
+1. Trigger and inspect CI on the exact current head.
+2. Fix any failures before changing the branch head again.
+3. Continue with a server-authorized GitHub landing workflow that respects branch protection, then verify release publication protection and end-to-end product acceptance.
