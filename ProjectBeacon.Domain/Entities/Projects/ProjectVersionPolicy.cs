@@ -32,6 +32,9 @@ public static class ProjectVersionPolicyCatalog
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly Regex NumericPattern = new(@"^[0-9]+(?:\.[0-9]+)*$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex XmlLocationPathPattern = new(
+        @"^(?:/[A-Za-z_][A-Za-z0-9_.-]*(?:/[A-Za-z_][A-Za-z0-9_.-]*)*|//[A-Za-z_][A-Za-z0-9_.-]*(?:/[A-Za-z_][A-Za-z0-9_.-]*)*)$",
+        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex SemVerPattern = new(
         @"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$",
         RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
@@ -165,11 +168,16 @@ public static class ProjectVersionPolicyCatalog
                 error = "Calendar scheme requires a .NET DateTime format string (max 40 characters).";
                 return false;
             }
+            if (!IsSupportedCalendarFormat(policy.CalendarFormat))
+            {
+                error = "Calendar format must contain yyyy, MM and dd once, with optional HH, mm and ss tokens and literal separators supported by the release workflow.";
+                return false;
+            }
             try
             {
-                _ = DateTime.ParseExact("2026-11-24", "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                _ = DateTime.ParseExact(DateTime.UtcNow.ToString(policy.CalendarFormat, CultureInfo.InvariantCulture),
-                    policy.CalendarFormat, CultureInfo.InvariantCulture);
+                var probe = new DateTime(2026, 11, 24, 13, 14, 15, DateTimeKind.Utc);
+                var formatted = probe.ToString(policy.CalendarFormat, CultureInfo.InvariantCulture);
+                _ = DateTime.ParseExact(formatted, policy.CalendarFormat, CultureInfo.InvariantCulture);
             }
             catch (FormatException)
             {
@@ -205,6 +213,11 @@ public static class ProjectVersionPolicyCatalog
             switch (source.Format)
             {
                 case "Xml":
+                    if (!XmlLocationPathPattern.IsMatch(source.Selector))
+                    {
+                        error = $"XML selector for '{source.Path}' must be an absolute or descendant element path (for example '/Project/PropertyGroup/Version' or '//Version'); predicates, attributes, axes, functions, wildcards, and namespace prefixes are not supported by the release workflow.";
+                        return false;
+                    }
                     try { _ = XPathExpression.Compile(source.Selector); }
                     catch (XPathException)
                     {
@@ -332,6 +345,44 @@ public static class ProjectVersionPolicyCatalog
 
     public static string FormatTag(ProjectVersionPolicy policy, string version) =>
         policy.TagPattern.Replace("{version}", version, StringComparison.Ordinal);
+
+    private static bool IsSupportedCalendarFormat(string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            return false;
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < format.Length;)
+        {
+            var character = format[index];
+            var token = character switch
+            {
+                'y' => "yyyy",
+                'M' => "MM",
+                'd' => "dd",
+                'H' => "HH",
+                'm' => "mm",
+                's' => "ss",
+                _ => null
+            };
+            if (token is null)
+            {
+                if (character is '%' or '\\' or '\'' or '"')
+                    return false;
+                index++;
+                continue;
+            }
+
+            if (index + token.Length > format.Length
+                || !string.Equals(format.Substring(index, token.Length), token, StringComparison.Ordinal)
+                || (index + token.Length < format.Length && format[index + token.Length] == character)
+                || !seen.Add(token))
+                return false;
+            index += token.Length;
+        }
+
+        return seen.Contains("yyyy") && seen.Contains("MM") && seen.Contains("dd");
+    }
 
     private static bool IsSafeTagPattern(string? pattern)
     {
