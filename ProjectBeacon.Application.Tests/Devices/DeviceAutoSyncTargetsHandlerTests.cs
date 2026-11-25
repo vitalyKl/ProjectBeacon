@@ -176,6 +176,26 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             landingAttempt.RecordLanded(
                 new string('6', 40), candidateTree, 0, new string('7', 64));
             _db.LandingAttempts.Add(landingAttempt);
+
+            // An external/manual merge without a Beacon LandingAttempt is not eligible
+            // while AutoSync is disabled, even when the task has a current approved Review.
+            var externalTask = TaskItem.Create(
+                "External merge without Beacon attempt", projectId, description: "Review-approved but not Beacon-landed.");
+            externalTask.PinPipelineDevice(deviceId);
+            externalTask.StartPipeline();
+            externalTask.EnterExecuting();
+            externalTask.EnterReview();
+            externalTask.SetApproved();
+            _db.Tasks.Add(externalTask);
+            var externalReview = ReviewRun.Start(
+                projectId, externalTask.Id, ReviewerType.Agent, targetRunId: Guid.NewGuid());
+            externalReview.SetCheckCommandHash(new string('a', 64));
+            externalReview.CompleteCheck(
+                "Review check passed.", "external-review-artifact",
+                new string('d', 40), new string('e', 40), deviceId, "main");
+            _db.ReviewRuns.Add(externalReview);
+            _db.ReviewVerdicts.Add(ReviewVerdict.Create(
+                externalTask.Id, projectId, ReviewVerdictKind.Approve, "Approved."));
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
