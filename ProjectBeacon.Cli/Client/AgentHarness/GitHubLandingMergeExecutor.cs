@@ -168,10 +168,24 @@ internal static class GitHubLandingMergeExecutor
         var finalSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
             ghPath, context.WorktreeRoot, repository, pullRequest.Number, ct);
         if (finalSnapshot.Error is not null
-            || !AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(before, finalSnapshot.View!))
+            || !AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(before, finalSnapshot.View!)
+            || !string.Equals(finalSnapshot.View!.Url, pullRequest.Url, StringComparison.Ordinal))
             return Failed("GitHubPullRequestChangedDuringPreflight");
 
-        var view = finalSnapshot.View!;
+        // One final base read after the PR snapshot closes the asynchronous window
+        // between status/check collection and the mutating GitHub API call.
+        var finalBase = await ReadRemoteBaseAsync(context, originUrls[0], ct);
+        if (finalBase.Sha is null)
+            return Failed(finalBase.ErrorCode ?? "GitHubReviewBaseUnavailable");
+        if (!string.Equals(finalBase.Sha, context.BaseSha, StringComparison.OrdinalIgnoreCase))
+            return Failed("GitHubReviewBaseAdvanced");
+        var finalPrSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+            ghPath, context.WorktreeRoot, repository, pullRequest.Number, ct);
+        if (finalPrSnapshot.Error is not null
+            || !AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(finalSnapshot.View!, finalPrSnapshot.View!))
+            return Failed("GitHubPullRequestChangedDuringPreflight");
+
+        var view = finalPrSnapshot.View!;
         var headMatches = string.Equals(view.HeadSha, expectedSourceSha, StringComparison.OrdinalIgnoreCase);
         var checksPassed = checkList.Count > 0
             && checkList.All(check => string.Equals(check.Bucket, "pass", StringComparison.OrdinalIgnoreCase));
@@ -232,6 +246,11 @@ internal static class GitHubLandingMergeExecutor
             context, originUrls[0], mergedView.MergeCommitSha!, ct);
         if (fetchedBase.Sha is null)
             return Unknown(fetchedBase.ErrorCode ?? "GitHubMergedCommitNotReachable");
+        var pinnedBaseReachable = await AgentTaskGitOperations.Git(
+            context.RepositoryRoot, context.DisabledFilters, ct,
+            "merge-base", "--is-ancestor", context.BaseSha, fetchedBase.Sha);
+        if (!AgentTaskGitOperations.Succeeded(pinnedBaseReachable))
+            return Unknown("GitHubPinnedReviewBaseNotReachable");
 
         var finalTask = await ReadTaskStateAsync(context, ct);
         if (finalTask.ErrorCode is not null
@@ -319,7 +338,8 @@ internal static class GitHubLandingMergeExecutor
         var checks = await AgentTaskGitHubPullRequestOperations.ReadRequiredChecksAsync(
             ghPath, context.WorktreeRoot, repository, pullRequest.Number, ct);
         if (checks.Error is not null || checks.Checks is not { Count: > 0 }
-            || checks.Checks.Any(check => !string.Equals(check.Bucket, "pass", StringComparison.OrdinalIgnoreCase)))
+            || checks.Checks.Any(check => !string.Equals(check.Bucket, "pass", StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(snapshot.View.ReviewDecision, "APPROVED", StringComparison.OrdinalIgnoreCase))
             return Unknown("GitHubMergedRequiredChecksNotVerified");
 
         var fetched = await FetchAndVerifyMergeAsync(
@@ -331,6 +351,10 @@ internal static class GitHubLandingMergeExecutor
             "merge-base", "--is-ancestor", context.BaseSha, fetched.Sha);
         if (!AgentTaskGitOperations.Succeeded(pinnedBaseReachable))
             return Unknown("GitHubPinnedReviewBaseNotReachable");
+        var taskState = await ReadTaskStateAsync(context, ct);
+        if (taskState.ErrorCode is not null || !taskState.Clean
+            || !string.Equals(taskState.HeadSha, expectedSourceSha, StringComparison.OrdinalIgnoreCase))
+            return Unknown("TaskBranchChangedAfterGitHubMerge");
 
         return new MergeExecution(
             new MergeResult(repository, pullRequest.Number, snapshot.View.Url,
