@@ -840,3 +840,12 @@ CI [#45860968625](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4586096
 В `ProjectBeacon.Web.Tests/Bunit/TaskPipelinePanelTests.cs` неподдерживаемая component lookup заменена на существующий DOM API `cut.Find(".mud-alert")`. Проверка оставляет текст pending-состояния и UUID redaction, но не зависит от внутреннего severity CSS-класса MudBlazor. Production severity mapping не менялся.
 
 Исправление: `99d90d9798a43c86458b686852731b36d19c49ed`. Текущий implementation head перед журналированием: `99d90d9798a43c86458b686852731b36d19c49ed`; требуется новый полный CI на exact post-journal HEAD. Старый run не валидирует этот тестовый фикс.
+
+
+## Дополнение — повторная ошибка совместимости bUnit 1.40 (26 ноября 2026)
+
+CI [#45862576833](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45862576833) на head `c25fe43b` показал, что и `cut.Find(".mud-alert")` недоступен на типизированном `IRenderedComponent<TaskPipelinePanel>` с закреплённым bUnit `1.40.0`. Все три ОС упали на компиляции одного Web-теста. Linux Web/TRX guard затем сообщил об отсутствии седьмого TRX-отчёта — это каскадный эффект несобравшегося Web test assembly.
+
+Исправление в `feat/release-management`, commit `f3a16483b88e53d3831e975002641ebf57216a05`: удалена только DOM/CSS-проверка существования alert. Сохранены assertions на отображение pending-сообщения и отсутствие UUID в пользовательском markup. Production UI не менялся.
+
+**Статус проверки:** старый CI не валидирует этот фикс. Требуется новый full Linux/Windows/macOS CI на точном post-journal HEAD. Локальный .NET SDK отсутствует. PR #230 не сливать до зелёного exact-head CI и live merge-queue acceptance в disposable repository.
