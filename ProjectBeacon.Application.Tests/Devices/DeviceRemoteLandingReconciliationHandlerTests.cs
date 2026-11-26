@@ -516,6 +516,77 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordsClosedUnmergedPullRequestAsQueueFailureForTheExactQueuedAttempt()
+    {
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
+        using (TenantScope.EnterUnscoped())
+        {
+            var attempt = LandingAttempt.Start(
+                setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
+                "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
+                "The queued pull request was closed without a merge.");
+            attempt.RecordPreview(
+                "main", setup.RemoteBaseSha, new string('5', 40), new string('6', 64), 0, null);
+            attempt.MarkExecutePending();
+            attempt.MarkGitHubMergeQueued(null);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var request = new DeviceRemoteLandingFailureRequest(
+                setup.ProjectId,
+                setup.TaskId,
+                attempt.Id,
+                setup.ReviewRunId,
+                "acme/project-beacon",
+                42,
+                "https://github.com/acme/project-beacon/pull/42",
+                $"beacon/task/{setup.TaskId:N}",
+                "main",
+                setup.SourceSha,
+                MergeRequestId: null,
+                VerifiedAtUtc: DateTime.UtcNow,
+                FailureCode: "GitHubPullRequestClosedWithoutMerge",
+                PullRequestState: "CLOSED");
+
+            var mismatchedState = await handler.ReportFailureAsync(
+                setup.DeviceId,
+                request with { PullRequestState = "OPEN" },
+                TestContext.Current.CancellationToken);
+            Assert.False(mismatchedState.Success);
+            Assert.Equal(ErrorKind.Validation, mismatchedState.Kind);
+
+            var result = await handler.ReportFailureAsync(
+                setup.DeviceId, request, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            Assert.Equal("GitHubPullRequestClosedWithoutMerge", result.Value!.FailureCode);
+            Assert.Equal(LandingAttemptStatus.Failed.ToString(), result.Value.AttemptStatus);
+
+            await using var verify = Factory().CreateDbContext();
+            var failed = await verify.LandingAttempts.AsNoTracking()
+                .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(LandingAttemptStatus.Failed, failed.Status);
+            Assert.Equal("GitHubPullRequestClosedWithoutMerge", failed.FailureCode);
+            Assert.Equal("GitHubPullRequestClosedWithoutMerge", failed.EscalationCode);
+            Assert.Null(failed.MergeCommitSha);
+
+            var task = await verify.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == setup.TaskId, TestContext.Current.CancellationToken);
+            Assert.Equal(TaskItemStatus.InProgress, task.Status);
+            Assert.Equal(TaskPipelineStage.Approved, task.PipelineStage);
+            Assert.Empty(await verify.RemoteLandingProofs.AsNoTracking()
+                .Where(proof => proof.TaskId == setup.TaskId)
+                .ToListAsync(TestContext.Current.CancellationToken));
+
+            var audit = await verify.AuditEvents.AsNoTracking()
+                .SingleAsync(item => item.Action == "task.remote_landing.merge_failed", TestContext.Current.CancellationToken);
+            Assert.Equal(AuditActorKind.Device, audit.ActorKind);
+            Assert.Equal(setup.DeviceId, audit.ActorDeviceId);
+        }
+    }
+
+    [Fact]
     public async Task RejectsQueueRemovalReportForGenericUnknownGitLandCompletion()
     {
         var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
