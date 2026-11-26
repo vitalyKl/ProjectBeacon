@@ -304,6 +304,21 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    public bool TryReadGitHubMergeRequestId(out string? mergeRequestId)
+    {
+        mergeRequestId = null;
+        const string prefix = "GitHubMergeQueued:";
+        if (Status != LandingAttemptStatus.ExecutePending
+            || FailureCode is null
+            || !FailureCode.StartsWith(prefix, StringComparison.Ordinal)
+            || !Guid.TryParseExact(FailureCode[prefix.Length..], "D", out var parsed)
+            || parsed == Guid.Empty)
+            return false;
+
+        mergeRequestId = parsed.ToString("D");
+        return true;
+    }
+
     public void ClearCommandCompletionUnknown()
     {
         if (Status is not (LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
