@@ -1006,8 +1006,9 @@ After the failure-reporting entry above, the branch received UI regression cover
 - `NativeCommandRunner` sets `DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1`, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, and `DOTNET_NOLOGO=1` in the isolated command environment. No user CLI state or credentials are shared.
 - The direct runner test allows 60 seconds and now asserts `timedOut=false` before reading `exitCode`; its diagnostic includes duration and output tail if the command still times out.
 - The approval/resume test waits up to 50 seconds for the bounded command and includes the last tool result in its failure message.
+- `NativeCommandRunnerTests` now also asserts that all three isolated .NET environment switches are set by `CreateStartInfo`.
 - Source and test commits: `90b6990815beb12c44bcf26c84e16784c6b1366e`, `6b3669b2339a3081fd34bebe53b1471d561bdcd9`, `fd953347cc89b6c4e07b9722850b1e6dc97ab8e5`.
-- Current implementation head before this journal update: `fd953347cc89b6c4e07b9722850b1e6dc97ab8e5`.
+- The environment-contract assertion test was added in commit `4457acb742cb5bf2448399a4d4c5bb39eede0e1c`; implementation head before this journal amendment: `4457acb742cb5bf2448399a4d4c5bb39eede0e1c`.
 
 ### Verification state
 
