@@ -1,5 +1,6 @@
 using ProjectBeacon.Application.Tasks;
 using ProjectBeacon.Domain.Enums;
+using MudBlazor;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
@@ -87,7 +88,8 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
 
         Assert.Contains("GitHub accepted the asynchronous merge request and is still processing it.", cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
-        Assert.Contains("mud-alert-info", cut.Markup);
+        var alert = cut.FindComponent<MudAlert>();
+        Assert.Equal(Severity.Info, alert.Instance.Severity);
     }
 
     [Fact]
