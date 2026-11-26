@@ -623,3 +623,24 @@ Live merge queue не тестировалась. End-to-end тестирова�
 3. Убедиться, что локальный GitLand продолжает требовать точного candidate tree.
 4. Сохранить административный блокер: classic tag protection `v*` и required reviewers для GitHub Environment `production` не подтверждены. Не создавать production tag и не запускать deploy.
 5. Оставить PR #230 открытым для review; слияние development PR не входит в это поручение.
+
+
+## Уточнение — послабление дерева только для подтверждённой merge queue (26 ноября 2026)
+
+Первоначальное исправление сравнения merge tree было дополнительно сужено, чтобы не ослаблять обычный прямой merge.
+
+### Итоговая матрица
+
+| Сценарий | Проверка фактического merge tree |
+|---|---|
+| GitHub async сразу вернул `merged` | Строгое равенство Preview candidate tree. Несовпадение → `LandedUnverified`, без автоматического принятия |
+| GitHub async вернул `pending` или `enqueued` | Ожидать фактический PR `MERGED`; merge-group tree может отличаться от Preview из-за более новой base или PR перед ним в очереди |
+| Обычный локальный GitLand | Строгое равенство Preview candidate tree; поведение не ослаблено |
+
+Для queued merge AutoSync подтверждает точный PR/source SHA, merge commit ancestry в фактически полученной удалённой целевой ветке, валидность actual merge-group tree и выполняет pinned ReviewCheck на самом итоговом merge commit. Candidate SHA остаётся частью неизменяемого Preview/LandingAttempt доказательства; он не заменяет подтверждение фактического queue merge.
+
+Для немедленного `merged` GitLand по-прежнему требует точного Preview tree, выполняет pinned post-merge check и сохраняет неизменяемый результат. AutoSync распознаёт этот завершённый путь по сохранённому post-merge proof и также использует строгую tree-проверку. Для queued попытки proof ещё отсутствует, поэтому применяется queue-only проверка дерева и последующий pinned check.
+
+Эта граница важна: обычное изменение base между проверкой и непосредственным merge не должно быть принято как merge-group сценарий, если GitHub не подтвердил queued state.
+
+Изменения находятся в `feat/release-management`; последняя implementation/journal вершина на момент записи: `cf6410071c6df28dbda627faa69b05ad556958df`. Run [#45789363602](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45789363602) был запущен на более ранней вершине `c0c1b7b9` и не валидирует это уточнение. Нужен новый полный CI на точной окончательной вершине и live acceptance на disposable репозитории с merge-group checks. До этого feature slice остаётся непроверенным; production tags/deploy запрещены до отдельной административной проверки защиты.
