@@ -744,3 +744,18 @@ CI [#45841796175](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4584179
 - `605e0cfddd7f5af9241f0ffba35de06e27178e6f` — исправить хеш-фикстуры на 64 символа.
 
 Журнал разработки дополнен подробным разбором. Новый полный CI должен быть запущен на точной вершине после следующих записей журнала; только зелёные Linux/Windows/macOS подтверждают этот срез.
+
+
+### Финальный результат первого CI pending/enqueued correction (26 ноября 2026)
+
+Полный run [#45841796175](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45841796175), run 1658, завершился неуспешно на Linux, Windows и macOS. В логах Windows подтверждены те же причины, что и в Linux:
+
+- Один compiler error CS1061: тест обращался к GitHubMergeRequestStatus у LandingAttemptDto, хотя свойство принадлежит Entity. Исправлено удалением лишнего DTO assertion; тест продолжает проверять persisted marker у Entity после reload.
+- Четыре Domain test failures возникли из-за ошибочной длины fixture: 40 символов передавались как candidateCheckOutputHash, хотя требуется 64-символьный SHA-256. Исправлены четыре значения, production validation не ослаблялась.
+- Application test failure был следствием отсутствующего executable после compile error, а не самостоятельным runtime failure.
+- На Linux API, CLI, Infrastructure, Web и Worker прошли. На Windows/macOS API и CLI прошли; общий run остаётся красным из-за Build/Application/Domain.
+- Исторический run не засчитывается для исправлений.
+
+Исправления source/test находятся в feat/release-management: 78b8edd8a2cf889ad15b7388e8de7aec495750d7 и 605e0cfddd7f5af9241f0ffba35de06e27178e6f. Журнал с финальным разбором дополнен в commit 77b9cccc185254ec35ee0f28aaf4dc0e9891f32b.
+
+Текущий implementation HEAD после обновления журнала: 77b9cccc185254ec35ee0f28aaf4dc0e9891f32b. Требуется новая полная Linux/Windows/macOS матрица exact-head; старый CI не подтверждает исправления.
