@@ -890,3 +890,17 @@ CI [#45862576833](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4586257
 Текущая реализационная вершина перед журналированием исправления: `3f89c04df347cdc87a1aa5b64185fa3fef424285`. Run #45898337610 проверял старую вершину и **не** валидирует исправление. Нужен новый полный Linux/Windows/macOS CI на post-journal HEAD. Локальный .NET build не заявляется.
 
 Остаток без изменений: live merge-queue acceptance в disposable GitHub repository; классическая tag protection `v*` и required reviewers Environment `production` должны быть подтверждены администратором. PR #230 не сливать до зелёного exact-head CI и live acceptance. SaaS Control Plane и billing вне scope.
+
+
+## Дополнение — удаление дублирующего хвоста Version Policy catalog (27 ноября 2026)
+
+После устранения C# character-literal ошибки следующий exact-head CI [#45898748221](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45898748221) выявил отдельный структурный дефект: в `ProjectVersionPolicy.cs` после первой полной закрывающей скобки `ProjectVersionPolicyCatalog` остался дублирующий хвост от предыдущего редактирования helper и вторая копия private methods. Компиляторы Linux/macOS/Windows указывали на `CS1022/CS0116` с начала orphan-блока в строке 624. Ошибки test binaries/TRX были каскадом сборки, а не независимыми test failures.
+
+Исправление в `feat/release-management`:
+- удалён весь лишний блок после первого полного класса;
+- сохранена одна реализация portable Regex validator и по одной реализации Calendar/tag/path и XML/JSON/TOML/Regex readers;
+- исходник заканчивается сразу после закрытия класса, без дублированных методов вне namespace/type.
+
+Source head до журналирования: `6efd63f9982dec21cf6d99789af316471043c008`. CI #45898748221 проверял старый `f24e8f15` и не валидирует удаление дубликата. Следующий полный Linux/Windows/macOS CI должен использовать точную post-journal вершину. Локальная .NET сборка не заявляется.
+
+Остаток: завершить exact-head CI; live async merge-queue acceptance в disposable GitHub repository; подтвердить классическую tag protection `v*` и reviewers Environment `production` через администратора. PR #230 не сливать до снятия этих условий. SaaS Control Plane и billing остаются вне scope.
