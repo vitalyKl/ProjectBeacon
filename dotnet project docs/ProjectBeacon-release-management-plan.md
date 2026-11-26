@@ -573,3 +573,21 @@ Next implementation must:
 5. Add regression tests for immediate `Landed` evidence and a changed project ReviewCheckCommand after landing; then run a new full CI matrix on the new exact source HEAD.
 
 The new proof-propagation source change is not yet implemented or validated. No production tag/deploy or PR merge occurred.
+
+## AutoSync: preserve immutable proof for immediate GitHub merges — 26 November 2026
+
+The previous green CI run [#45783053165](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45783053165) validated the Windows SQLite teardown correction on exact source head `a37e6f5a8115650b579cc756eddc148db76ad4f8`.
+
+A follow-up review found that immediate GitHub merges (`merged` returned by the asynchronous merge request) were already fully checked by GitLand and persisted as `LandingAttempt.Status = Landed`, but AutoSync target discovery forwarded only the attempt ID. The daemon verifier therefore lacked the candidate tree and check evidence it requires before closing the task. Rerunning the current project ReviewCheckCommand would also incorrectly make later project-setting edits invalidate a completed landing.
+
+Implementation in `feat/release-management`:
+
+- `DeviceAutoSyncTargetsHandler` exports the persisted candidate tree, post-merge exit code and output hash for an already-`Landed` attempt.
+- The pinned workstation compares the actual GitHub merge commit tree to the immutable candidate tree. For a `Landed` attempt it forwards the stored successful check proof and does not execute the current mutable project setting again.
+- For an async merge still pending/enqueued, AutoSync still has no post-merge evidence; it runs only the ReviewCheckCommand whose hash matches the immutable Review proof after the exact GitHub merge is observed.
+- The server now compares the candidate tree and post-merge exit/hash in the reconciliation request with the values persisted in the `Landed` attempt. Missing or mismatched evidence is rejected.
+- Added tests for target payload proof fields, later ReviewCheckCommand edits, rejection of missing evidence and mismatched candidate tree, and successful reconciliation with the exact immutable proof.
+
+Source/test head before the journal-only update: `1c9cfdd43477c46375cecf9a809a386f06d9a48a`; journal commit: `bd4378bb09d883df6d64f80542e198df775b5aef`.
+
+**Verification:** the new source/tests have not yet been covered by CI. Full Linux/Windows/macOS CI on the latest branch head is required. No live GitHub merge-queue acceptance, production tag or deployment is claimed.
