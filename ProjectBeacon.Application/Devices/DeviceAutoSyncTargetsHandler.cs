@@ -127,6 +127,7 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 .FirstOrDefaultAsync(ct);
             Guid? landingAttemptId = null;
             string? mergeRequestId = null;
+            string? mergeRequestStatus = null;
             string? candidateTreeSha = null;
             string? postMergeCheckCommand = null;
             int? persistedPostMergeCheckExitCode = null;
@@ -162,9 +163,11 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 else if (landingAttempt.TryReadGitHubMergeRequestId(out mergeRequestId)
                     && hasCandidateTree)
                 {
-                    // A queued request has no post-merge proof yet. The pinned workstation
-                    // must run the exact ReviewCheckCommand after GitHub reports MERGED.
+                    // A queued or pending request has no post-merge proof yet. Preserve
+                    // its known async state so an expired pending UUID is never mistaken
+                    // for a removed merge-queue entry.
                     landingAttemptId = landingAttempt.Id;
+                    mergeRequestStatus = landingAttempt.GitHubMergeRequestStatus;
                     candidateTreeSha = landingAttempt.CandidateTreeSha;
                     var configuredCheck = reviewCheckCommand?.Trim();
                     if (!string.IsNullOrWhiteSpace(configuredCheck))
@@ -195,7 +198,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 postMergeCheckCommand,
                 persistedPostMergeCheckExitCode,
                 persistedPostMergeCheckOutputHash,
-                landingAttempt?.IsGitHubMergeQueued == true));
+                landingAttempt?.IsGitHubMergeQueued == true,
+                mergeRequestStatus));
         }
 
         return targets;
@@ -221,4 +225,5 @@ public sealed record DeviceRemoteLandingTargetDto(
     string? PostMergeCheckCommand = null,
     int? PersistedPostMergeCheckExitCode = null,
     string? PersistedPostMergeCheckOutputHash = null,
-    bool GitHubMergeQueued = false);
+    bool GitHubMergeQueued = false,
+    string? MergeRequestStatus = null);
