@@ -243,9 +243,17 @@ public static class ProjectVersionPolicyCatalog
                     }
                     break;
                 case "Regex":
-                    if (!IsPortableRegexSelector(source.Selector, out var regexCompatibilityError))
+                    if (source.Selector.Contains("(?<=", StringComparison.Ordinal)
+                        || source.Selector.Contains("(?<!", StringComparison.Ordinal)
+                        || source.Selector.Contains("-[", StringComparison.Ordinal)
+                        || Regex.IsMatch(source.Selector, @"\\[pPwWbBGZ]")
+                        || Regex.IsMatch(source.Selector, @"\\[1-9]")
+                        || Regex.IsMatch(source.Selector, @"\(\?(?!<version>|:|=|!)")
+                        || (source.Selector.IndexOf(@"\k<version>", StringComparison.Ordinal) is var backReferenceIndex
+                            && backReferenceIndex >= 0
+                            && source.Selector.IndexOf("(?<version>", StringComparison.Ordinal) > backReferenceIndex))
                     {
-                        error = $"Regex selector for '{source.Path}' is not portable to the release workflow. {regexCompatibilityError}";
+                        error = "Regex selector uses syntax that is not shared by .NET and the Python release gate. Use one version capture group, non-capturing groups, look-ahead and ordinary character classes; look-behind, inline options, Unicode-category/word escapes, numeric backreferences and character-class subtraction are not supported.";
                         return false;
                     }
                     try
@@ -356,46 +364,8 @@ public static class ProjectVersionPolicyCatalog
     public static string FormatTag(ProjectVersionPolicy policy, string version) =>
         policy.TagPattern.Replace("{version}", version, StringComparison.Ordinal);
 
-    private static bool IsPortableRegexSelector(string pattern, out string? error)
+    private static bool IsSupportedCalendarFormat(string? format)
     {
-        error = null;
-        var captureGroups = 0;
-        var hasNamedVersionGroup = false;
-        var hasNamedVersionBackReference = false;
-        var inCharacterClass = false;
-        var classHasContent = false;
-
-        for (var index = 0; index < pattern.Length; index++)
-        {
-            var character = pattern[index];
-            if (character == '\\')
-            {
-                if (++index >= pattern.Length)
-                {
-                    error = "A trailing escape is not supported.";
-                    return false;
-                }
-
-                var escaped = pattern[index];
-                if (escaped == 'k')
-                {
-                    const string namedBackReference = "k<version>";
-                    if (inCharacterClass || !hasNamedVersionGroup
-                        || !pattern.AsSpan(index).StartsWith(namedBackReference, StringComparison.Ordinal))
-                    {
-                        error = "Only a named version backreference after its capture group is supported.";
-                        return false;
-                    }
-                    hasNamedVersionBackReference = true;
-                    index += namedBackReference.Length - 1;
-                    continue;
-                }
-
-                var portableEscape = escaped is 'd' or 'D' or 's' or 'S'
-                    or 't' or 'r' or 'n' or 'f' or 'v'
-                    or ']' or '-' or '^' || escaped == (char)92;
-                if (!inCharacterClass)
-                    portableEscape |= escaped is 'A' or 'z' or '.' or '    {
         if (string.IsNullOrWhiteSpace(format))
             return false;
 
@@ -521,245 +491,6 @@ public static class ProjectVersionPolicyCatalog
         return current is string or sbyte or byte or short or ushort or int or uint or long or ulong
             ? Convert.ToString(current, CultureInfo.InvariantCulture)?.Trim()
             : null;
-    }
-
-    private static string? ExtractRegex(string selector, string content)
-    {
-        var match = Regex.Match(content, selector, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        return !match.Success ? null
-            : match.Groups["version"]?.Success == true ? match.Groups["version"].Value
-            : match.Groups[1].Value;
-    }
-}
- or '|' or '?'
-                        or '*' or '+' or '(' or ')' or '[' or '{' or '}';
-                if (!portableEscape)
-                {
-                    error = "This escape is not supported by the shared .NET/Python regex grammar.";
-                    return false;
-                }
-                if (inCharacterClass)
-                    classHasContent = true;
-                continue;
-            }
-
-            if (inCharacterClass)
-            {
-                if (character == '[')
-                {
-                    error = "Nested and subtractive character classes are not supported.";
-                    return false;
-                }
-                if (character == ']')
-                {
-                    if (!classHasContent)
-                    {
-                        error = "An empty character class is not supported; escape a literal closing bracket.";
-                        return false;
-                    }
-                    inCharacterClass = false;
-                }
-                else
-                {
-                    classHasContent = true;
-                }
-                continue;
-            }
-
-            if (character == '[')
-            {
-                inCharacterClass = true;
-                classHasContent = false;
-                continue;
-            }
-            if (character == '}')
-            {
-                error = "An unmatched closing brace is not portable; escape it when a literal is intended.";
-                return false;
-            }
-            if (character != '(')
-                continue;
-
-            var remaining = pattern.AsSpan(index);
-            if (remaining.StartsWith("(?<version>", StringComparison.Ordinal))
-            {
-                captureGroups++;
-                hasNamedVersionGroup = true;
-                index += "(?<version>".Length - 1;
-                continue;
-            }
-            if (remaining.StartsWith("(?:", StringComparison.Ordinal)
-                || remaining.StartsWith("(?=", StringComparison.Ordinal)
-                || remaining.StartsWith("(?!", StringComparison.Ordinal))
-            {
-                index += 2;
-                continue;
-            }
-            if (index + 1 < pattern.Length && pattern[index + 1] == '?')
-            {
-                error = "Only named version captures, non-capturing groups, and look-ahead assertions are supported.";
-                return false;
-            }
-            captureGroups++;
-        }
-
-        if (inCharacterClass)
-        {
-            error = "Character class is not closed.";
-            return false;
-        }
-        if (captureGroups != 1)
-        {
-            error = "A version regex must contain exactly one capture group: named 'version' or ordinary group 1.";
-            return false;
-        }
-        if (hasNamedVersionBackReference && !hasNamedVersionGroup)
-        {
-            error = "A named version backreference requires a named version capture group.";
-            return false;
-        }
-        return true;
-    }
-
-    private static bool IsSupportedCalendarFormat(string? format)
-    {
-        if (string.IsNullOrWhiteSpace(format))
-            return false;
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < format.Length;)
-        {
-            var character = format[index];
-            var token = character switch
-            {
-                'y' => "yyyy",
-                'M' => "MM",
-                'd' => "dd",
-                'H' => "HH",
-                'm' => "mm",
-                's' => "ss",
-                _ => null
-            };
-            if (token is null)
-            {
-                if (character is not ('.' or '-' or '/' or '_' or ' ' or ':' or 'T' or 'Z'))
-                    return false;
-                index++;
-                continue;
-            }
-
-            if (index + token.Length > format.Length
-                || !string.Equals(format.Substring(index, token.Length), token, StringComparison.Ordinal)
-                || (index + token.Length < format.Length && format[index + token.Length] == character)
-                || !seen.Add(token))
-                return false;
-            index += token.Length;
-        }
-
-        return seen.Contains("yyyy") && seen.Contains("MM") && seen.Contains("dd");
-    }
-
-    private static bool IsSafeTagPattern(string? pattern)
-    {
-        if (string.IsNullOrWhiteSpace(pattern) || pattern.Length > 100
-            || pattern.IndexOf("{version}", StringComparison.Ordinal) < 0
-            || pattern.IndexOf("{version}", StringComparison.Ordinal) != pattern.LastIndexOf("{version}", StringComparison.Ordinal))
-            return false;
-        var sample = pattern.Replace("{version}", "1.2.3", StringComparison.Ordinal);
-        if (sample.Length is 0 or > 200
-            || sample.StartsWith("/", StringComparison.Ordinal)
-            || sample.EndsWith("/", StringComparison.Ordinal)
-            || sample.Contains("..", StringComparison.Ordinal)
-            || !sample.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '/'))
-            return false;
-
-        // Git ref components cannot begin with '.', end with '.', or end with '.lock'.
-        // Empty components are also invalid (for example, a doubled or trailing slash).
-        return sample.Split('/').All(segment =>
-            segment.Length > 0
-            && !segment.StartsWith(".", StringComparison.Ordinal)
-            && !segment.EndsWith(".", StringComparison.Ordinal)
-            && !segment.EndsWith(".lock", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool IsSafeRelativePath(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || path.Length > 500
-            || path.StartsWith("/", StringComparison.Ordinal)
-            || path.Contains('\\') || path.Contains(':') || path.Any(char.IsControl))
-            return false;
-        if (!path.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or '/'))
-            return false;
-        var segments = path.Split('/');
-        return segments.All(segment => segment.Length > 0 && segment is not ("." or ".."));
-    }
-
-    private static string? ExtractXml(string selector, string content)
-    {
-        using var stringReader = new StringReader(content);
-        using var reader = XmlReader.Create(stringReader, new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = null,
-            MaxCharactersInDocument = 1_000_000
-        });
-        var document = XDocument.Load(reader, LoadOptions.None);
-        return document.XPathSelectElement(selector)?.Value?.Trim();
-    }
-
-    private static string? ExtractJsonPointer(string selector, string content)
-    {
-        using var document = JsonDocument.Parse(content);
-        var current = document.RootElement;
-        foreach (var part in selector.Split('/').Skip(1))
-        {
-            var key = part.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal);
-            if (current.ValueKind == JsonValueKind.Object)
-            {
-                if (!current.TryGetProperty(key, out current))
-                    return null;
-                continue;
-            }
-            if (current.ValueKind == JsonValueKind.Array
-                && int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
-                && index >= 0 && index < current.GetArrayLength())
-            {
-                current = current[index];
-                continue;
-            }
-            return null;
-        }
-        return current.ValueKind == JsonValueKind.String ? current.GetString()?.Trim() : current.ToString();
-    }
-
-    private static string? ExtractToml(string selector, string content)
-    {
-        var wanted = selector.Split('.');
-        string section = string.Empty;
-        string? value = null;
-        foreach (var raw in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            var line = raw.Split('#', 2)[0].Trim();
-            if (line.Length == 0)
-                continue;
-            if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith(']'))
-            {
-                section = line[1..^1].Trim();
-                continue;
-            }
-            var separator = line.IndexOf('=');
-            if (separator < 0)
-                continue;
-            var key = line[..separator].Trim();
-            if (key.Length == 0)
-                continue;
-            var fullKey = string.IsNullOrEmpty(section) ? key : section + "." + key;
-            if (!string.Equals(fullKey, string.Join('.', wanted), StringComparison.Ordinal))
-                continue;
-            value = line[(separator + 1)..].Trim().Trim('"', '\'');
-            break;
-        }
-        return value;
     }
 
     private static string? ExtractRegex(string selector, string content)
