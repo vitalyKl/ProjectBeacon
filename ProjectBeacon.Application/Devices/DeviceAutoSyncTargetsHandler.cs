@@ -42,7 +42,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 runtime.ProjectId,
                 runtime.LocalRoot,
                 project.GitPolicyJson,
-                project.GitPolicyRevision
+                project.GitPolicyRevision,
+                project.ReviewCheckCommand
             }).ToListAsync(ct);
 
         var targets = new List<DeviceAutoSyncTargetDto>();
@@ -54,7 +55,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 continue;
 
             var remoteLandings = await ListRemoteLandingTargetsAsync(
-                db, runtime.ProjectId, deviceId, policy.AutoSyncEnabled, ct);
+                db, runtime.ProjectId, deviceId, policy.AutoSyncEnabled,
+                runtime.ReviewCheckCommand, ct);
             if (!policy.AutoSyncEnabled
                 && (remoteLandings.Count == 0
                     || !WorkstationCapabilities.Supports(
@@ -69,7 +71,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
         return Result.Ok((IReadOnlyList<DeviceAutoSyncTargetDto>)targets);
     }
     private static async Task<IReadOnlyList<DeviceRemoteLandingTargetDto>> ListRemoteLandingTargetsAsync(
-        IBeaconDb db, Guid projectId, Guid deviceId, bool autoSyncEnabled, CancellationToken ct)
+        IBeaconDb db, Guid projectId, Guid deviceId, bool autoSyncEnabled,
+        string? reviewCheckCommand, CancellationToken ct)
     {
         var taskIds = await db.Tasks.IgnoreQueryFilters().AsNoTracking()
             .Where(task => task.ProjectId == projectId
@@ -110,21 +113,46 @@ public sealed class GetDeviceAutoSyncTargetsHandler
             if (verdict is null || verdict.Kind != Domain.Enums.ReviewVerdictKind.Approve)
                 continue;
 
-            // AutoSync is a separate repository-sync preference. A Beacon-initiated
-            // GitHub landing must still be reconciled when AutoSync is disabled, but
-            // only after GitLand completion persisted exact verified Landed evidence.
+            // AutoSync is a separate repository-sync preference. For Beacon-managed
+            // GitHub merges, continue reconciling both a fully verified Landed attempt
+            // and an async merge request that is pending/in a queue. The latter is never
+            // closed here: the pinned workstation must verify MERGED, exact candidate
+            // tree and the project post-merge check before the server records Landed.
             var landingAttempt = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
                 .Where(attempt => attempt.ProjectId == projectId && attempt.TaskId == taskId)
                 .OrderByDescending(attempt => attempt.CreatedAt)
                 .ThenByDescending(attempt => attempt.Id)
                 .FirstOrDefaultAsync(ct);
-            if (landingAttempt is not null
-                && (landingAttempt.Status != Domain.Enums.LandingAttemptStatus.Landed
-                    || landingAttempt.ReviewRunId != review.Id
-                    || landingAttempt.DeviceId != deviceId
-                    || !string.Equals(landingAttempt.SourceSha, review.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
-                    || !string.Equals(landingAttempt.TargetBranch, review.CheckedBaseBranch, StringComparison.Ordinal)))
-                continue;
+            Guid? landingAttemptId = null;
+            string? mergeRequestId = null;
+            string? candidateTreeSha = null;
+            string? postMergeCheckCommand = null;
+            if (landingAttempt is not null)
+            {
+                var proofMatches = landingAttempt.ReviewRunId == review.Id
+                    && landingAttempt.DeviceId == deviceId
+                    && string.Equals(landingAttempt.SourceSha, review.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(landingAttempt.TargetBranch, review.CheckedBaseBranch, StringComparison.Ordinal);
+                if (!proofMatches)
+                    continue;
+
+                if (landingAttempt.Status == Domain.Enums.LandingAttemptStatus.Landed)
+                {
+                    landingAttemptId = landingAttempt.Id;
+                }
+                else if (landingAttempt.TryReadGitHubMergeRequestId(out mergeRequestId)
+                    && landingAttempt.CandidateTreeSha is { Length: 40 or 64 } && landingAttempt.CandidateTreeSha.All(Uri.IsHexDigit)
+                    && !string.IsNullOrWhiteSpace(reviewCheckCommand))
+                {
+                    landingAttemptId = landingAttempt.Id;
+                    candidateTreeSha = landingAttempt.CandidateTreeSha;
+                    postMergeCheckCommand = reviewCheckCommand.Trim();
+                }
+                else
+                {
+                    continue;
+                }
+            }
             if (!autoSyncEnabled && landingAttempt is null)
                 continue;
 
@@ -133,7 +161,11 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 review.Id,
                 $"beacon/task/{taskId:N}",
                 review.CheckedBaseBranch,
-                review.CheckedSourceSha));
+                review.CheckedSourceSha,
+                landingAttemptId,
+                mergeRequestId,
+                candidateTreeSha,
+                postMergeCheckCommand));
         }
 
         return targets;
@@ -152,4 +184,8 @@ public sealed record DeviceRemoteLandingTargetDto(
     Guid ReviewRunId,
     string SourceBranch,
     string TargetBranch,
-    string SourceSha);
+    string SourceSha,
+    Guid? LandingAttemptId = null,
+    string? MergeRequestId = null,
+    string? CandidateTreeSha = null,
+    string? PostMergeCheckCommand = null);
