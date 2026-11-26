@@ -243,12 +243,10 @@ public static class ProjectVersionPolicyCatalog
                     }
                     break;
                 case "Regex":
-                    if (source.Selector.Contains("(?<=", StringComparison.Ordinal)
-                        || source.Selector.Contains("(?<!", StringComparison.Ordinal)
-                        || source.Selector.Contains("-[", StringComparison.Ordinal)
+                    if (source.Selector.Contains("-[", StringComparison.Ordinal)
                         || Regex.IsMatch(source.Selector, @"\\[pPwWbBGZ]")
                         || Regex.IsMatch(source.Selector, @"\\[1-9]")
-                        || Regex.IsMatch(source.Selector, @"\(\?(?!<version>|:|=|!)")
+                        || Regex.IsMatch(source.Selector, @"(?<!\\\\)\(\?(?!<version>|:|=|!)")
                         || (source.Selector.IndexOf(@"\k<version>", StringComparison.Ordinal) is var backReferenceIndex
                             && backReferenceIndex >= 0
                             && source.Selector.IndexOf("(?<version>", StringComparison.Ordinal) > backReferenceIndex))
