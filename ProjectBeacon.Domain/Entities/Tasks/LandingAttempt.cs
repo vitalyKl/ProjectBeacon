@@ -312,6 +312,16 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>
+    /// True only when GitHub explicitly acknowledged that this PR entered its merge queue.
+    /// A generic CommandCompletionUnknown is intentionally excluded because it can also
+    /// represent a local GitLand operation and must remain explicitly retryable.
+    /// </summary>
+    public bool IsGitHubMergeQueued =>
+        Status == LandingAttemptStatus.ExecutePending
+        && (string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal)
+            || FailureCode?.StartsWith("GitHubMergeQueued:", StringComparison.Ordinal) == true);
+
     public bool TryReadGitHubMergeRequestId(out string? mergeRequestId)
     {
         mergeRequestId = null;
