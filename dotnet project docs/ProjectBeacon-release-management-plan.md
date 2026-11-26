@@ -486,3 +486,23 @@ CI [#45765744398](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4576574
 Source/test commits: `90b6990815beb12c44bcf26c84e16784c6b1366e`, `6b3669b2339a3081fd34bebe53b1471d561bdcd9`, `fd953347cc89b6c4e07b9722850b1e6dc97ab8e5`. Журнал implementation branch обновлён commit `0854badef909e0b85b6b8479f8a390f48a403ce1`. Текущий full head после journal update должен быть проверен новым cross-platform CI; прежние Linux/macOS success из #45765744398 не проверяют post-fix Windows код.
 
 Остаток не меняется: real project acceptance GitHub merge queue (pending/enqueued/merged/failed и неопределённый no-UUID), плюс ручная проверка классических tag/branch protection и required reviewers Production Environment. Не создавать production tag/deploy до административной проверки.
+
+
+## Статус GitHub-authoritative landing и Windows CI fix — 26 ноября 2026
+
+Реализация S4 продвинулась от read-only reconciliation к доверенному исполнению landing:
+
+- Для GitHub-origin GitLand Execute повторно строит точный candidate и запускает pinned ReviewCheck, затем вызывает GitHub asynchronous merge API с exact reviewed head SHA и merge_action=default. Нет bypass_rules, --admin, force-push, произвольного base/head или отдельного merge tool для Actor. Решение о немедленном merge/merge queue принимает GitHub по настроенным правилам репозитория.
+- pending/enqueued не трактуется как успешное слияние. Beacon сохраняет async request ID и ждёт подтверждение точного PR/request.
+- Закреплённая станция через AutoSync проверяет итоговый PR, merge commit, fetched target ancestry, совпадение candidate tree и post-merge ReviewCheck. Сервер повторно проверяет task/workstation/Review/attempt/request identity и закрывает задачу только после полного доказательства.
+- Терминальное failed состояние передаётся отдельным device-authenticated failure endpoint; при совпадении exact UUID attempt переводится в Failed, но задача остаётся открытой. Без request UUID терминальный отказ не записывается как Failed — это остаётся неопределённым/ручным состоянием.
+
+CI #45765744398 на head a1f277731f66ccadc319f204eede3db3632b6251: Linux и macOS прошли; Windows прошёл Build, EF, API, Application, Domain, Infrastructure, Web и Worker, но CLI module упал на три timeout-sensitive tests. Исправления:
+- isolated NativeCommandRunner устанавливает DOTNET_SKIP_FIRST_TIME_EXPERIENCE, DOTNET_CLI_TELEMETRY_OPTOUT, DOTNET_NOLOGO;
+- runner test теперь использует 60 секунд и выводит duration/output при timeout;
+- approval/resume test ждёт завершения bounded command до 50 секунд;
+- отдельные assertions проверяют три environment flags.
+
+Source/test commits: 90b6990815beb12c44bcf26c84e16784c6b1366e, 6b3669b2339a3081fd34bebe53b1471d561bdcd9, fd953347cc89b6c4e07b9722850b1e6dc97ab8e5, 4457acb742cb5bf2448399a4d4c5bb39eede0e1c. Журнал implementation branch содержит точную диагностику. Не считать fix принятым до нового CI на post-journal HEAD.
+
+End-to-end acceptance с реальной GitHub merge queue всё ещё необходим: enqueued→merged, definitive failed, no/expired UUID, PR identity drift и ReviewCheckCommand drift. Tag/branch protection и production Environment reviewers остаются отдельным административным блокером.
