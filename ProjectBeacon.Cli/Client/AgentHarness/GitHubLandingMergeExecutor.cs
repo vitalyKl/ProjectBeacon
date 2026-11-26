@@ -24,7 +24,9 @@ internal static class GitHubLandingMergeExecutor
     internal sealed record MergeExecution(
         MergeResult? Result,
         string? ErrorCode,
-        bool CompletionUnknown);
+        bool CompletionUnknown,
+        string? MergeRequestId = null,
+        string? MergeRequestStatus = null);
 
     public static async Task<MergeExecution> MergeAsync(
         AgentTaskGitOperations.GitContext context,
@@ -202,22 +204,39 @@ internal static class GitHubLandingMergeExecutor
         if (blockers.Count > 0)
             return Failed("GitHubMergeNotAdmissible");
 
+        // GitHub's asynchronous merge endpoint is the supported path for regular,
+        // stacked and merge-queue PRs. Never bypass repository rules; an enqueued or
+        // pending request remains ExecutePending until AutoSync proves the final merge.
         var merge = await AgentTaskGitOperations.RunGitHubCliAsync(
             ghPath, context.WorktreeRoot, ct,
             BuildMergeApiArguments(repository, pullRequest.Number, expectedSourceSha));
-        if (merge.ExitCode != 0 || merge.TimedOut)
+        var asyncMerge = ParseAsyncMergeResponse(merge.StdOut);
+        if (asyncMerge.Error is null && asyncMerge.Status is "pending" or "enqueued")
         {
-            // A lost response can happen after GitHub accepted the merge. Re-read before
-            // deciding whether this is a definite rejection or an unknown completion.
+            if (!Guid.TryParse(asyncMerge.MergeRequestId, out var mergeRequestId)
+                || mergeRequestId == Guid.Empty)
+                return Unknown("GitHubMergeRequestIdentityMissing");
+            return new MergeExecution(
+                null, null, false, mergeRequestId.ToString("D"), asyncMerge.Status);
+        }
+        if (asyncMerge.Error is null && asyncMerge.Status == "failed")
+            return Failed("GitHubAsyncMergeRejected");
+        if (asyncMerge.Error is not null || asyncMerge.Status != "merged"
+            || !AgentTaskGitOperations.IsGitSha(asyncMerge.MergeCommitSha ?? string.Empty))
+        {
+            // A lost response can occur after GitHub accepted the request. Re-read the PR
+            // before deciding whether the outcome is a definite rejection or unknown.
             var afterFailure = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
                 ghPath, context.WorktreeRoot, repository, pullRequest.Number, ct);
             if (afterFailure.Error is not null)
                 return Unknown("GitHubMergeOutcomeUnknown");
             if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
                     afterFailure.View!, "MERGED", context.BaseBranch, expectedSourceSha))
-                return afterFailure.View!.State == "OPEN"
-                    ? Failed("GitHubMergeRejected")
-                    : Unknown("GitHubMergeOutcomeUnknown");
+                return merge.TimedOut || merge.ExitCode != 0
+                    ? Unknown("GitHubMergeOutcomeUnknown")
+                    : Failed("GitHubAsyncMergeRejected");
+            if (!AgentTaskGitOperations.IsGitSha(afterFailure.View!.MergeCommitSha ?? string.Empty))
+                return Unknown("GitHubMergeEvidenceInvalid");
         }
 
         var mergedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
@@ -234,13 +253,9 @@ internal static class GitHubLandingMergeExecutor
                 mergedView.MergedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var mergedAt))
             return Unknown("GitHubMergeEvidenceInvalid");
 
-        if (merge.ExitCode == 0 && !merge.TimedOut)
-        {
-            var parsedMerge = ParseMergeApiResponse(merge.StdOut);
-            if (parsedMerge.MergeCommitSha is null
-                || !string.Equals(parsedMerge.MergeCommitSha, mergedView.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
-                return Unknown("GitHubMergeResponseMismatch");
-        }
+        if (asyncMerge.MergeCommitSha is not null
+            && !string.Equals(asyncMerge.MergeCommitSha, mergedView.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
+            return Unknown("GitHubMergeResponseMismatch");
 
         var fetchedBase = await FetchAndVerifyMergeAsync(
             context, originUrls[0], mergedView.MergeCommitSha!, ct);
@@ -286,10 +301,54 @@ internal static class GitHubLandingMergeExecutor
         [
             "api",
             "--method", "PUT",
-            $"repos/{repository}/pulls/{pullRequestNumber}/merge",
+            $"repos/{repository}/pulls/{pullRequestNumber}/merge-async",
             "-f", "sha=" + expectedHeadSha,
-            "-f", "merge_method=merge"
+            "-f", "merge_action=default"
         ];
+    }
+
+    internal sealed record AsyncMergeResponse(
+        string? Status,
+        string? MergeRequestId,
+        string? MergeCommitSha,
+        string? Error);
+
+    internal static AsyncMergeResponse ParseAsyncMergeResponse(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("status", out var statusValue)
+                || statusValue.ValueKind != JsonValueKind.String)
+                return new AsyncMergeResponse(null, null, null, "GitHub asynchronous merge response is missing status.");
+
+            var status = statusValue.GetString()?.ToLowerInvariant();
+            if (status is not ("pending" or "enqueued" or "merged" or "failed"))
+                return new AsyncMergeResponse(status, null, null, "GitHub returned an unsupported asynchronous merge status.");
+
+            var details = root.TryGetProperty("details", out var detailsValue)
+                && detailsValue.ValueKind == JsonValueKind.Object
+                    ? detailsValue
+                    : default;
+            var requestId = ReadJsonString(details, "uuid") ?? ReadJsonString(root, "uuid");
+            var mergeSha = ReadJsonString(details, "sha") ?? ReadJsonString(root, "sha");
+            return new AsyncMergeResponse(status, requestId, mergeSha, null);
+        }
+        catch (JsonException)
+        {
+            return new AsyncMergeResponse(null, null, null, "GitHub returned malformed asynchronous merge JSON.");
+        }
+    }
+
+    private static string? ReadJsonString(JsonElement element, string property)
+    {
+        return element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
     }
 
     internal static (string? MergeCommitSha, string? Error) ParseMergeApiResponse(string json)
