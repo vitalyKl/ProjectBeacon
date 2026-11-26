@@ -118,8 +118,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
             // AutoSync is a separate repository-sync preference. For Beacon-managed
             // GitHub merges, continue reconciling both a fully verified Landed attempt
             // and an async merge request that is pending/in a queue. The latter is never
-            // closed here: the pinned workstation must verify MERGED, exact candidate
-            // tree and the project post-merge check before the server records Landed.
+            // closed here: the pinned workstation must verify the exact PR/source identity,
+            // actual merge-group commit/tree, and project post-merge check before recording Landed.
             var landingAttempt = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
                 .Where(attempt => attempt.ProjectId == projectId && attempt.TaskId == taskId)
                 .OrderByDescending(attempt => attempt.CreatedAt)
