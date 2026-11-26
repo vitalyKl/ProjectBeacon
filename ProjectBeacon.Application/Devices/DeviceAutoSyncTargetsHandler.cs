@@ -133,6 +133,7 @@ public sealed class GetDeviceAutoSyncTargetsHandler
             {
                 var proofMatches = landingAttempt.ReviewRunId == review.Id
                     && landingAttempt.DeviceId == deviceId
+                    && string.Equals(landingAttempt.ReviewCommandHash, review.CheckCommandHash, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(landingAttempt.SourceSha, review.CheckedSourceSha, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(landingAttempt.TargetBranch, review.CheckedBaseBranch, StringComparison.Ordinal);
                 if (!proofMatches)
