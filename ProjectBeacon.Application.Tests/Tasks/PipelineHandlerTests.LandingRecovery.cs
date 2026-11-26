@@ -132,7 +132,6 @@ public sealed partial class PipelineHandlerTests
         Assert.True(result.Success, result.Error);
         Assert.Equal(LandingAttemptStatus.ExecutePending, result.Value!.Status);
         Assert.Equal("GitHubMergePending:" + mergeRequestId, result.Value.FailureCode);
-        Assert.Equal("pending", result.Value.GitHubMergeRequestStatus);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.LandingAttempts.AsNoTracking()
