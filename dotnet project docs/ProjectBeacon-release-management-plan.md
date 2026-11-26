@@ -831,3 +831,12 @@ CI [#45859153428](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4585915
 2. Завершить live async merge-queue acceptance на disposable GitHub repository: pending expiry, восстановление по live GraphQL entry, queue removal, close-without-merge, успешный merge и drift PR/head/base.
 3. Администратору подтвердить классическую tag protection `v*` и required reviewers Environment `production`; не создавать production tags и не запускать deploy до проверки.
 4. Продолжать user-project acceptance UI, RLS/authorization и локализованных failure/recovery states. SaaS Control Plane и billing не затрагивать.
+
+
+## Дополнение — совместимость BUnit 1.40 (26 ноября 2026)
+
+CI [#45860968625](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45860968625) на старом HEAD `ffcdcdbb` выявил compile error `CS1061`: pinned bUnit `1.40.0` не предоставляет `FindComponent<MudAlert>()` для `IRenderedComponent<TaskPipelinePanel>`. Production UI не был причиной ошибки.
+
+В `ProjectBeacon.Web.Tests/Bunit/TaskPipelinePanelTests.cs` неподдерживаемая component lookup заменена на существующий DOM API `cut.Find(".mud-alert")`. Проверка оставляет текст pending-состояния и UUID redaction, но не зависит от внутреннего severity CSS-класса MudBlazor. Production severity mapping не менялся.
+
+Исправление: `99d90d9798a43c86458b686852731b36d19c49ed`. Текущий implementation head перед журналированием: `99d90d9798a43c86458b686852731b36d19c49ed`; требуется новый полный CI на exact post-journal HEAD. Старый run не валидирует этот тестовый фикс.
