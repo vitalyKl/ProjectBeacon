@@ -117,9 +117,10 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             if (open.Length > 1)
                 return new VerificationResult(null, "Remote landing skipped: more than one open PR matches the queued merge request.");
 
-            var queueAcknowledged = target.GitHubMergeQueued || !string.IsNullOrWhiteSpace(target.MergeRequestId);
+            var asyncMergeAccepted = HasAcceptedAsyncMerge(
+                target.GitHubMergeQueued, target.MergeRequestId, target.MergeRequestStatus);
             if (open.Length == 0
-                && queueAcknowledged
+                && asyncMergeAccepted
                 && target.LandingAttemptId is { } closedAttemptId)
             {
                 var closed = matching.Where(pull => pull.State == "CLOSED").ToArray();
@@ -152,8 +153,8 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                         return new VerificationResult(null, asyncState.StatusMessage);
                 }
 
-                queueAcknowledged = target.GitHubMergeQueued
-                    || string.Equals(asyncState?.Status, "enqueued", StringComparison.Ordinal);
+                var queueAcknowledged = HasConfirmedMergeQueueEntry(
+                    target.GitHubMergeQueued, target.MergeRequestStatus, asyncState?.Status);
                 if (queueAcknowledged)
                 {
                     var queue = await ReadMergeQueueEntryAsync(
@@ -390,6 +391,27 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             expectedPullRequestState);
         return new VerificationResult(null, request, reason);
     }
+
+    internal static bool HasAcceptedAsyncMerge(
+        bool legacyQueuedMarker,
+        string? mergeRequestId,
+        string? persistedStatus) =>
+        legacyQueuedMarker
+        || !string.IsNullOrWhiteSpace(mergeRequestId)
+        || persistedStatus is "pending" or "enqueued";
+
+    /// <summary>
+    /// A missing queue entry is a definitive removal only after GitHub has explicitly
+    /// reported enqueued. A pending async request can expire after 24 hours while it is
+    /// still being processed; expiry is not proof that a queue entry was removed.
+    /// </summary>
+    internal static bool HasConfirmedMergeQueueEntry(
+        bool legacyQueuedMarker,
+        string? persistedStatus,
+        string? currentAsyncStatus) =>
+        legacyQueuedMarker
+        || string.Equals(persistedStatus, "enqueued", StringComparison.Ordinal)
+        || string.Equals(currentAsyncStatus, "enqueued", StringComparison.Ordinal);
 
     internal static string? FailureCodeForUnmergedPullRequestState(string? state) => state switch
     {
