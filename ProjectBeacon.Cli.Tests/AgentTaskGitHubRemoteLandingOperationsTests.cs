@@ -4,6 +4,52 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class AgentTaskGitHubRemoteLandingOperationsTests
 {
+    [Theory]
+    [InlineData("AWAITING_CHECKS", 1)]
+    [InlineData("LOCKED", 2)]
+    [InlineData("MERGEABLE", 3)]
+    [InlineData("QUEUED", 4)]
+    [InlineData("UNMERGEABLE", 5)]
+    public void ParseMergeQueueEntryResponse_ParsesKnownQueueStatesAndPosition(string state, int position)
+    {
+        var json = $\"\\\"{\\\"data\\\":{\\\"repository\\\":{\\\"pullRequest\\\":{\\\"state\\\":\\\"OPEN\\\",\\\"mergeQueueEntry\\\":{\\\"state\\\":\\\"{{state}}\\\",\\\"position\\\":{{position}}}}}}}}\"\\";
+
+        var result = AgentTaskGitHubRemoteLandingOperations.ParseMergeQueueEntryResponse(json);
+
+        Assert.Null(result.Error);
+        Assert.Equal("OPEN", result.State!.PullRequestState);
+        Assert.Equal(state, result.State.EntryState);
+        Assert.Equal(position, result.State.Position);
+    }
+
+    [Fact]
+    public void ParseMergeQueueEntryResponse_TreatsMissingEntryAsRemovedButKeepsPRState()
+    {
+        const string json = """
+            {"data":{"repository":{"pullRequest":{"state":"OPEN","mergeQueueEntry":null}}}}
+            """;
+
+        var result = AgentTaskGitHubRemoteLandingOperations.ParseMergeQueueEntryResponse(json);
+
+        Assert.Null(result.Error);
+        Assert.Equal("OPEN", result.State!.PullRequestState);
+        Assert.Null(result.State.EntryState);
+        Assert.Null(result.State.Position);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("{\"errors\":[{\"message\":\"forbidden\"}]}")]
+    [InlineData("{\"data\":{\"repository\":{\"pullRequest\":{\"state\":\"OPEN\",\"mergeQueueEntry\":{}}}}}")]
+    public void ParseMergeQueueEntryResponse_FailsClosedOnInvalidGraphQlResults(string json)
+    {
+        var result = AgentTaskGitHubRemoteLandingOperations.ParseMergeQueueEntryResponse(json);
+
+        Assert.Null(result.State);
+        Assert.NotNull(result.Error);
+    }
+
     [Fact]
     public void ParseWorktrees_ExtractsTaskBranchesAndPathsWithSpaces()
     {
