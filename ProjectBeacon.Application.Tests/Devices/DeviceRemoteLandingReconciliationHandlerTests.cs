@@ -431,7 +431,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
                 var unchanged = await verifyBefore.LandingAttempts.AsNoTracking()
                     .SingleAsync(item => item.Id == landingAttempt.Id, TestContext.Current.CancellationToken);
                 Assert.Equal(LandingAttemptStatus.ExecutePending, unchanged.Status);
-                Assert.Equal("GitHubMergeQueued:" + requestId, unchanged.FailureCode);
+                Assert.Equal("GitHubMergeEnqueued:" + requestId, unchanged.FailureCode);
             }
 
             var result = await handler.ReportFailureAsync(
