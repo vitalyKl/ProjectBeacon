@@ -1074,3 +1074,37 @@ After the failure-reporting entry above, the branch received UI regression cover
 1. Trigger one full CI matrix on the current post-journal head. Confirm the new `!cancelled()` conditions parse and the same tests remain green.
 2. Once the current head is green, continue end-to-end acceptance of GitHub merge queue: enqueued→merged, definitive failed with exact UUID, missing/expired UUID, PR identity drift and ReviewCheckCommand drift.
 3. Keep classic branch/tag protection and Production Environment required reviewers as administrative blockers until verified in GitHub Settings. No production tag/deploy or PR merge was performed.
+
+
+## 2026-11-26 — Fix Windows SQLite disposal race in the Web test fixture
+
+**CI:** [#45778443033](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45778443033), run 1652  
+**Failing test:** `ProjectBeacon.Web.Tests.Bunit.ChatPollRecoveryTests.ChatDock_PollSurvivesTransientFailure`  
+**Failure:** `SqliteConnection.Close()` threw `InvalidOperationException: Collection was modified; enumeration operation may not execute.` during `BUnitRenderBase.Dispose()`.
+
+### Diagnosis
+
+- CI #45778443033 failed only in the Windows Web test module: 249 passed, 3 platform-conditional tests skipped, 1 failed. Linux and macOS full jobs passed; all other Windows test modules passed.
+- The failure occurred in the shared bUnit fixture teardown, not in the GitHub merge executor. `BUnitRenderBase.Dispose()` closed the shared in-memory SQLite connection before disposing the bUnit renderer.
+- `ChatDock` owns background polling. The renderer must dispose components and scoped services while their shared database connection is still alive; closing SQLite first can race command/statement cleanup during component teardown.
+
+### Fix
+
+- Changed teardown order in `ProjectBeacon.Web.Tests/Bunit/BUnitRenderBase.cs`:
+  1. dispose the bUnit renderer (components, timers/poll loops and scoped services);
+  2. dispose the fixture's root `BeaconDbContext`;
+  3. dispose the shared in-memory SQLite connection.
+- The test itself remains unchanged; no retry, longer timeout, or swallowed exception was introduced.
+- Source-fix commit: `41cf2f82ea6e3adb3db74793e0262775c10160a5`.
+
+### Verification state
+
+- The fix is committed on `feat/release-management`; current branch head at this journal entry is `41cf2f82ea6e3adb3db74793e0262775c10160a5`.
+- CI #45778443033 validates the preceding head `13a157373004b49be000fb735c83f5fff4dbb7ef`, not this teardown change.
+- A fresh full Linux/Windows/macOS matrix must run on the current head. Windows must pass `ChatDock_PollSurvivesTransientFailure` and the full Web module; formatting must also pass.
+
+### Next
+
+1. Trigger and inspect exact-head CI on `41cf2f8`.
+2. If green, continue GitHub async merge acceptance: `pending → merged`, `enqueued → merged`, definitive `failed` with exact UUID, expired/missing UUID, and mismatched PR/review identity.
+3. Keep tag/branch protection and Production Environment reviewer checks as administrative blockers. No production tag, deployment, or PR merge was performed.
