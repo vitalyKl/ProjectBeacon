@@ -273,7 +273,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     return new VerificationResult(null, "Remote landing skipped: queued Beacon merge is missing its pinned post-merge check command.");
 
                 var postMergeCheck = await RunPostMergeCheckAsync(
-                    repositoryRoot, localRoot, finalView.MergeCommitSha!, expectedTreeSha: null,
+                    repositoryRoot, localRoot, finalView.MergeCommitSha!, null,
                     target.PostMergeCheckCommand, ct);
                 if (postMergeCheck.Error is not null || postMergeCheck.ExitCode != 0 || postMergeCheck.OutputHash is null)
                     return new VerificationResult(null, "Remote landing skipped: post-merge check failed (" + (postMergeCheck.Error ?? "PostMergeCheckFailed") + ").");
