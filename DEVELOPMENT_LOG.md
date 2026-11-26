@@ -925,3 +925,35 @@ After the failure-reporting entry above, the branch received UI regression cover
 - Rechecked Application reconciliation tests: a wrong async request UUID is rejected without changing the attempt; the exact UUID records Failed and an audit event while keeping the task InProgress/Approved with no RemoteLandingProof.
 - Current implementation head before this journal correction: `43747d09cd31bd3adcc1fb9ed7ee94ea5b7b9b4c`. The latest commit adds the BUnit assertion; previous journal text naming `c5982175` is the pre-UI-test head and is superseded by this correction.
 - CI run [#45763146032](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) is still an older-head run (head `8ff19877`); there is no CI run for `43747d09`. A full run on the post-journal exact HEAD remains mandatory.
+
+
+## 2026-11-26 — Definitive GitHub merge-queue failure reporting and UI
+
+**Implementation branch:** feat/release-management  
+**Open PR:** https://github.com/vitalyKl/ProjectBeacon/pull/230  
+**Implementation head before this journal update:** faf9f8e9ab96f17cc8e220d289d1c2089379c881
+
+### Implemented
+
+- Added Device-authenticated endpoint POST /v1/devices/me/remote-landings/failure, separate from successful-merge reconciliation. It is protected by RequireDevice; no user/Actor GitHub merge tool was introduced.
+- The pinned workstation reports failure only after GitHub returns async request state "failed", then re-reads the exact PR and confirms it remains OPEN with the same target branch, reviewed source SHA and canonical PR URL.
+- Server-side ReportFailureAsync validates the active device, project runtime attachment, AutoSyncV1 and (when normal AutoSync is disabled) RemoteLandingReconcileV1, pinned task workstation, exact latest LandingAttempt ID, exact ReviewRun, request UUID, source/target identity, approved verdict, unchanged ReviewCheckCommand hash, and absence of an active pipeline session.
+- The handler transitions only the latest matching ExecutePending attempt to Failed with GitHubAsyncMergeFailed, writes an audit event and leaves the task InProgress/Approved. It does not close the task, create a remote landing proof, push, merge, or modify refs. Stale attempts and mismatched UUIDs are rejected.
+- AutoSync posts the failure report through the Device endpoint and logs a clear instruction to request a fresh Preview. The failure reason is localized on en/ru/de/ja/zh in the task landing UI.
+- Added Application test for wrong UUID rejection and exact failure recording; added AutoSync loop test proving the failure endpoint is called and successful reconciliation is not; added BUnit test for the localized failed-merge message.
+- Removed the redundant AlreadyRecorded field from the new failure response contract.
+
+### CI findings and exact coverage
+
+- CI #45761895374 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45761895374) ran on the earlier head 34b19bc7. All seven test modules, TRX guards and builds succeeded on Linux before dotnet format failed; macOS failed at the same formatting step; Windows was cancelled by the matrix's fail-fast behavior.
+- Exact format diagnostics were three xUnit2031 findings in DeviceAutoSyncTargetsHandlerTests.cs at lines 272, 277 and 290: Assert.Single(collection.Where(...)) must use Assert.Single(collection, predicate). The three assertions are corrected in a later commit.
+- CI #45763146032 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) was triggered on head 8ff19877. It includes the first server-side failure-report handler and xUnit assertion fix, but predates the Device endpoint, AutoSync client POST, Application/CLI tests, localized UI reason and BUnit test. It is not coverage for the final branch state.
+- Current implementation head before this journal update is faf9f8e9ab96f17cc8e220d289d1c2089379c881. A new full CI on the post-journal head is mandatory; no green result is claimed for the newest changes.
+- Local .NET SDK/test runner is unavailable in this execution environment.
+
+### Remaining
+
+1. Verify the outcome of #45763146032 on its exact 8ff19877 head; fix any findings relevant to its scope.
+2. Run full Linux/Windows/macOS CI on the final branch head including the Device failure endpoint, AutoSync client path, tests and localized UI.
+3. Validate end-to-end on a user project with an actual GitHub merge queue, especially pending, enqueued, failed, no/expired UUID, and ReviewCheckCommand drift.
+4. Production tag/branch protections and required reviewers for GitHub Environment production remain unverified through this integration. No production tag/deployment is permitted until an administrator checks GitHub Settings.
