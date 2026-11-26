@@ -682,3 +682,18 @@ AutoSync ранее ожидал PR в состояниях `OPEN` или `MERGE
 Новый полный CI на точной implementation вершине после журнала ещё не запускался; до него эта часть не считается принятой. Live merge queue не тестировалась. Следующая проверка — полный Linux/Windows/macOS CI и затем disposable GitHub repository с настроенным merge_group workflow: queued PR closed without merge, queue entry removed, async failed, queued → merged, expiry/lost UUID и PR/base/head drift.
 
 Административные блокеры без изменений: classic tag protection `v*` и required reviewers для Environment `production` не подтверждены. Production tag/deploy запрещены до проверки через GitHub Settings. PR #230 остаётся открытым; его merge не входит в этот план.
+
+
+## Дополнение — исправление audit allowlist после проверки CI (26 ноября 2026)
+
+Первый full CI для closed-unmerged queue failure slice был запущен на exact head `0c56ffbc234ebf57a984b8a7ce80c53440d93eb1` (run [#45794974665](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45794974665)). Linux завершил job, macOS показал ту же причину в Application; в трёх тестах сервер дошёл до записи audit event, но audit schema guard отклонил неразрешённое поле `pullRequestState`.
+
+Исправление в `feat/release-management`:
+
+- удалено только неallowlisted поле `pullRequestState` из JSON audit details;
+- оставлены стандартные allowlisted `policyCode` и `resultCode`, различающие `GitHubAsyncMergeFailed` и `GitHubPullRequestClosedWithoutMerge`;
+- валидация пары failure code/PR state до записи audit остаётся строгой, allowlist не ослаблялся.
+
+Source correction: `fb00cf6d37f9b93d0319054361014cd69db8177b`; journal commit: `e2cc19ed38937fe3cc86d38f10f23b9cc6f7fb28`. Полный exact-head CI на следующей вершине обязателен; предыдущий красный run не включает исправление. До зелёного CI этот участок не считается принятым.
+
+Live merge-queue acceptance и административная проверка classic tag protection `v*` / Production Environment reviewers остаются обязательными блокерами. Production tag/deploy не выполнять.
