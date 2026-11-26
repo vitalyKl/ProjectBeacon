@@ -143,17 +143,19 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     if (!string.Equals(queue.PullRequestState, "OPEN", StringComparison.Ordinal))
                         return new VerificationResult(null,
                             "GitHub merge-queue status returned a PR state that changed during polling; retrying on the next AutoSync cycle.");
-                    if (queue.EntryState is null
-                        || string.Equals(queue.EntryState, "UNMERGEABLE", StringComparison.Ordinal))
+                    if (queue.EntryState is null)
                         return await BuildQueueFailureAsync(
                             ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
-                            queue.EntryState is null
-                                ? "GitHub removed the PR from its merge queue before it merged."
-                                : "GitHub marked the merge-queue entry UNMERGEABLE.",
-                            ct);
+                            "GitHub removed the PR from its merge queue before it merged.", ct);
 
-                    return new VerificationResult(null,
-                        $"GitHub PR #{open[0].Number} remains in the merge queue ({queue.EntryState}, position {queue.Position?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}); waiting for MERGED.");
+                    // UNMERGEABLE is a current queue-entry condition, not proof that
+                    // GitHub removed or permanently failed the request. Keep monitoring;
+                    // report a definitive failure only when the acknowledged entry is gone
+                    // (or the async request itself reports failed).
+                    var queueMessage = string.Equals(queue.EntryState, "UNMERGEABLE", StringComparison.Ordinal)
+                        ? $"GitHub PR #{open[0].Number} remains in the merge queue but is currently UNMERGEABLE; waiting for the queue state to change or the entry to be removed."
+                        : $"GitHub PR #{open[0].Number} remains in the merge queue ({queue.EntryState}, position {queue.Position?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}); waiting for MERGED.";
+                    return new VerificationResult(null, queueMessage);
                 }
 
                 if (asyncState is not null)
