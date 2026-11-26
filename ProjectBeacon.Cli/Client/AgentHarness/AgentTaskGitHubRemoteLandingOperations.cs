@@ -15,7 +15,14 @@ internal static class AgentTaskGitHubRemoteLandingOperations
 {
     internal sealed record VerificationResult(
         DeviceRemoteLandingReconciliationRequest? Request,
-        string? Status);
+        DeviceRemoteLandingFailureRequest? FailureRequest,
+        string? Status)
+    {
+        public VerificationResult(DeviceRemoteLandingReconciliationRequest? request, string? status)
+            : this(request, null, status)
+        {
+        }
+    }
 
     internal sealed record WorktreeEntry(string Path, string? Branch);
 
@@ -113,6 +120,34 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             {
                 var asyncState = await ReadAsyncMergeRequestStateAsync(
                     ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
+                if (string.Equals(asyncState.Status, "failed", StringComparison.Ordinal)
+                    && target.LandingAttemptId is { } landingAttemptId)
+                {
+                    var failedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                        ghPath, repositoryRoot, repository, open[0].Number, ct);
+                    if (failedSnapshot.Error is not null)
+                        return new VerificationResult(null, "GitHub reported a failed async merge, but the PR state could not be re-confirmed.");
+                    var failedView = failedSnapshot.View!;
+                    if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                            failedView, "OPEN", target.TargetBranch, target.SourceSha)
+                        || !string.Equals(failedView.Url, open[0].Url, StringComparison.Ordinal))
+                        return new VerificationResult(null, "GitHub async merge failed, but the exact open PR identity could not be re-confirmed.");
+
+                    var failureRequest = new DeviceRemoteLandingFailureRequest(
+                        projectId,
+                        target.TaskId,
+                        landingAttemptId,
+                        target.ReviewRunId,
+                        repository,
+                        open[0].Number,
+                        failedView.Url,
+                        target.SourceBranch,
+                        target.TargetBranch,
+                        target.SourceSha,
+                        target.MergeRequestId,
+                        DateTime.UtcNow);
+                    return new VerificationResult(null, failureRequest, asyncState.StatusMessage);
+                }
                 return new VerificationResult(null, asyncState.StatusMessage);
             }
             if (open.Length == 1 && target.LandingAttemptId is not null)
