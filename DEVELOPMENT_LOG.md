@@ -1605,3 +1605,40 @@ A final parity pass over Version Policy exposed two remaining cases where the AP
 2. Finish live GitHub merge-queue acceptance in a disposable repository, including request expiry, recovery via live GraphQL queue entry, queue removal, closed-unmerged PR, direct/queued merge completion and PR/head/base drift.
 3. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector. No production tag or deployment is permitted until an administrator checks GitHub Settings.
 4. Keep PR #230 open and unmerged until the current CI and live merge-queue acceptance are complete. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Fix portable Regex validator compile failure
+
+**CI:** [#45898337610](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45898337610)  
+**Failing exact head:** `cf919a332fb4df18f7be80eb18735b4cfb7ede65`  
+**Current implementation head before this journal update:** `3f89c04df347cdc87a1aa5b64185fa3fef424285`
+
+### Finding
+
+The first exact-head cross-platform run after the TOML/Regex parity work failed to compile `ProjectBeacon.Domain/Entities/Projects/ProjectVersionPolicy.cs` on all three platforms. Linux, Windows and macOS all reported the same root diagnostic at line 386:
+
+- `CS1010: Newline in constant`
+- `CS1012: Too many characters in character literal`
+- `CS1002: ; expected`
+
+The remaining diagnostics later in the file, and the test modules reporting that their binaries could not be started / zero tests ran, were cascading effects of the Domain project failing to compile. They were not independent test failures.
+
+### Correction
+
+- Replaced the problematic C# backslash character literal in the portable Regex scanner with an integer code-point comparison (`(int)character == 92`), and handled escaped backslashes similarly.
+- Rewrote the helper into small, explicit branches for the accepted escape set, character classes, group extensions and the single required version capture. This avoids the malformed literal and keeps the server-side grammar aligned with Python.
+- Removed dead validator state and restored normal method separation/formatting.
+- No release/merge behavior changed in this corrective slice.
+
+### CI result and next verification
+
+- Run #45898337610 tested the old exact head `cf919a33`; Linux, Windows and macOS all failed Build on the same C# character-literal error. Downstream test/TRX steps on Linux and platform test modules were cascades because the test binaries were not produced.
+- The source fix is committed on `feat/release-management`; current head before this log entry is `3f89c04df347cdc87a1aa5b64185fa3fef424285`.
+- The old CI run is not evidence for this fix. Trigger a new full Linux/Windows/macOS run on the post-journal head. No local .NET build is claimed; the .NET SDK is unavailable in this execution environment.
+
+### Remaining blockers
+
+1. Complete exact-head CI on the fixed Regex scanner; then handle any genuine tests/format findings separately from compiler cascades.
+2. Perform live async merge-queue acceptance in a disposable GitHub repository, including pending expiry, live GraphQL queue-entry recovery, queue removal, closed-unmerged PR, direct/queued merge completion, PR/head/base drift and post-merge-check failure.
+3. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector. No production tag/deploy is permitted before administrator verification.
+4. Keep PR #230 open and unmerged until the exact-head CI and live merge-queue acceptance are complete.
