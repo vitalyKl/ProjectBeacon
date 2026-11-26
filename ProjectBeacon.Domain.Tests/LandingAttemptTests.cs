@@ -124,6 +124,26 @@ public sealed class LandingAttemptTests
         Assert.Equal(revertCommit, attempt.RevertCommitSha);
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", true)]
+    public void GitHubMergeQueueState_IsDurableAndDistinctFromGenericUnknown(string? requestId, bool expected)
+    {
+        var attempt = Start();
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkGitHubMergeQueued(requestId);
+
+        Assert.Equal(expected, attempt.IsGitHubMergeQueued);
+        Assert.True(attempt.TryReadGitHubMergeRequestId(out var parsedId));
+        Assert.Equal(requestId, parsedId);
+
+        attempt.MarkCommandCompletionUnknown();
+
+        Assert.False(attempt.IsGitHubMergeQueued);
+        Assert.True(attempt.TryReadGitHubMergeRequestId(out _));
+    }
+
     [Fact]
     public void ExecuteCannotBeRepeatedOrLandedWithDifferentTree()
     {
