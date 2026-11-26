@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
@@ -179,6 +181,15 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             }
             else if (latestLandingAttempt.TryReadGitHubMergeRequestId(out var expectedMergeRequestId))
             {
+                var pinnedCheckCommand = project.ReviewCheckCommand?.Trim();
+                var currentCheckHash = string.IsNullOrWhiteSpace(pinnedCheckCommand)
+                    ? null
+                    : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(pinnedCheckCommand))).ToLowerInvariant();
+                if (!string.Equals(currentCheckHash, latestLandingAttempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+                    return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                        "The project's ReviewCheckCommand changed after the landing request. Restore the reviewed command and retry reconciliation.",
+                        ErrorKind.Conflict);
+
                 if (request.LandingAttemptId != latestLandingAttempt.Id
                     || !string.Equals(request.MergeRequestId, expectedMergeRequestId, StringComparison.Ordinal)
                     || !string.Equals(request.CandidateTreeSha, latestLandingAttempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
