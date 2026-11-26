@@ -1108,3 +1108,31 @@ After the failure-reporting entry above, the branch received UI regression cover
 1. Trigger and inspect exact-head CI on `41cf2f8`.
 2. If green, continue GitHub async merge acceptance: `pending → merged`, `enqueued → merged`, definitive `failed` with exact UUID, expired/missing UUID, and mismatched PR/review identity.
 3. Keep tag/branch protection and Production Environment reviewer checks as administrative blockers. No production tag, deployment, or PR merge was performed.
+
+
+## 2026-11-26 — Full cross-platform CI green after SQLite teardown fix
+
+**Validated HEAD:** `a37e6f5a8115650b579cc756eddc148db76ad4f8`  
+**CI:** [#45783053165](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45783053165), run 1653  
+**Result:** Linux, Windows and macOS jobs all completed successfully.
+
+### Exact result
+
+- All three platforms: Restore, Build and EF no-pending-model-changes check passed.
+- All seven test modules passed on Linux, Windows and macOS: API, Application, CLI, Domain, Infrastructure, Web and Worker.
+- Linux authoritative Postgres lane also passed release-manifest tests, TRX result-count/allowed-skip guards and `dotnet format`.
+- Windows Web passed, including the previously failing `ChatDock_PollSurvivesTransientFailure`; the teardown no longer closes the shared SQLite connection before bUnit disposes components and scoped DbContexts.
+- Windows and macOS format checks passed.
+- No test failures, formatter failures or cancelled jobs remain in this run.
+
+### Scope
+
+- This run validates the SQLite disposal-order fix from `41cf2f82ea6e3adb3db74793e0262775c10160a5` plus the preceding source at exact head `a37e6f5a8115650b579cc756eddc148db76ad4f8`.
+- It does **not** validate changes made after that head. The next AutoSync proof-enrichment fix will require a new full CI run.
+
+### Next
+
+1. Ensure an already-`Landed` immediate GitHub merge exports its persisted candidate-tree and post-merge proof to AutoSync. The current target handler includes only the LandingAttemptId for this state; the daemon's verifier then refuses to reconcile because required proof fields are absent.
+2. Reconcile an already-`Landed` attempt using its immutable stored post-merge exit code/hash (do not rerun a potentially changed project command); queued async merges still need the pinned ReviewCheck to run on the final merged tree.
+3. Add regression coverage for immediate merge and ReviewCheckCommand drift, then run full CI on the new exact head.
+4. Continue live merge-queue acceptance; no production tag, deployment or PR merge was performed.
