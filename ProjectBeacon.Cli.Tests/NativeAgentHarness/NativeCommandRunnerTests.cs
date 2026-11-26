@@ -113,6 +113,9 @@ public sealed class NativeCommandRunnerTests
             Assert.True(Directory.Exists(Path.Combine(
                 NativeCommandRunner.SessionHomePath(sessionId), "home", "git-hooks-empty")));
             Assert.Equal("cat", start.Environment["GIT_PAGER"]);
+            Assert.Equal("1", start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"]);
+            Assert.Equal("1", start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"]);
+            Assert.Equal("1", start.Environment["DOTNET_NOLOGO"]);
             Assert.False(start.Environment.ContainsKey("GIT_EXTERNAL_DIFF"));
             Assert.Equal("status", args[^2]);
             Assert.Equal("--short", args[^1]);
