@@ -135,7 +135,7 @@
             }
             @if (!string.IsNullOrWhiteSpace(landing.FailureCode))
             {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                <MudAlert Severity="@LandingFailureSeverity(landing.FailureCode)" Dense="true" Class="mt-2">
                     @LandingReasonLabel(landing.FailureCode)
                 </MudAlert>
             }
@@ -237,6 +237,7 @@
             "GitPolicyChangedSincePreview" => "LandingReasonGitPolicyChangedSincePreview",
             "TaskNotApprovedForExecute" => "LandingReasonTaskApprovalRequired",
             "AutomaticLandingNotAllowed" => "LandingReasonManualActionRequired",
+            _ when code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal) => "LandingReasonGitHubMergeQueued",
             _ => ResolveLandingReasonCategory(code)
         };
 
@@ -291,6 +292,13 @@
             return "LandingReasonManualActionRequired";
         return null;
     }
+
+    private static Severity LandingFailureSeverity(string code) =>
+        code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal)
+            ? Severity.Info
+            : string.Equals(code, "CommandCompletionUnknown", StringComparison.Ordinal)
+                ? Severity.Warning
+                : Severity.Error;
 
     private Color LandingStatusColor(LandingAttemptStatus status) => status switch
     {
