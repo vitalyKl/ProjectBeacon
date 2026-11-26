@@ -32,6 +32,7 @@ public sealed class GitHubLandingMergeExecutorTests
     [Theory]
     [InlineData("""{"status":"pending","details":{"uuid":"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1","expected_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}""", "pending", "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", null)]
     [InlineData("""{"status":"enqueued","details":{"uuid":"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1"}}""", "enqueued", "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", null)]
+    [InlineData("""{"status":"enqueued","details":{"message":"Pull request is already in the merge queue."}}""", "enqueued", null, null)]
     [InlineData("""{"status":"merged","details":{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}""", "merged", null, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")]
     [InlineData("""{"status":"failed","details":{"message":"Merge queue failed"}}""", "failed", null, null)]
     public void AsyncMergeResponse_ParsesPendingEnqueuedMergedAndFailedStates(
@@ -46,6 +47,18 @@ public sealed class GitHubLandingMergeExecutorTests
         Assert.Equal(expectedStatus, result.Status);
         Assert.Equal(expectedRequestId, result.MergeRequestId);
         Assert.Equal(expectedMergeSha, result.MergeCommitSha);
+    }
+
+    [Fact]
+    public void AsyncMergeResponse_ExtractsStructuredConflictBodyFromGitHubCliStderr()
+    {
+        const string stderr = "gh: HTTP 409: Conflict\\n{\\\"status\\\":\\\"pending\\\",\\\"details\\\":{\\\"uuid\\\":\\\"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1\\\"}}";
+
+        var result = GitHubLandingMergeExecutor.ParseAsyncMergeResponse(stderr);
+
+        Assert.Null(result.Error);
+        Assert.Equal("pending", result.Status);
+        Assert.Equal("9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", result.MergeRequestId);
     }
 
     [Theory]
