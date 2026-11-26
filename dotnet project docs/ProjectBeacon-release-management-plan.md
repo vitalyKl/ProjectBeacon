@@ -658,3 +658,27 @@ Live merge queue не тестировалась. End-to-end тестирова�
 - Добавлены Domain и Application tests: UUID/no-UUID queue marker, отличие от generic unknown, отсутствие второй GitLand команды при повторном Execute.
 
 Текущий implementation source/test head: `77b73cf187022c39b072e4ca50a2fa0434931fa4`; журнал следующего commit должен быть добавлен до нового exact-head CI. Предыдущий run [#45789363602](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45789363602) стартовал на более старом `c0c1b7b9` и не валидирует этот guard и queue-only narrowing. Нужен новый CI на окончательном implementation head; live merge queue всё ещё не тестировалась. Production tag/deploy и merge PR #230 не выполнялись.
+
+
+## Дополнение — закрытый без merge PR после постановки в merge queue (26 ноября 2026)
+
+### Найденный крайний сценарий
+
+AutoSync ранее ожидал PR в состояниях `OPEN` или `MERGED`. Если владелец/maintainer закрывал уже поставленный в GitHub merge queue PR без слияния, PR исчезал из набора `OPEN` и не попадал в `MERGED`. Beacon переставал предпринимать действия, а `LandingAttempt` оставался в `ExecutePending` бесконечно.
+
+### Исправление в `feat/release-management`, PR #230
+
+- Для exact task branch + review base AutoSync теперь обрабатывает `CLOSED` PR, если сам Beacon ранее сохранил явное подтверждение queue request: `GitHubMergeQueued` или UUID async merge request.
+- Workstation повторно запрашивает конкретный PR и подтверждает точное совпадение URL, base, head SHA и source identity; для закрытого PR дополнительно требует отсутствие `mergedAt` и merge commit SHA.
+- В серверный device failure endpoint отправляется отдельный машинный код `GitHubPullRequestClosedWithoutMerge` с состоянием `CLOSED`. Обычная async/queue removal failure остаётся `GitHubAsyncMergeFailed` с состоянием `OPEN`.
+- Сервер принимает только эти две фиксированные пары code/state и проверяет точную queued LandingAttempt, latest successful Review proof, pinned workstation, source SHA, base branch, project/device binding и отсутствие активной pipeline session.
+- Failure оставляет задачу `InProgress/Approved`, записывает audit event и переводит attempt в `Failed`; RemoteLandingProof не создаётся и task не закрывается. После разбора отказа можно запросить свежие Preview/Review.
+- Добавлены CLI unit tests для state classification/неприемлемых состояний и Application/SQLite test для failure report, mismatch state, сохранения task state, отсутствия merge proof и audit actor.
+
+Изменения source/tests сохранены в `feat/release-management` коммитами `53c72915`–`561fbd82`; журнал продолжен в commit `0c56ffbc234ebf57a984b8a7ce80c53440d93eb1`.
+
+### Проверка и остаток
+
+Новый полный CI на точной implementation вершине после журнала ещё не запускался; до него эта часть не считается принятой. Live merge queue не тестировалась. Следующая проверка — полный Linux/Windows/macOS CI и затем disposable GitHub repository с настроенным merge_group workflow: queued PR closed without merge, queue entry removed, async failed, queued → merged, expiry/lost UUID и PR/base/head drift.
+
+Административные блокеры без изменений: classic tag protection `v*` и required reviewers для Environment `production` не подтверждены. Production tag/deploy запрещены до проверки через GitHub Settings. PR #230 остаётся открытым; его merge не входит в этот план.
