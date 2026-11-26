@@ -267,7 +267,6 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 sourceSha = request.SourceSha,
                 reviewRunId = request.ReviewRunId.ToString("D"),
                 policyCode = expectedFailureCode,
-                pullRequestState = request.PullRequestState,
                 resultCode = request.FailureCode == "GitHubPullRequestClosedWithoutMerge"
                     ? "QueuedPullRequestClosed"
                     : "QueuedMergeFailed"
