@@ -91,7 +91,7 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
-    public async Task ExecuteLanding_DoesNotRedispatchAnAlreadyQueuedGitHubMerge()
+    public async Task ExecuteLanding_DoesNotRedispatchAnAlreadyPendingGitHubMerge()
     {
         var done = await SeedDoneSubtaskAsync("Do not redispatch a GitHub queued merge");
         Guid deviceId;
@@ -114,7 +114,8 @@ public sealed partial class PipelineHandlerTests
             "GitHub has already accepted the pull request into its merge queue.");
         attempt.RecordPreview("main", new string('d', 40), new string('e', 40), new string('f', 64), 0, null);
         attempt.MarkExecutePending();
-        attempt.MarkGitHubMergeQueued(null);
+        var mergeRequestId = Guid.NewGuid().ToString("D");
+        attempt.MarkGitHubMergeQueued(mergeRequestId, "pending");
         using (TenantScope.EnterUnscoped())
         {
             _db.LandingAttempts.Add(attempt);
@@ -130,12 +131,13 @@ public sealed partial class PipelineHandlerTests
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(LandingAttemptStatus.ExecutePending, result.Value!.Status);
-        Assert.Equal("GitHubMergeQueued", result.Value.FailureCode);
+        Assert.Equal("GitHubMergePending:" + mergeRequestId, result.Value.FailureCode);
+        Assert.Equal("pending", result.Value.GitHubMergeRequestStatus);
         using (TenantScope.EnterUnscoped())
         {
             var persisted = await _db.LandingAttempts.AsNoTracking()
                 .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
-            Assert.Equal("GitHubMergeQueued", persisted.FailureCode);
+            Assert.Equal("GitHubMergePending:" + mergeRequestId, persisted.FailureCode);
             Assert.Empty(await _db.WorkstationCommands.AsNoTracking()
                 .Where(command => command.Kind == WorkstationCommandKind.GitLand
                     && command.PayloadJson.Contains(attempt.Id.ToString("D")))
