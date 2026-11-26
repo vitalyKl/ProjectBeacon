@@ -1021,3 +1021,30 @@ After the failure-reporting entry above, the branch received UI regression cover
 1. Trigger and inspect full CI on the current post-journal branch head; verify all three Windows CLI tests pass.
 2. If green, continue final product acceptance for GitHub merge queue pending/enqueued/merged/failed paths and the no-UUID uncertainty path.
 3. Keep classic branch/tag protection and Production Environment reviewers as an administrative blocker until verified in GitHub Settings.
+
+
+## 2026-11-26 — Prevent false test failures when a newer PR CI run cancels the previous run
+
+**Incident:** CI #45775401460 (run 1650), triggered for head `43b611406c9370e9dd022b4b61c4cffed2672127`. A second PR run #45775571535 (run 1651) was created for the same SHA. The workflow has `concurrency.cancel-in-progress: true`, so #1650 was superseded while its Build step was running.
+
+### Confirmed failure mechanism
+
+- Linux logs show `The operation was canceled` in Build. Because test steps used `if: always()`, the API `dotnet test --no-build` still ran after cancellation; its test executable had not been produced (`Win32Exception (2): ... ProjectBeacon.API.Tests ... No such file or directory`), so the test host reported `Zero tests ran` and exit code 1. TRX guards then found six reports instead of seven.
+- Windows job was cancelled before Build completed; subsequent `dotnet test` invocations reported `No test projects were found` or missing test executables. These are cancellation artifacts, not evidence of failing tests.
+- Linux Application (1,017; 1 skip), CLI (668), Domain (315), Infrastructure (119), Web (253), and Worker (24) completed successfully on the canceled run. The API module did not execute any tests. Do not count run 1650 as a test pass or as a product-code regression.
+- GitHub queued run #45775571535 (run 1651) for the same source SHA `43b611406c9370e9dd022b4b61c4cffed2672127`; it started after run 1650 cleared. It validates the code changes at that source head but uses the previous workflow-file revision.
+
+### CI/release workflow correction
+
+- In `.github/workflows/ci.yml`, all 16 test, TRX report and TRX guard conditions changed from `if: always()` to `if: ${{ !cancelled() }}`.
+- In `.github/workflows/release.yml`, the eight test and TRX-guard conditions changed the same way. The separate scan/SBOM upload remains `if: always()` so diagnostic artifacts still upload on failure/cancellation.
+- This preserves the intended behavior: after a normal Build/test failure, run remaining modules to collect complete diagnostics; after the workflow itself is cancelled/superseded, do not launch `--no-build` tests against partial or missing binaries.
+- Implementation commits: `14a8b606b99fdb96c678dd4d04873e99565a5f10` (CI), `216901136fbd16da006b04da59910f776227d652` (release workflow).
+- Current source/workflow head before this journal append: `216901136fbd16da006b04da59910f776227d652`.
+
+### Verification and next steps
+
+1. Run #45775571535 (run 1651) is the current validation of the earlier source head `43b61140`; do not infer that it validates the new workflow gating.
+2. After run 1651 finishes, trigger one fresh full Linux/Windows/macOS CI on the current head after this journal update. Verify the Windows cold-start test fix and cancellation-safe workflow expressions together.
+3. Confirm that a normal build/test failure still allows all later test modules and TRX reporting, while a superseded run skips test/report/guard steps.
+4. No PR merge, production tag or deployment was performed.
