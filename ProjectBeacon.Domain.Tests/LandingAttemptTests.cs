@@ -253,6 +253,20 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void UnknownExecuteAcknowledgement_CanBeReconciledAgainstTheExactRemotePullRequest()
+    {
+        var attempt = Start();
+        attempt.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkCommandCompletionUnknown();
+
+        Assert.Equal(LandingAttemptStatus.ExecutePending, attempt.Status);
+        Assert.True(attempt.TryReadGitHubMergeRequestId(out var requestId));
+        Assert.Null(requestId);
+    }
+
+    [Fact]
     public void GitHubMergeQueue_RejectsInvalidRequestUuid()
     {
         var attempt = Start();
