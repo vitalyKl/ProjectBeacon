@@ -181,8 +181,8 @@ def read_toml_version(document: Any, selector: str) -> str:
         current = current[part]
     # Match the supported scalar contract of the .NET Tomlyn reader. Complex
     # TOML values, booleans and date/time values are not version projections.
-    if isinstance(current, bool) or not isinstance(current, (str, int, float)):
-        fail("TOML version selector must resolve to a string or numeric scalar")
+    if isinstance(current, bool) or not isinstance(current, (str, int)):
+        fail("TOML version selector must resolve to a string or integer scalar")
     return str(current).strip()
 
 
