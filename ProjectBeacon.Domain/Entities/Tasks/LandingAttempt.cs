@@ -294,13 +294,21 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     /// reached MERGED yet (for example, it is waiting in a merge queue). The attempt
     /// remains ExecutePending until the pinned workstation verifies the final merge.
     /// </summary>
-    public void MarkGitHubMergeQueued(string mergeRequestId)
+    public void MarkGitHubMergeQueued(string? mergeRequestId)
     {
         EnsureStatus(LandingAttemptStatus.ExecutePending);
-        if (!Guid.TryParse(mergeRequestId, out var parsed) || parsed == Guid.Empty)
-            throw new ArgumentException("GitHub asynchronous merge request ID must be a GUID.", nameof(mergeRequestId));
-
-        FailureCode = "GitHubMergeQueued:" + parsed.ToString("D");
+        if (string.IsNullOrWhiteSpace(mergeRequestId))
+        {
+            // GitHub can report that a PR is already enqueued without returning a new
+            // async-request UUID. The PR state remains the durable polling authority.
+            FailureCode = "GitHubMergeQueued";
+        }
+        else
+        {
+            if (!Guid.TryParse(mergeRequestId, out var parsed) || parsed == Guid.Empty)
+                throw new ArgumentException("GitHub asynchronous merge request ID must be a GUID.", nameof(mergeRequestId));
+            FailureCode = "GitHubMergeQueued:" + parsed.ToString("D");
+        }
         Touch();
     }
 
@@ -308,9 +316,11 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     {
         mergeRequestId = null;
         const string prefix = "GitHubMergeQueued:";
-        if (Status != LandingAttemptStatus.ExecutePending
-            || FailureCode is null
-            || !FailureCode.StartsWith(prefix, StringComparison.Ordinal)
+        if (Status != LandingAttemptStatus.ExecutePending || FailureCode is null)
+            return false;
+        if (string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal))
+            return true;
+        if (!FailureCode.StartsWith(prefix, StringComparison.Ordinal)
             || !Guid.TryParseExact(FailureCode[prefix.Length..], "D", out var parsed)
             || parsed == Guid.Empty)
             return false;
