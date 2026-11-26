@@ -47,6 +47,50 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
     }
 
     [Fact]
+    public void PendingGitHubMerge_ShowsProcessingMessageWithoutLeakingRequestId()
+    {
+        var taskId = Guid.NewGuid();
+        var mergeRequestId = Guid.NewGuid().ToString("D");
+        var now = DateTime.UtcNow;
+        var landing = new LandingAttemptDto(
+            Guid.NewGuid(),
+            taskId,
+            LandingAttemptStatus.ExecutePending,
+            $"beacon/task/{taskId:N}",
+            new string('a', 40),
+            new string('b', 40),
+            Guid.NewGuid(),
+            "main",
+            new string('c', 40),
+            new string('d', 40),
+            null,
+            null,
+            "GitHubMergePending:" + mergeRequestId,
+            null,
+            null,
+            null,
+            now,
+            now);
+        var pipeline = new PipelineStateDto(
+            taskId,
+            "Pending merge task",
+            TaskItemStatus.InProgress,
+            TaskPipelineStage.Approved,
+            null,
+            [],
+            [],
+            [],
+            LatestLandingAttempt: landing);
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
+            parameters => parameters.Add(component => component.Pipeline, pipeline));
+
+        Assert.Contains("GitHub accepted the asynchronous merge request and is still processing it.", cut.Markup);
+        Assert.DoesNotContain(mergeRequestId, cut.Markup);
+        Assert.Contains("mud-alert-info", cut.Markup);
+    }
+
+    [Fact]
     public void QueuedGitHubMerge_ShowsInformationalMessageWithoutLeakingRequestId()
     {
         var taskId = Guid.NewGuid();
@@ -65,7 +109,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
             new string('d', 40),
             null,
             null,
-            "GitHubMergeQueued:" + mergeRequestId,
+            "GitHubMergeEnqueued:" + mergeRequestId,
             null,
             null,
             null,
@@ -86,7 +130,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains("GitHub accepted the merge request.", cut.Markup);
+        Assert.Contains("GitHub has placed the pull request in the merge queue.", cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
     }
 }
