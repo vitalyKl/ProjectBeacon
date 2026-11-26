@@ -198,6 +198,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
         using (TenantScope.EnterUnscoped())
         {
             var candidateTree = new string('5', 40);
+            var postMergeHash = new string('7', 64);
             var attempt = LandingAttempt.Start(
                 setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
                 "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
@@ -205,13 +206,54 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             attempt.RecordPreview(
                 "main", setup.RemoteBaseSha, candidateTree, new string('6', 64), 0, null);
             attempt.MarkExecutePending();
-            attempt.RecordLanded(setup.MergeSha, candidateTree, 0, new string('7', 64));
+            attempt.RecordLanded(setup.MergeSha, candidateTree, 0, postMergeHash);
             _db.LandingAttempts.Add(attempt);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+            // A later Project setting edit must not invalidate an already completed,
+            // immutable post-merge check recorded by GitLand.
+            var project = await _db.Projects.SingleAsync(
+                item => item.Id == setup.ProjectId, TestContext.Current.CancellationToken);
+            project.Update(reviewCheckCommand: "dotnet test");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
             var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var missingProof = await handler.HandleAsync(
+                setup.DeviceId,
+                Request(setup) with
+                {
+                    LandingAttemptId = attempt.Id,
+                    CandidateTreeSha = candidateTree,
+                    PostMergeCheckExitCode = 0
+                },
+                TestContext.Current.CancellationToken);
+            Assert.False(missingProof.Success);
+            Assert.Equal(ErrorKind.Conflict, missingProof.Kind);
+            Assert.Contains("post-merge evidence", missingProof.Error ?? string.Empty, StringComparison.Ordinal);
+
+            var wrongTree = await handler.HandleAsync(
+                setup.DeviceId,
+                Request(setup) with
+                {
+                    LandingAttemptId = attempt.Id,
+                    CandidateTreeSha = new string('4', 40),
+                    PostMergeCheckExitCode = 0,
+                    PostMergeCheckOutputHash = postMergeHash
+                },
+                TestContext.Current.CancellationToken);
+            Assert.False(wrongTree.Success);
+            Assert.Equal(ErrorKind.Conflict, wrongTree.Kind);
+
             var result = await handler.HandleAsync(
-                setup.DeviceId, Request(setup) with { LandingAttemptId = attempt.Id }, TestContext.Current.CancellationToken);
+                setup.DeviceId,
+                Request(setup) with
+                {
+                    LandingAttemptId = attempt.Id,
+                    CandidateTreeSha = candidateTree,
+                    PostMergeCheckExitCode = 0,
+                    PostMergeCheckOutputHash = postMergeHash
+                },
+                TestContext.Current.CancellationToken);
 
             Assert.True(result.Success, result.Error);
             Assert.Equal("Done", result.Value!.TaskStatus);
