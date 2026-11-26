@@ -455,6 +455,14 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Execute"))
             return Result.Ok(RequestLandingHandler.ToDto(attempt));
 
+        if (attempt.IsGitHubMergeQueued)
+        {
+            // GitHub already accepted this exact PR into background processing or its
+            // merge queue. Do not overwrite that durable state with a second Execute;
+            // AutoSync owns read-only polling until the exact PR reaches MERGED or fails.
+            return Result.Ok(RequestLandingHandler.ToDto(attempt));
+        }
+
         if (attempt.Status is not (LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending)
             || string.IsNullOrWhiteSpace(attempt.TargetBranch)
             || string.IsNullOrWhiteSpace(attempt.TargetHeadSha)
