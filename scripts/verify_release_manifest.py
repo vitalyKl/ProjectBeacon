@@ -179,18 +179,131 @@ def read_toml_version(document: Any, selector: str) -> str:
         if not part or not isinstance(current, dict) or part not in current:
             fail(f"TOML key path {selector!r} does not exist")
         current = current[part]
+    # Match the supported scalar contract of the .NET Tomlyn reader. Complex
+    # TOML values, booleans and date/time values are not version projections.
+    if isinstance(current, bool) or not isinstance(current, (str, int, float)):
+        fail("TOML version selector must resolve to a string or numeric scalar")
     return str(current).strip()
 
 
+def validate_portable_dotnet_regex(selector: str) -> tuple[bool, str | None]:
+    if not isinstance(selector, str) or not selector:
+        return False, "Regex selector is empty"
+
+    capture_groups = 0
+    has_named_version_group = False
+    has_named_version_backreference = False
+    in_character_class = False
+    index = 0
+
+    while index < len(selector):
+        character = selector[index]
+        if character == "\\":
+            index += 1
+            if index >= len(selector):
+                return False, "A trailing escape is not supported"
+            escaped = selector[index]
+            if escaped == "k":
+                marker = "k<version>"
+                if in_character_class or not selector.startswith(marker, index):
+                    return False, r"Only the .NET named backreference \k<version> is supported, and only outside a character class"
+                has_named_version_backreference = True
+                index += len(marker)
+                continue
+
+            portable_escape = escaped in {"d", "D", "s", "S", "t", "r", "n", "f", "v", "\\", "]", "-", "^"}
+            if not in_character_class:
+                portable_escape = portable_escape or escaped in {
+                    "A", "z", ".", "$", "|", "?", "*", "+", "(", ")", "[", "{", "}"
+                }
+            if not portable_escape:
+                return False, r"Use only portable escapes (\d, \D, \s, \S, \t, \r, \n, \f, \v, \A, \z, escaped regex punctuation, or \k<version>)"
+            index += 1
+            continue
+
+        if in_character_class:
+            if character == "[":
+                return False, "Nested and subtractive character classes are not supported"
+            if character == "]":
+                in_character_class = False
+            index += 1
+            continue
+
+        if character == "[":
+            in_character_class = True
+            index += 1
+            continue
+
+        if character != "(":
+            index += 1
+            continue
+
+        if selector.startswith("(?<version>", index):
+            capture_groups += 1
+            has_named_version_group = True
+            index += len("(?<version>")
+            continue
+
+        if any(selector.startswith(extension, index) for extension in ("(?:", "(?=", "(?!")):
+            index += 3
+            continue
+
+        if selector.startswith("(?", index):
+            return False, "Only (?<version>...), (?:...), (?=...), and (?!...) group extensions are supported"
+        capture_groups += 1
+        index += 1
+
+    if in_character_class:
+        return False, "Character class is not closed"
+    if capture_groups != 1:
+        return False, "A portable version selector must contain exactly one capturing group: (?<version>...) or one ordinary group (...)"
+    if has_named_version_backreference and not has_named_version_group:
+        return False, r"\k<version> requires a named (?<version>...) capture group"
+
+    try:
+        re.compile(dotnet_regex_to_python(selector))
+    except re.error as exc:
+        return False, f"invalid portable regular expression: {exc}"
+    return True, None
+
+
 def dotnet_regex_to_python(selector: str) -> str:
-    # Beacon stores .NET regular expressions. Translate common named capture
-    # and backreference syntax while leaving (?<=...) / (?<!...) lookbehinds intact.
-    translated = re.sub(r"\(\?<([A-Za-z_][A-Za-z0-9_]*)>", r"(?P<\1>", selector)
-    translated = re.sub(r"\\k<([A-Za-z_][A-Za-z0-9_]*)>", r"(?P=\1)", translated)
-    return translated.replace(r"\z", r"\Z")
+    # Translate only the two .NET constructs intentionally supported by the
+    # common grammar; do not rewrite escaped text or content inside a class.
+    output: list[str] = []
+    in_character_class = False
+    index = 0
+    while index < len(selector):
+        character = selector[index]
+        if character == "\\" and index + 1 < len(selector):
+            escaped = selector[index + 1]
+            if not in_character_class and escaped == "k" and selector.startswith("k<version>", index + 1):
+                output.append("(?P=version)")
+                index += len("\\k<version>")
+                continue
+            if not in_character_class and escaped == "z":
+                output.append(r"\Z")
+            else:
+                output.append("\\" + escaped)
+            index += 2
+            continue
+        if not in_character_class and selector.startswith("(?<version>", index):
+            output.append("(?P<version>")
+            index += len("(?<version>")
+            continue
+        if character == "[" and not in_character_class:
+            in_character_class = True
+        elif character == "]" and in_character_class:
+            in_character_class = False
+        output.append(character)
+        index += 1
+    return "".join(output)
 
 
 def read_regex_version(text: str, selector: str) -> str:
+    portable, compatibility_error = validate_portable_dotnet_regex(selector)
+    if not portable:
+        fail("Regex selector is not portable to the release workflow: " + (compatibility_error or "unsupported syntax"))
     pattern = dotnet_regex_to_python(selector)
     try:
         completed = subprocess.run(
