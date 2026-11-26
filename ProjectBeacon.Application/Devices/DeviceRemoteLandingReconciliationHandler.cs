@@ -249,13 +249,11 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             detailsJson: JsonSerializer.Serialize(new
             {
                 deviceId,
-                request.Repository,
-                request.PullRequestNumber,
-                request.SourceBranch,
-                request.TargetBranch,
-                request.SourceSha,
-                mergeRequestId = mergeRequestId.ToString("D"),
-                failureCode = expectedFailureCode,
+                sourceBranch = request.SourceBranch,
+                targetBranch = request.TargetBranch,
+                sourceSha = request.SourceSha,
+                reviewRunId = request.ReviewRunId.ToString("D"),
+                policyCode = expectedFailureCode,
                 resultCode = "QueuedMergeFailed"
             })));
 
