@@ -219,6 +219,63 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ReconcilesQueuedGitHubMergeOnlyWithExactRequestAndPostMergeEvidence()
+    {
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
+        using (TenantScope.EnterUnscoped())
+        {
+            var candidateTree = new string('5', 40);
+            var requestId = Guid.NewGuid().ToString("D");
+            var postMergeHash = new string('8', 64);
+            var attempt = LandingAttempt.Start(
+                setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
+                "main", setup.SourceSha, new string('2', 40), new string('a', 64),
+                "Beacon-managed async merge waiting for GitHub queue.");
+            attempt.RecordPreview(
+                "main", setup.RemoteBaseSha, candidateTree, new string('6', 64), 0, null);
+            attempt.MarkExecutePending();
+            attempt.MarkGitHubMergeQueued(requestId);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var baseRequest = Request(setup) with
+            {
+                LandingAttemptId = attempt.Id,
+                MergeRequestId = requestId,
+                CandidateTreeSha = candidateTree,
+                PostMergeCheckExitCode = 0,
+                PostMergeCheckOutputHash = postMergeHash
+            };
+            var wrongRequest = await handler.HandleAsync(
+                setup.DeviceId,
+                baseRequest with { MergeRequestId = Guid.NewGuid().ToString("D") },
+                TestContext.Current.CancellationToken);
+
+            Assert.False(wrongRequest.Success);
+            Assert.Equal(ErrorKind.Conflict, wrongRequest.Kind);
+
+            var result = await handler.HandleAsync(
+                setup.DeviceId, baseRequest, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            Assert.Equal("Done", result.Value!.TaskStatus);
+            Assert.Equal("Closed", result.Value.PipelineStage);
+            await using var verify = Factory().CreateDbContext();
+            var savedAttempt = await verify.LandingAttempts.AsNoTracking()
+                .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(LandingAttemptStatus.Landed, savedAttempt.Status);
+            Assert.Equal(setup.MergeSha, savedAttempt.MergeCommitSha);
+            Assert.Equal(0, savedAttempt.PostMergeCheckExitCode);
+            Assert.Equal(postMergeHash, savedAttempt.PostMergeCheckOutputHash);
+            var task = await verify.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == setup.TaskId, TestContext.Current.CancellationToken);
+            Assert.Equal(TaskItemStatus.Done, task.Status);
+            Assert.Equal(TaskPipelineStage.Closed, task.PipelineStage);
+        }
+    }
+
+    [Fact]
     public async Task RejectsAutoSyncOffReconciliationFromLegacyDaemonWithoutNewCapability()
     {
         var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
@@ -297,6 +354,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var project = Project.Create("GitHub remote", null, org.Id);
             project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
                 0, [], 200, 20_000, "Off", autoSyncEnabled: autoSyncEnabled));
+            project.Update(reviewCheckCommand: "dotnet test --no-build");
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
