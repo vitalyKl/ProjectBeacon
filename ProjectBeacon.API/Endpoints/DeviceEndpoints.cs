@@ -40,6 +40,8 @@ public static class DeviceEndpoints
             .RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapPost("/v1/devices/me/remote-landings/failure", ReportRemoteLandingFailure)
             .RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/devices/me/remote-landings/status", ReportRemoteLandingStatus)
+            .RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet("/v1/devices/me/tasks/{taskId:guid}/workspace-bootstrap", GetTaskWorkspaceBootstrap)
             .RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery().RequireDevice();
@@ -264,6 +266,17 @@ public static class DeviceEndpoints
     {
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(actor.DeviceId!.Value, body, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ReportRemoteLandingStatus(
+        [FromBody] DeviceRemoteLandingStatusRequest body,
+        ReconcileDeviceRemoteLandingHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.ReportAsyncMergeStatusAsync(actor.DeviceId!.Value, body, ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
