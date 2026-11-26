@@ -3285,6 +3285,9 @@ orthstar</value>
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
     <value>GitHub はマージ要求を受け付けました。マージキューでの処理、または GitHub によるマージ完了を待っています。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
   </data>
+  <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
+    <value>GitHub は非同期マージ要求を拒否しました。マージキューの失敗理由を確認し、必要な変更を行ってから、新しいランディングプレビューを要求してください。</value>
+  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>ランディング処理が、画面で認識できない理由を返しました。ワークステーションのログを確認し、診断 ID をサポートに伝えてください。</value>
   </data>
