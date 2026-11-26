@@ -549,3 +549,27 @@ CI [#45778443033](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4577844
 **Проверка:** CI #45778443033 относится к предыдущему source head `13a15737`. Новый полный Linux/Windows/macOS CI обязателен для текущего post-journal head. Считать teardown fix принятым только после прохождения Windows Web и общей матрицы.
 
 Состояние GitHub-authoritative landing не меняется: executor использует GitHub async merge API, не включает bypass rules, а merge queue остаётся авторитетным; задача закрывается только после сверки точного PR/head, merge commit, target ancestry, candidate tree и pinned post-merge check. End-to-end сценарии merge queue ещё нужно проверить. Не запускать production tags/deploy до подтверждения классической tag protection и Production Environment reviewers.
+
+
+## CI result: Windows SQLite teardown fix accepted — 26 ноября 2026
+
+CI [#45783053165](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45783053165), run 1653, completed successfully on exact implementation head `a37e6f5a8115650b579cc756eddc148db76ad4f8`:
+
+- Linux, Windows and macOS Restore, Build, EF model check, all seven test modules and formatting passed.
+- Linux additionally passed release-manifest Python tests and TRX guards.
+- Windows Web passed the former failing `ChatDock_PollSurvivesTransientFailure`; disposing the bUnit renderer and scoped DbContexts before shared SQLite removed the teardown race.
+- The implementation/journal branch then received journal-only commit `401a7dd4a0da6ec264a123981be8d55a4c1fffca`; this does not change application source.
+
+### Additional S4 proof propagation issue found after the green run
+
+For an immediate GitHub merge, GitLand already completes the exact post-merge check and writes `LandingAttempt.Status = Landed`, including candidate tree SHA, check exit code and output hash. However `GetDeviceAutoSyncTargetsHandler` currently sends only `LandingAttemptId` for this state. The daemon's remote verifier requires the candidate tree and post-merge proof before it submits reconciliation, so it refuses to close the task even though the server already has immutable successful evidence.
+
+Next implementation must:
+
+1. Include the persisted candidate tree SHA, post-merge exit code and output hash in the remote-landing target for an already-`Landed` attempt.
+2. Have the daemon verify that the actual GitHub merge commit tree equals the persisted candidate tree, then forward the existing post-merge proof. Do not rerun the mutable project `ReviewCheckCommand` for an attempt already marked `Landed`.
+3. For an async attempt still pending/enqueued, continue to run the pinned ReviewCheck against the exact eventual GitHub merge commit and pass that fresh result to reconciliation.
+4. Make `ReconcileDeviceRemoteLandingHandler` compare the `Landed` request's candidate tree and post-merge check exit/hash against the persisted attempt, not merely the merge commit SHA.
+5. Add regression tests for immediate `Landed` evidence and a changed project ReviewCheckCommand after landing; then run a new full CI matrix on the new exact source HEAD.
+
+The new proof-propagation source change is not yet implemented or validated. No production tag/deploy or PR merge occurred.
