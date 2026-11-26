@@ -1399,3 +1399,31 @@ The previous run is now fully complete. Linux, Windows and macOS all finished wi
 - The old run remains red by design; its results cannot be reused for the fixed head.
 
 **Current branch head after these corrections and journal updates:** `bbb039d6f17853470a713f1dddf4162ebf28ff32`. Trigger a fresh full CI for this exact head. No green claim is made until all Linux/Windows/macOS jobs and formatting pass.
+
+
+## 2026-11-26 — Fix stale async merge state assertion
+
+**Failed CI:** [#45844150177](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45844150177), run 1659.  
+**Validated branch head:** `77b9cccc185254ec35ee0f28aaf4dc0e9891f32b`.  
+**Test-only correction:** `e7f848ffd604c0ecbe9da6371e07e5299bf7d76c`.
+
+### Exact CI finding
+
+- Linux, Windows and macOS all failed one and only one Application test:
+  `DeviceRemoteLandingReconciliationHandlerTests.RecordsOnlyTheExactVerifiedGitHubQueueFailureAndKeepsTaskOpen`.
+- The test called `LandingAttempt.MarkGitHubMergeQueued(requestId)`. The current API deliberately maps that compatibility overload to async merge state `enqueued`, and the entity persists `GitHubMergeEnqueued:{requestId}`.
+- The assertion still expected the pre-split legacy marker `GitHubMergeQueued:{requestId}`. The implementation and the rest of the async merge protocol were correct; this was a stale test expectation.
+- Updated only that assertion to the explicit `GitHubMergeEnqueued:{requestId}`. No production code, protocol, or legacy compatibility behavior was changed.
+- All other Application tests passed on all three OS jobs. Build, API, CLI, Domain, Infrastructure, Web and Worker passed; format passed on the jobs. Linux PostgreSQL integration coverage was active (not skipped); Windows/macOS use the documented PostgreSQL skips.
+
+### Verification
+
+- The source/test correction is committed as `e7f848ffd604c0ecbe9da6371e07e5299bf7d76c`.
+- A fresh full cross-platform CI run is required for this exact head; run #45844150177 remains red and does not validate the correction.
+- Existing async merge safeguards remain: exact PR/head/base identity, exact async request UUID when pending, explicit distinction between `pending` and `enqueued`, no duplicate Execute after accepted async request, fail-closed handling of unknown/expired request state, and post-merge proof before task closure.
+
+### Next
+
+1. Trigger and inspect full CI on the post-fix head.
+2. Continue the outstanding disposable-repository GitHub merge-queue acceptance (pending expiry, pending→enqueued, queue removal, closed-unmerged PR, merge completion, and PR/head/base drift).
+3. Keep production tag/deploy blocked until an administrator verifies the `v*` tag rules and `production` Environment reviewers.
