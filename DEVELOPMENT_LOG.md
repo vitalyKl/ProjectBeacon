@@ -957,3 +957,32 @@ After the failure-reporting entry above, the branch received UI regression cover
 2. Run full Linux/Windows/macOS CI on the final branch head including the Device failure endpoint, AutoSync client path, tests and localized UI.
 3. Validate end-to-end on a user project with an actual GitHub merge queue, especially pending, enqueued, failed, no/expired UUID, and ReviewCheckCommand drift.
 4. Production tag/branch protections and required reviewers for GitHub Environment production remain unverified through this integration. No production tag/deployment is permitted until an administrator checks GitHub Settings.
+
+
+## 2026-11-26 — Resolve Application test failures in async-merge reporting
+
+**Source-fix head:** `2260a7c8c99a6f488286a784751e67f97a57966a`  
+**CI with failures:** [#45764313765](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45764313765), run 1648, on pre-fix head `eb76ae90bdb8573c8d1c8183e995f5f37bf03c61`.
+
+### Exact failures from Linux TRX
+
+1. `DeviceRemoteLandingReconciliationHandlerTests.RecordsOnlyTheExactVerifiedGitHubQueueFailureAndKeepsTaskOpen` failed because the new audit payload serialized anonymous members `request.Repository` and `request.PullRequestNumber` using PascalCase, and `AuditEvent.ValidateDetails` correctly rejected the non-allowlisted key `Repository`.
+   - Fixed by emitting only existing allowlisted audit keys: `deviceId`, `sourceBranch`, `targetBranch`, `sourceSha`, `reviewRunId`, `policyCode`, `resultCode`.
+   - The attempt ID remains the audit event TargetId; the failure code is stored in the dedicated attempt fields. No free-form repository/PR/request UUID strings are added to audit details.
+
+2. `IgnoreQueryFiltersAllowlistTests.ProductionTenantFilterBypasses_MatchReviewedPathAndCountAllowlist` expected 9 calls but found 18 in `DeviceRemoteLandingReconciliationHandler.cs`.
+   - The first 9 calls belong to successful remote-landing reconciliation; the additional 9 belong to the new authenticated failure-report handler.
+   - Reviewed all 18 call sites: every device lookup is constrained by authenticated `deviceId`; project/runtime/task/review/verdict/session/attempt lookups are constrained by the exact request `projectId`, `taskId`, attempt identity and/or device binding. The two flows separately validate the immutable task workstation pin, proof and status before recording anything.
+   - Updated `docs/ignore-query-filters.allowlist` to count 18 and explain the success and failure proof boundaries. No production query was removed or weakened.
+
+### CI state and verification
+
+- On run #45764313765, Linux, Windows and macOS all reached the Application module and marked it failed. Linux TRX reported the two failures above; CLI, Domain, Infrastructure, Web and Worker subsequently passed on Linux. TRX guards passed with 2,663 results, 7 modules and the permitted platform skip.
+- The fixes are committed on the implementation branch at `2260a7c8c99a6f488286a784751e67f97a57966a`. No CI result exists for this post-fix head yet.
+- The previous green runs #45582326452 and #45586302515 predate the async merge queue/failure-report flow and do not validate it.
+
+### Next
+
+1. Trigger a fresh full CI on the exact post-journal head; confirm Application passes and all three platform jobs complete.
+2. If Application is green, finish Linux TRX guards, Windows/macOS tests and formatting before accepting the slice.
+3. Continue end-to-end merge-queue acceptance, including the safe "no async UUID" state (PR polling can confirm eventual MERGED, but a terminal failure without exact UUID remains unknown and must not be falsely recorded as Failed).
