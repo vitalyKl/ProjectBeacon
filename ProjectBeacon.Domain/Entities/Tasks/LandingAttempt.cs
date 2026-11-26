@@ -318,7 +318,11 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         const string prefix = "GitHubMergeQueued:";
         if (Status != LandingAttemptStatus.ExecutePending || FailureCode is null)
             return false;
-        if (string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal))
+        // A lost workstation acknowledgement can mean GitHub accepted the merge
+        // request before the response was persisted. Reconcile the exact PR read-only;
+        // the server still requires exact candidate-tree and post-merge check evidence.
+        if (string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal)
+            || string.Equals(FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal))
             return true;
         if (!FailureCode.StartsWith(prefix, StringComparison.Ordinal)
             || !Guid.TryParseExact(FailureCode[prefix.Length..], "D", out var parsed)
