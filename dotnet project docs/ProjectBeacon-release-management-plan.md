@@ -728,3 +728,19 @@ Beacon сохранял UUID GitHub async merge request, но не сохран�
 - Live acceptance в disposable GitHub repository: pending дольше 24 часов, pending→enqueued, expired enqueued UUID при живой queue entry, queue removal, закрытый без merge PR, eventual merge и PR/base/head drift.
 - Classic tag protection `v*` и required reviewers Production Environment всё ещё не подтверждены администратором. Production tag/deploy запрещены до проверки.
 - PR #230 остаётся открытым; не сливать его как часть релизной публикации.
+
+
+## Дополнение — корректировки после первого CI нового async-merge среза (26 ноября 2026)
+
+CI [#45841796175](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45841796175), run 1658, выявил два дефекта в добавленных тестах:
+
+1. Application test обращался к `GitHubMergeRequestStatus` у `LandingAttemptDto`, хотя вычисляемое свойство принадлежит entity `LandingAttempt`. Удалено только это избыточное DTO assertion; тест продолжает проверять сохранённый marker на entity после reload. DTO без необходимости не расширялся.
+2. Четыре Domain fixture передавали 40-символьную строку как `candidateCheckOutputHash`, хотя это SHA-256 длиной 64. Исправлены четыре тестовых значения, production validation не менялась.
+
+В Linux логах подтверждено: один compiler error `CS1061`, после которого Application test executable не был создан; это не отдельный runtime test failure. Четыре Domain test failures имели одну причину — invalid test input length. API, CLI (701 tests), Infrastructure, Web и Worker на Linux прошли. Windows/macOS ещё исполнялись на момент разбора, поэтому общий run остаётся красным/незавершённым и не принимается как validation.
+
+Исправления source/tests записаны в `feat/release-management`:
+- `78b8edd8a2cf889ad15b7388e8de7aec495750d7` — убрать несуществующее DTO поле из теста;
+- `605e0cfddd7f5af9241f0ffba35de06e27178e6f` — исправить хеш-фикстуры на 64 символа.
+
+Журнал разработки дополнен подробным разбором. Новый полный CI должен быть запущен на точной вершине после следующих записей журнала; только зелёные Linux/Windows/macOS подтверждают этот срез.
