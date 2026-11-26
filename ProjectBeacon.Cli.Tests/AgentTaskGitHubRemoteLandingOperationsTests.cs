@@ -40,6 +40,24 @@ public sealed class AgentTaskGitHubRemoteLandingOperationsTests
     }
 
     [Theory]
+    [InlineData("pending", null, "QUEUED", true)]
+    [InlineData("pending", null, "UNMERGEABLE", true)]
+    [InlineData("pending", null, null, false)]
+    [InlineData("pending", "pending", "QUEUED", false)]
+    [InlineData("enqueued", null, "QUEUED", false)]
+    [InlineData(null, null, "QUEUED", false)]
+    public void ExpiredAsyncRequest_IsRecoveredOnlyFromALiveQueueEntry(
+        string? persistedStatus,
+        string? currentAsyncStatus,
+        string? queueEntryState,
+        bool expected)
+    {
+        Assert.Equal(expected,
+            AgentTaskGitHubRemoteLandingOperations.ShouldRecoverEnqueuedFromQueueEntry(
+                persistedStatus, currentAsyncStatus, queueEntryState));
+    }
+
+    [Theory]
     [InlineData("OPEN", "GitHubAsyncMergeFailed")]
     [InlineData("CLOSED", "GitHubPullRequestClosedWithoutMerge")]
     public void UnmergedPullRequestState_MapsToAnExplicitFailureCode(string state, string expectedFailureCode)
