@@ -289,7 +289,7 @@ internal static class GitLandExecutor
 
         var merge = await GitHubLandingMergeExecutor.MergeAsync(
             context, request.TargetBranch, request.SourceSha, ct);
-        if (merge.MergeRequestId is not null)
+        if (merge.MergeRequestStatus is "pending" or "enqueued")
         {
             // GitHub accepted the async merge request, but pending/enqueued is not a
             // landed result. Keep the server attempt ExecutePending for AutoSync proof.
