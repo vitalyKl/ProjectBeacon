@@ -164,7 +164,10 @@ public sealed class LandingAttemptTests
         var unverified = Start();
         unverified.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
         unverified.MarkExecutePending();
-        Assert.Throws<InvalidOperationException>(unverified.RecordGitHubMergeEnqueuedWithoutRequestId);
+        Assert.Throws<InvalidOperationException>(() =>
+        {
+            unverified.RecordGitHubMergeEnqueuedWithoutRequestId();
+        });
     }
 
     [Fact]
