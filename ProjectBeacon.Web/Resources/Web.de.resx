@@ -3274,8 +3274,11 @@ orthstar</value>
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>Der Merge befindet sich möglicherweise bereits im Ziel-Branch, aber die Prüfung nach dem Merge ist fehlgeschlagen oder konnte nicht bestätigt werden. Prüfen Sie den Ziel-Branch, bevor Sie einen Revert anfordern.</value>
   </data>
+  <data name="LandingReasonGitHubMergePending" xml:space="preserve">
+    <value>GitHub hat den asynchronen Merge-Auftrag angenommen und verarbeitet ihn noch. Ein Eintrag in der Merge Queue wurde noch nicht bestätigt. Die Aufgabe bleibt offen, bis Beacon den Merge-Commit und die Prüfung nach dem Merge bestätigt.</value>
+  </data>
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
-    <value>GitHub hat den Merge-Auftrag angenommen. Er wartet auf die Merge Queue oder den Abschluss des GitHub-Merges. Die Aufgabe bleibt offen, bis Beacon den Merge-Commit und die Prüfung nach dem Merge bestätigt.</value>
+    <value>GitHub hat den PR in die Merge Queue aufgenommen. Die Aufgabe bleibt offen, bis GitHub den Merge abschließt und Beacon den Merge-Commit sowie die Prüfung nach dem Merge bestätigt.</value>
   </data>
   <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
     <value>GitHub hat den asynchronen Merge-Auftrag abgelehnt. Prüfen Sie den Fehler der Merge Queue, nehmen Sie erforderliche Änderungen vor und fordern Sie eine neue Landing-Vorschau an.</value>
