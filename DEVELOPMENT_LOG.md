@@ -986,3 +986,37 @@ After the failure-reporting entry above, the branch received UI regression cover
 1. Trigger a fresh full CI on the exact post-journal head; confirm Application passes and all three platform jobs complete.
 2. If Application is green, finish Linux TRX guards, Windows/macOS tests and formatting before accepting the slice.
 3. Continue end-to-end merge-queue acceptance, including the safe "no async UUID" state (PR polling can confirm eventual MERGED, but a terminal failure without exact UUID remains unknown and must not be falsely recorded as Failed).
+
+
+## 2026-11-26 — Windows CLI test timeout correction after GitHub merge-queue integration
+
+**CI failure:** [#45765744398](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45765744398), run 1649, on exact head `a1f277731f66ccadc319f204eede3db3632b6251`.
+
+### Exact failure scope
+
+- Linux and macOS jobs completed successfully.
+- Windows build, EF model check, API, Application, Domain, Infrastructure, Web and Worker tests passed; CLI module had three failures:
+  1. `NativeCommandRunnerTests.ArgvCommandRunsWithoutShellAndReturnsStructuredResultAndLogId`: `dotnet --version` exceeded the test's hard-coded 15-second timeout. The runner correctly returned `timedOut=true` and `exitCode=null`; the test then attempted to read the null exit code as a number.
+  2. `NativeAgentRuntimeTests.NativeRuntimeWaitsForCommandApprovalBeforeRunningArgvAndResumesAfterReply(decision: "once")`: the test stopped waiting after 200 × 20 ms (4 seconds), before its approved `dotnet --version` command completed.
+  3. The same resume test with `decision: "always"` hit the same four-second polling limit.
+- This was a Windows cold-start/test-budget failure, not a GitHub landing assertion or a compile failure.
+
+### Fixes committed
+
+- `NativeCommandRunner` sets `DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1`, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, and `DOTNET_NOLOGO=1` in the isolated command environment. No user CLI state or credentials are shared.
+- The direct runner test allows 60 seconds and now asserts `timedOut=false` before reading `exitCode`; its diagnostic includes duration and output tail if the command still times out.
+- The approval/resume test waits up to 50 seconds for the bounded command and includes the last tool result in its failure message.
+- Source and test commits: `90b6990815beb12c44bcf26c84e16784c6b1366e`, `6b3669b2339a3081fd34bebe53b1471d561bdcd9`, `fd953347cc89b6c4e07b9722850b1e6dc97ab8e5`.
+- Current implementation head before this journal update: `fd953347cc89b6c4e07b9722850b1e6dc97ab8e5`.
+
+### Verification state
+
+- No CI run covers these three follow-up commits yet. The successful Linux/macOS jobs from #45765744398 do not validate the Windows fix.
+- A new full Linux/Windows/macOS matrix must run on the exact post-journal head.
+- No production tag/deploy or PR merge was performed.
+
+### Next
+
+1. Trigger and inspect full CI on the current post-journal branch head; verify all three Windows CLI tests pass.
+2. If green, continue final product acceptance for GitHub merge queue pending/enqueued/merged/failed paths and the no-UUID uncertainty path.
+3. Keep classic branch/tag protection and Production Environment reviewers as an administrative blocker until verified in GitHub Settings.
