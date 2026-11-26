@@ -194,7 +194,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 candidateTreeSha,
                 postMergeCheckCommand,
                 persistedPostMergeCheckExitCode,
-                persistedPostMergeCheckOutputHash));
+                persistedPostMergeCheckOutputHash,
+                landingAttempt?.IsGitHubMergeQueued == true));
         }
 
         return targets;
@@ -219,4 +220,5 @@ public sealed record DeviceRemoteLandingTargetDto(
     string? CandidateTreeSha = null,
     string? PostMergeCheckCommand = null,
     int? PersistedPostMergeCheckExitCode = null,
-    string? PersistedPostMergeCheckOutputHash = null);
+    string? PersistedPostMergeCheckOutputHash = null,
+    bool GitHubMergeQueued = false);
