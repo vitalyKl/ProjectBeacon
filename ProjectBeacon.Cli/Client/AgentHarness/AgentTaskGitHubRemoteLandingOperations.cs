@@ -169,9 +169,8 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                 // workstation was offline, the live GraphQL queue entry is still valid
                 // evidence that the same PR reached enqueued. Recover that transition before
                 // the UUID can no longer be used to distinguish queue removal from expiry.
-                if (asyncState is { Status: null }
-                    && string.Equals(target.MergeRequestStatus, "pending", StringComparison.Ordinal)
-                    && !string.IsNullOrWhiteSpace(target.MergeRequestId))
+                if (ShouldRecoverEnqueuedFromQueueEntry(
+                        target.MergeRequestStatus, asyncState?.Status, queueEntryState: "probe"))
                 {
                     var expiredRequestQueue = await ReadMergeQueueEntryAsync(
                         ghPath, repositoryRoot, repository, open[0].Number, ct);
@@ -484,6 +483,14 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             expectedPullRequestState);
         return new VerificationResult(null, request, reason);
     }
+
+    internal static bool ShouldRecoverEnqueuedFromQueueEntry(
+        string? persistedStatus,
+        string? currentAsyncStatus,
+        string? queueEntryState) =>
+        string.Equals(persistedStatus, "pending", StringComparison.Ordinal)
+        && currentAsyncStatus is null
+        && !string.IsNullOrWhiteSpace(queueEntryState);
 
     internal static bool HasAcceptedAsyncMerge(
         bool legacyQueuedMarker,
