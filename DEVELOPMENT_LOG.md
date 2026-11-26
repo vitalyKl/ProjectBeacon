@@ -1474,3 +1474,38 @@ A GitHub asynchronous merge request can begin as `pending` and later become `enq
 1. Trigger exact-head cross-platform CI.
 2. Inspect the new status round-trip and test outcomes; fix any failures before further feature changes.
 3. Finish disposable-repository queue acceptance and administrative release-protection verification.
+
+
+## 2026-11-26 — Fix cross-platform build and test regressions in GitHub landing
+
+**Working branch:** `feat/release-management`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)  
+**Pre-fix head tested by CI:** `f1692d47e60afa071cd7bc60cf25d834f4ddc0dd`  
+**Current source/test head before this journal entry:** `b218893f54fea16792ec005af399e795df1a3a6b`
+
+### Findings from CI #45859153428
+
+The run was triggered on the exact old head `f1692d47`. Linux and macOS completed; Windows was still running its CLI test module at the last inspection. The old run is not evidence for the current source/test head.
+
+1. **Cross-platform build failure — xUnit delegate signature.** Linux and macOS logs reported `CS0407` in `ProjectBeacon.Domain.Tests/LandingAttemptTests.cs:167`: a `bool`-returning `RecordGitHubMergeEnqueuedWithoutRequestId()` method group was passed to `Assert.Throws`, which expects an `Action`. Changed the assertion to a statement lambda that discards the return value while still asserting the expected exception. Commit: `a67f3aaef8235357f52b9ebe31fb39f326a6bf8c`.
+
+2. **Application test failure — audit metadata allowlist.** `task.remote_landing.merge_enqueued` persisted repository/PR/request identity, but `AuditEvent.AllowedDetailKeys` rejected the `repository` key. Added a narrow allowlist for `repository`, `pullRequestNumber`, `pullRequestUrl`, and `mergeRequestId`; repository and PR URL values now have dedicated strict patterns (canonical `owner/repository` and HTTPS `github.com/{owner}/{repository}/pull/{number}`). Added positive and negative Domain tests. Commits: `856b67bb4f2843951eab33d51f46c68c2a9e7f61`, `c65007a9a9af21eee9561353eac662eaff41e30f`.
+
+3. **Application test failure — tenant-filter bypass manifest count.** Recounted every `IgnoreQueryFilters()` call in all 40 allowlisted source files. The `DeviceRemoteLandingReconciliationHandler.cs` entry was stale at 18; the current source has 27 calls. Updated the reviewed count and rationale to 27. All 40 manifest counts were checked against the corresponding current source file. Commit: `c38eab3709b4857e07574cf07b4a84347747b8fb`.
+
+4. **Web test failure — MudBlazor CSS implementation detail.** `PendingGitHubMerge_ShowsProcessingMessageWithoutLeakingRequestId` expected the literal CSS class `mud-alert-info`, but the current MudBlazor rendering does not emit that class. The pending text and UUID redaction were not the failing assertions. Replaced the brittle CSS assertion with a semantic component assertion: locate `MudAlert` and assert `Severity.Info`. Commit: `b218893f54fea16792ec005af399e795df1a3a6b`.
+
+### Exact validation state
+
+- CI [#45582326452](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45582326452) was fully green on earlier head `9878489da6c71a8f337c7cab8989524666298b68`; it predates the async GitHub merge-queue implementation and must not be carried forward.
+- CI [#45859153428](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45859153428) tested `f1692d47`. macOS and Linux completed with Build/Application/Domain/Web failures described above; Linux TRX guards also failed because of those tests. The Windows job had completed Build with the same failure and Application tests failed, while CLI tests were still running at the last poll.
+- The new audit, allowlist, Domain assertion and BUnit fixes are after `f1692d47` and have not yet been tested by GitHub Actions.
+- Local .NET SDK remains unavailable in this execution environment; no local build/test result is claimed.
+- New CI must be triggered on the exact post-journal branch head. The previous CI result is not a pass for the current branch.
+
+### Remaining blockers
+
+1. Run fresh Linux/Windows/macOS CI on the exact current head and fix any newly exposed errors.
+2. Complete async GitHub merge-queue live acceptance in a disposable repository: pending expiry, recovery from a live GraphQL queue entry, queue removal, closed-unmerged PR, merge completion, and PR/head/base drift.
+3. Classic `v*` tag protection and required reviewers for GitHub Environment `production` remain unverified through the connector. Do not create production tags or deploy.
+4. Continue user-project acceptance for Release/landing UI, RLS/authorization, localized states and failure/recovery behavior. SaaS Control Plane and billing remain out of scope.
