@@ -304,8 +304,9 @@ internal static class GitHubLandingMergeExecutor
     /// <summary>
     /// Validates the actual tree produced by a merge. A non-null candidate SHA means
     /// the merge is expected to reproduce a local GitLand candidate exactly. A null
-    /// candidate is used only for GitHub's merge queue, whose merge-group tree can
-    /// legitimately include a newer base and earlier queued pull requests.
+    /// candidate is used only after a confirmed queued request, whose merge-group tree
+    /// can legitimately include a newer base and earlier queued pull requests. Direct
+    /// async responses with status=merged keep the strict candidate-tree comparison.
     /// </summary>
     internal static bool IsPostMergeTreeAcceptable(
         string? expectedCandidateTreeSha,
