@@ -362,6 +362,11 @@ public static class ProjectVersionPolicyCatalog
                 if (escaped == 'k')
                 {
                     const string marker = "k<version>";
+                    if (!hasNamedVersionGroup)
+                    {
+                        error = @"\k<version> must follow its named (?<version>...) capture group.";
+                        return false;
+                    }
                     if (inCharacterClass || index + marker.Length > pattern.Length
                         || !string.Equals(pattern.Substring(index, marker.Length), marker, StringComparison.Ordinal))
                     {
