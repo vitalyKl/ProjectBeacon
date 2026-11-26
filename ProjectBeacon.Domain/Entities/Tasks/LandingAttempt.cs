@@ -358,6 +358,25 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     /// The exact status known for a Beacon-issued GitHub async merge. Legacy UUID
     /// markers remain unknown because older clients did not persist pending vs enqueued.
     /// </summary>
+    /// <summary>
+    /// Recovers an enqueue acknowledgement when the workstation lost the async response
+    /// (and therefore has no request UUID) but independently verified a live GraphQL
+    /// merge-queue entry for the exact open PR. This never accepts an unverified unknown.
+    /// </summary>
+    public bool RecordGitHubMergeEnqueuedWithoutRequestId()
+    {
+        EnsureStatus(LandingAttemptStatus.ExecutePending);
+        if (string.Equals(FailureCode, "GitHubMergeEnqueued", StringComparison.Ordinal))
+            return false;
+        if (!string.Equals(FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "A GitHub queue entry without an async request UUID can only recover an unknown Execute acknowledgement.");
+
+        FailureCode = "GitHubMergeEnqueued";
+        Touch();
+        return true;
+    }
+
     public string? GitHubMergeRequestStatus
     {
         get
