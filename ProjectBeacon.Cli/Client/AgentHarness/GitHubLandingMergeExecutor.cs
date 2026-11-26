@@ -301,6 +301,20 @@ internal static class GitHubLandingMergeExecutor
             false);
     }
 
+    /// <summary>
+    /// Validates the actual tree produced by a merge. A non-null candidate SHA means
+    /// the merge is expected to reproduce a local GitLand candidate exactly. A null
+    /// candidate is used only for GitHub's merge queue, whose merge-group tree can
+    /// legitimately include a newer base and earlier queued pull requests.
+    /// </summary>
+    internal static bool IsPostMergeTreeAcceptable(
+        string? expectedCandidateTreeSha,
+        string? actualMergeTreeSha) =>
+        AgentTaskGitOperations.IsGitSha(actualMergeTreeSha)
+        && (expectedCandidateTreeSha is null
+            || AgentTaskGitOperations.IsGitSha(expectedCandidateTreeSha)
+                && string.Equals(expectedCandidateTreeSha, actualMergeTreeSha, StringComparison.OrdinalIgnoreCase));
+
     internal static string[] BuildMergeApiArguments(
         string repository,
         int pullRequestNumber,
