@@ -355,3 +355,38 @@ After the server and target-discovery regression tests, the workstation loop now
 - Добавлен unit test для Supports(RemoteLandingReconcileV1).
 
 **Проверка:** CI #45714185084 на предыдущем source/test head `e0fb1f07` не включает capability gate. Linux завершился успешно, Windows/macOS находились в более поздних CLI/Web тестах без видимых ошибок. Для этого compatibility slice обязателен новый полный CI на текущем implementation head после обновления журнала.
+
+
+## Дополнение — асинхронный GitHub landing и merge queue (26 ноября 2026)
+
+Реализация находится в `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230). Этот срез закрывает архитектурный разрыв между GitLand Execute и GitHub-authoritative merge: Beacon теперь отправляет разрешённый merge request, но не считает принятие запроса фактом слияния.
+
+### Что реализовано
+
+- GitHub merge вызывается через асинхронный endpoint `PUT /repos/{owner}/{repo}/pulls/{number}/merge-async` с точным reviewed head SHA и `merge_action=default`. GitHub выбирает прямой merge или merge queue по настройкам репозитория. `bypass_rules` не задаётся.
+- `pending` и `enqueued` — состояния ожидания, не `Landed`. Beacon сохраняет очередь в `LandingAttempt`, оставляет её `ExecutePending` и не закрывает задачу.
+- Повторный HTTP 409 может вернуть ранее созданный async request UUID; код извлекает его из structured response body. Если GitHub сообщил `enqueued` без UUID, Beacon продолжает опрашивать сам PR. Потерянное подтверждение workstation также допускает только read-only recovery по тому же PR.
+- AutoSync target discovery видит queued Beacon attempts, даже когда обычный repository AutoSync выключен, но только у устройств с capability `git-remote-landing-reconcile-v1`. Старые daemon без capability не получают remote-landing-only target; reconciliation API повторно проверяет этот capability.
+- Переход к `Landed` требует реального PR `MERGED`, точного source/head/base, fetch актуального target, достижимости merge commit и совпадения дерева merge commit с неизменяемым candidate tree из Preview.
+- Закреплённый workstation запускает тот же project `ReviewCheckCommand` на detached temporary worktree, созданном от merge commit. Проверяются HEAD, tree, отсутствие незакоммиченных изменений; результат передаётся как exit code + SHA-256 output hash.
+- Server reconciliation принимает только точные LandingAttempt ID, ReviewRun, workstation, source SHA, base branch, async merge UUID (когда он есть), candidate tree и post-merge check proof. В этой же серверной операции queued attempt переводится в `Landed` и задача закрывается.
+- Хеш `ReviewCheckCommand` сравнивается между ReviewRun, LandingAttempt и текущими настройками проекта. Если Owner меняет команду пока PR ожидает в очереди, проверка не подменяется новой: задача остаётся открытой до восстановления исходной конфигурации.
+
+### Проверки
+
+Добавлены/расширены Domain, CLI, Application и workstation tests: очередь с UUID и без него, восстановление после неизвестного результата Execute, 409 response, pending/enqueued/merged/failed parsing, target discovery при AutoSync=false, запрет закрытия по неправильной LandingAttempt/UUID, command drift и успешное reconciliation только по полному доказательству.
+
+Полностью зелёный CI [#45715872864](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45715872864) подтверждён на более раннем head `22fc248c7a616db0805d18b97273572c4e9db72a`, до async merge queue реализации. Текущие async changes не покрыты этим run. Последний source/test head до обновления журнала/плана: `64268979e60ea6f932673c21b87dc37c6fad3ba8`. Не считать slice принятым до полного Linux/Windows/macOS CI на точном текущем HEAD.
+
+### Границы безопасности и блокеры
+
+- GitHub branch/repository rules оцениваются при фактическом прямом merge или при исполнении merge queue, а не в момент первоначального async request. Beacon не использует `bypass_rules` и не предоставляет обычному Actor отдельный merge tool.
+- Rulesets API вернул пустой список. Classic branch/tag protection и required reviewers Environment `production` через текущую интеграцию не подтверждены (403/unsupported). До ручной проверки администратором production tag/deploy запрещён.
+- Нужен end-to-end acceptance на пользовательском проекте с обязательной merge queue, включая отсутствие/истечение UUID и отказ merge queue.
+- PR #230 остаётся открытым; ничего не слито в `main`, production tag/deploy не создавались.
+
+### Следующий этап
+
+1. Завершить полный CI на итоговом implementation head и исправить все обнаруженные ошибки.
+2. Пройти end-to-end acceptance с реальным GitHub merge queue и verify PostMergeCheck.
+3. Доделать product acceptance: release/settings UI, localization, RLS, ошибки workflow и проект с независимой схемой версии. 
