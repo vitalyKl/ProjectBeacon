@@ -378,7 +378,7 @@ public static class ProjectVersionPolicyCatalog
                 if (!inCharacterClass)
                 {
                     portableEscape |= escaped is 'A' or 'z' or '.' or '$' or '?' or '*' or '+'
-                        or '(' or ')' or '[' or '{' or '}' || escaped == '\\u007C';
+                        or '(' or ')' or '[' or '{' or '}' || escaped == (char)124;
                 }
                 if (!portableEscape)
                 {
