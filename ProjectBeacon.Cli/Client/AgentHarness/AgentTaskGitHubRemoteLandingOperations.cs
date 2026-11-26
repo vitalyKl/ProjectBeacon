@@ -125,7 +125,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                         ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
                     if (string.Equals(asyncState.Status, "failed", StringComparison.Ordinal))
                         return await BuildQueueFailureAsync(
-                            ghPath, repositoryRoot, repository, open[0], target, landingAttemptId,
+                            ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
                             asyncState.StatusMessage ?? "GitHub async merge request failed.", ct);
                     if (string.Equals(asyncState.Status, "pending", StringComparison.Ordinal))
                         return new VerificationResult(null, asyncState.StatusMessage);
@@ -146,7 +146,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     if (queue.EntryState is null
                         || string.Equals(queue.EntryState, "UNMERGEABLE", StringComparison.Ordinal))
                         return await BuildQueueFailureAsync(
-                            ghPath, repositoryRoot, repository, open[0], target, landingAttemptId,
+                            ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
                             queue.EntryState is null
                                 ? "GitHub removed the PR from its merge queue before it merged."
                                 : "GitHub marked the merge-queue entry UNMERGEABLE.",
@@ -321,6 +321,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
     private static async Task<VerificationResult> BuildQueueFailureAsync(
         string ghPath,
         string workingDirectory,
+        Guid projectId,
         string repository,
         AgentTaskGitOperations.PullRequestInfo pullRequest,
         DeviceRemoteLandingTargetDto target,
@@ -340,7 +341,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             return new VerificationResult(null, "GitHub queue failure could not be bound to the exact open PR/source/base identity.");
 
         var request = new DeviceRemoteLandingFailureRequest(
-            target.ProjectId,
+            projectId,
             target.TaskId,
             landingAttemptId,
             target.ReviewRunId,
