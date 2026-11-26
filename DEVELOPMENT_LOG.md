@@ -1642,3 +1642,39 @@ The remaining diagnostics later in the file, and the test modules reporting that
 2. Perform live async merge-queue acceptance in a disposable GitHub repository, including pending expiry, live GraphQL queue-entry recovery, queue removal, closed-unmerged PR, direct/queued merge completion, PR/head/base drift and post-merge-check failure.
 3. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector. No production tag/deploy is permitted before administrator verification.
 4. Keep PR #230 open and unmerged until the exact-head CI and live merge-queue acceptance are complete.
+
+
+## 2026-11-27 — Remove duplicated policy-catalog tail after class close
+
+**CI:** [#45898748221](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45898748221)  
+**Failing exact head:** `f24e8f158a985d59fe7a011b8ab3fe1563c76f91`  
+**Current source head before this journal entry:** `6efd63f9982dec21cf6d99789af316471043c008`
+
+### Finding
+
+After the prior correction removed the malformed character literal, the next cross-platform run exposed the remaining structural defect: `ProjectVersionPolicy.cs` contained a complete implementation of `ProjectVersionPolicyCatalog` ending at line 623, followed by a stale duplicate fragment from an earlier helper edit and a second copy of the remaining private methods. The duplicate content was outside the already-closed class and caused `CS1022`, `CS0116`, and cascading namespace/member errors beginning at line 624.
+
+- Linux and macOS reported the same duplicate-tail diagnostics.
+- Windows reported the same diagnostics while its job was still running; the source error is platform-independent.
+- The earlier character-literal compile error was gone. The new failure was a separate duplicate-source-tail issue.
+- Downstream test modules could not start because the Domain assembly did not compile; their missing-binary/zero-test messages were cascades, not test assertions failing.
+
+### Correction
+
+- Removed the stale duplicate block after the first complete class close.
+- Retained one complete class containing exactly one copy of the portable Regex validator, Calendar/tag/path validators and XML/JSON/TOML/Regex projection readers.
+- Confirmed the resulting file has one copy of each private helper and ends immediately after the class closing brace.
+- No release state, merge API or runtime workflow behavior changed.
+
+### Validation status
+
+- Run #45898748221 is an old-head failure on `f24e8f15`; it does not validate this duplicate-tail removal.
+- Current implementation source head before journal update: `6efd63f9982dec21cf6d99789af316471043c008`.
+- A fresh exact-head cross-platform CI run is required after this journal entry. No local .NET build is claimed because the SDK is unavailable in this execution environment.
+
+### Remaining blockers
+
+1. Run Linux/Windows/macOS CI on the post-journal head and address any remaining compiler, test, TRX, resource or formatting findings.
+2. Finish live async merge-queue acceptance in a disposable GitHub repository, including request expiry, live GraphQL queue recovery, queue removal, closed-unmerged PR, queued/direct merge completion, PR/head/base drift and post-merge-check failure.
+3. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector; no production tag or deployment is permitted before administrator confirmation.
+4. Keep PR #230 open and unmerged until exact-head CI and live merge-queue acceptance are complete.
