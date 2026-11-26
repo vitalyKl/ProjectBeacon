@@ -190,6 +190,61 @@ public sealed class GitLandCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task MergeQueueCompletionWithoutUuid_KeepsExactLandingAttemptPending()
+    {
+        var (org, project, device, userId) = CreateScope();
+        const string sourceSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string reviewTreeSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string commandHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        const string targetHeadSha = "dddddddddddddddddddddddddddddddddddddddd";
+        const string candidateTreeSha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string outputHash = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        var taskId = Guid.NewGuid();
+        var attempt = LandingAttempt.Start(
+            project.Id, taskId, Guid.NewGuid(), userId, device.Id,
+            "main", sourceSha, reviewTreeSha, commandHash, "Wait for the existing GitHub merge queue.");
+        attempt.RecordPreview("main", targetHeadSha, candidateTreeSha, outputHash, 0, null);
+        attempt.MarkExecutePending();
+
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.Orgs.Add(org);
+            _db.Projects.Add(project);
+            _db.DaemonDevices.Add(device);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var command = CreateCommand(
+                device.Id, project.Id, userId, attempt.Id, taskId, "Execute",
+                sourceSha, reviewTreeSha, commandHash, "main",
+                targetHeadSha, candidateTreeSha, null);
+            var result = JsonSerializer.Serialize(new
+            {
+                status = "merge_queued",
+                targetBranch = "main",
+                sourceSha,
+                targetHeadSha,
+                candidateTreeSha,
+                mergeRequestId = (string?)null,
+                mergeRequestStatus = "enqueued"
+            });
+
+            await new GitLandCompletion().ApplyAsync(
+                _db, command, true, result, null, TestContext.Current.CancellationToken);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(LandingAttemptStatus.ExecutePending, attempt.Status);
+            Assert.Equal("GitHubMergeQueued", attempt.FailureCode);
+            Assert.Null(attempt.MergeCommitSha);
+            Assert.True(attempt.TryReadGitHubMergeRequestId(out var mergeRequestId));
+            Assert.Null(mergeRequestId);
+            Assert.Contains(
+                await _db.AuditEvents.Select(item => item.Action).ToListAsync(TestContext.Current.CancellationToken),
+                action => action == "pipeline.landing.execute_queued");
+        }
+    }
+
+    [Fact]
     public async Task NonObjectResult_KeepsMutatingActionsRecoverableAndFailsPreview()
     {
         var (org, project, device, userId) = CreateScope();
