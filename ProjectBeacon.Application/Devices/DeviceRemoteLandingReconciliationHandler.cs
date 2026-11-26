@@ -150,13 +150,24 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 "The task must remain InProgress and pipeline-approved while a queued merge is monitored.",
                 ErrorKind.Conflict);
 
-        var attempt = await db.LandingAttempts
+        var attempt = await db.LandingAttempts.IgnoreQueryFilters()
             .FirstOrDefaultAsync(item => item.Id == request.LandingAttemptId
                 && item.ProjectId == request.ProjectId
                 && item.TaskId == request.TaskId, ct);
         if (attempt is null)
             return Result.Failure<DeviceRemoteLandingFailureResult>(
                 "Landing attempt not found.", ErrorKind.NotFound);
+
+        var latestAttemptId = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.ProjectId == request.ProjectId && item.TaskId == request.TaskId)
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.Id)
+            .Select(item => (Guid?)item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestAttemptId != attempt.Id)
+            return Result.Failure<DeviceRemoteLandingFailureResult>(
+                "The GitHub async merge failure belongs to an older landing attempt. The latest attempt must be resolved instead.",
+                ErrorKind.Conflict);
 
         var expectedFailureCode = "GitHubAsyncMergeFailed";
         if (attempt.Status != LandingAttemptStatus.ExecutePending
