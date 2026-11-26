@@ -3264,6 +3264,9 @@
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>Слияние могло уже попасть в целевую ветку, но проверка после слияния завершилась ошибкой или её результат не удалось подтвердить. Проверьте целевую ветку, прежде чем запрашивать откат.</value>
   </data>
+  <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
+    <value>GitHub принял запрос на слияние. Ожидается обработка merge queue или завершение слияния на стороне GitHub. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
+  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>Попытка слияния вернула причину, которую интерфейс пока не распознаёт. Проверьте журнал рабочей станции и передайте службе поддержки диагностический ID ниже.</value>
   </data>
