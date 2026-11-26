@@ -294,47 +294,98 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     /// reached MERGED yet (for example, it is waiting in a merge queue). The attempt
     /// remains ExecutePending until the pinned workstation verifies the final merge.
     /// </summary>
-    public void MarkGitHubMergeQueued(string? mergeRequestId)
+    public void MarkGitHubMergeQueued(string? mergeRequestId) =>
+        MarkGitHubMergeQueued(mergeRequestId, "enqueued");
+
+    /// <summary>
+    /// Stores the state returned by GitHub's asynchronous merge endpoint. Pending is
+    /// distinct from enqueued: the async request can expire after 24 hours, and an
+    /// expired pending request is not proof that a merge-queue entry was removed.
+    /// </summary>
+    public void MarkGitHubMergeQueued(string? mergeRequestId, string? mergeRequestStatus)
     {
         EnsureStatus(LandingAttemptStatus.ExecutePending);
+        if (mergeRequestStatus is not ("pending" or "enqueued"))
+            throw new ArgumentException("GitHub asynchronous merge status must be pending or enqueued.", nameof(mergeRequestStatus));
+
         if (string.IsNullOrWhiteSpace(mergeRequestId))
         {
+            if (!string.Equals(mergeRequestStatus, "enqueued", StringComparison.Ordinal))
+                throw new ArgumentException("A pending GitHub async merge requires its request UUID.", nameof(mergeRequestId));
             // GitHub can report that a PR is already enqueued without returning a new
-            // async-request UUID. The PR state remains the durable polling authority.
-            FailureCode = "GitHubMergeQueued";
+            // async-request UUID. The PR's merge-queue entry remains the polling authority.
+            FailureCode = "GitHubMergeEnqueued";
         }
         else
         {
             if (!Guid.TryParse(mergeRequestId, out var parsed) || parsed == Guid.Empty)
                 throw new ArgumentException("GitHub asynchronous merge request ID must be a GUID.", nameof(mergeRequestId));
-            FailureCode = "GitHubMergeQueued:" + parsed.ToString("D");
+            var prefix = string.Equals(mergeRequestStatus, "pending", StringComparison.Ordinal)
+                ? "GitHubMergePending:"
+                : "GitHubMergeEnqueued:";
+            FailureCode = prefix + parsed.ToString("D");
         }
         Touch();
     }
 
     /// <summary>
-    /// True only when GitHub explicitly acknowledged that this PR entered its merge queue.
-    /// A generic CommandCompletionUnknown is intentionally excluded because it can also
-    /// represent a local GitLand operation and must remain explicitly retryable.
+    /// The exact status known for a Beacon-issued GitHub async merge. Legacy UUID
+    /// markers remain unknown because older clients did not persist pending vs enqueued.
     /// </summary>
+    public string? GitHubMergeRequestStatus
+    {
+        get
+        {
+            if (Status != LandingAttemptStatus.ExecutePending || FailureCode is null)
+                return null;
+            if (string.Equals(FailureCode, "GitHubMergeEnqueued", StringComparison.Ordinal)
+                || string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal))
+                return "enqueued";
+            if (FailureCode.StartsWith("GitHubMergePending:", StringComparison.Ordinal))
+                return "pending";
+            if (FailureCode.StartsWith("GitHubMergeEnqueued:", StringComparison.Ordinal))
+                return "enqueued";
+            return null;
+        }
+    }
+
+    /// <summary>True when the request is known to have reached GitHub's merge queue.</summary>
     public bool IsGitHubMergeQueued =>
+        string.Equals(GitHubMergeRequestStatus, "enqueued", StringComparison.Ordinal);
+
+    /// <summary>True when GitHub accepted background processing but has not enqueued/merged it.</summary>
+    public bool IsGitHubMergePending =>
+        string.Equals(GitHubMergeRequestStatus, "pending", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Any explicit GitHub async acceptance prevents duplicate Execute dispatch. A legacy
+    /// UUID marker is treated as accepted but its pending/enqueued subtype remains unknown.
+    /// </summary>
+    public bool IsGitHubMergeAccepted =>
         Status == LandingAttemptStatus.ExecutePending
-        && (string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal)
+        && (string.Equals(FailureCode, "GitHubMergeEnqueued", StringComparison.Ordinal)
+            || string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal)
+            || FailureCode?.StartsWith("GitHubMergePending:", StringComparison.Ordinal) == true
+            || FailureCode?.StartsWith("GitHubMergeEnqueued:", StringComparison.Ordinal) == true
             || FailureCode?.StartsWith("GitHubMergeQueued:", StringComparison.Ordinal) == true);
 
     public bool TryReadGitHubMergeRequestId(out string? mergeRequestId)
     {
         mergeRequestId = null;
-        const string prefix = "GitHubMergeQueued:";
         if (Status != LandingAttemptStatus.ExecutePending || FailureCode is null)
             return false;
+
         // A lost workstation acknowledgement can mean GitHub accepted the merge
         // request before the response was persisted. Reconcile the exact PR read-only;
         // the server still requires exact candidate-tree and post-merge check evidence.
-        if (string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal)
+        if (string.Equals(FailureCode, "GitHubMergeEnqueued", StringComparison.Ordinal)
+            || string.Equals(FailureCode, "GitHubMergeQueued", StringComparison.Ordinal)
             || string.Equals(FailureCode, "CommandCompletionUnknown", StringComparison.Ordinal))
             return true;
-        if (!FailureCode.StartsWith(prefix, StringComparison.Ordinal)
+
+        var prefixes = new[] { "GitHubMergePending:", "GitHubMergeEnqueued:", "GitHubMergeQueued:" };
+        var prefix = prefixes.FirstOrDefault(value => FailureCode.StartsWith(value, StringComparison.Ordinal));
+        if (prefix is null
             || !Guid.TryParseExact(FailureCode[prefix.Length..], "D", out var parsed)
             || parsed == Guid.Empty)
             return false;
