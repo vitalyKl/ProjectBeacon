@@ -96,7 +96,7 @@ public sealed class ProjectVersionPolicyCatalogTests
     [InlineData(@"version=(?<version>\p{L}+)", false)]
     [InlineData(@"version=(?<version>\d+)\1", false)]
     [InlineData(@"version=(?<version>\d+)\k<other>", false)]
-    [InlineData(@"version=\d+(?<version>\d+)\k<version>", false)]
+    [InlineData(@"version=\k<version>(?<version>\d+)", false)]
     [InlineData(@"(?i)version=(?<version>\d+)", false)]
     [InlineData(@"version=(?<version>[a-z-[aeiou]]+)", false)]
     [InlineData(@"version=(?<version>[0-9]+)(?<other>[0-9]+)", false)]
