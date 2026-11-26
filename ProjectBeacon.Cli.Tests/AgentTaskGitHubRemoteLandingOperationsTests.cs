@@ -5,6 +5,25 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 public sealed class AgentTaskGitHubRemoteLandingOperationsTests
 {
     [Theory]
+    [InlineData("OPEN", "GitHubAsyncMergeFailed")]
+    [InlineData("CLOSED", "GitHubPullRequestClosedWithoutMerge")]
+    public void UnmergedPullRequestState_MapsToAnExplicitFailureCode(string state, string expectedFailureCode)
+    {
+        Assert.Equal(
+            expectedFailureCode,
+            AgentTaskGitHubRemoteLandingOperations.FailureCodeForUnmergedPullRequestState(state));
+    }
+
+    [Theory]
+    [InlineData("MERGED")]
+    [InlineData("UNKNOWN")]
+    [InlineData(null)]
+    public void UnmergedPullRequestState_RejectsMergedOrUnknownStates(string? state)
+    {
+        Assert.Null(AgentTaskGitHubRemoteLandingOperations.FailureCodeForUnmergedPullRequestState(state));
+    }
+
+    [Theory]
     [InlineData("AWAITING_CHECKS", 1)]
     [InlineData("LOCKED", 2)]
     [InlineData("MERGEABLE", 3)]
