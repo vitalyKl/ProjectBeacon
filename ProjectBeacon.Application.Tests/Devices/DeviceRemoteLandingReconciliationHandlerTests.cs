@@ -440,6 +440,15 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             Assert.True(repeated.Success, repeated.Error);
             Assert.True(repeated.Value!.AlreadyRecorded);
 
+            var targets = await new GetDeviceAutoSyncTargetsHandler(Factory()).HandleAsync(
+                setup.DeviceId, TestContext.Current.CancellationToken);
+            Assert.True(targets.Success, targets.Error);
+            var remoteTarget = Assert.Single(Assert.Single(targets.Value!).RemoteLandings!);
+            Assert.Equal(attempt.Id, remoteTarget.LandingAttemptId);
+            Assert.Equal(requestId, remoteTarget.MergeRequestId);
+            Assert.Equal("enqueued", remoteTarget.MergeRequestStatus);
+            Assert.True(remoteTarget.GitHubMergeQueued);
+
             await using var verify = Factory().CreateDbContext();
             var persisted = await verify.LandingAttempts.AsNoTracking()
                 .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
