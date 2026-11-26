@@ -82,14 +82,18 @@ public sealed class NativeAgentRuntimeTests
                 JsonSerializer.Serialize(new { decision }), CancellationToken.None));
 
             AgentTurnStatus? status = null;
-            for (var i = 0; i < 200; i++)
+            // Windows may need a longer cold-start path for the isolated dotnet CLI home.
+            // The command itself is bounded to 60 seconds; wait for that result rather than
+            // failing the approval/resume test after an arbitrary four-second window.
+            for (var i = 0; i < 2500; i++)
             {
                 status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
                 if (status?.Ended == true)
                     break;
                 await Task.Delay(20, TestContext.Current.CancellationToken);
             }
-            Assert.True(status?.Ended, status?.Error ?? "The approved command turn did not finish.");
+            Assert.True(status?.Ended,
+                status?.Error ?? $"The approved command turn did not finish. Last tool result: {provider.LastToolResult}");
             Assert.Equal("stop", status!.Finish);
             Assert.Equal(1, provider.FinalRequests);
             Assert.Empty(await capabilities.ListPendingFormsAsync(session, CancellationToken.None));
