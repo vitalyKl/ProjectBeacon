@@ -481,6 +481,12 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             _db.LandingAttempts.Add(attempt);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
+            // A later project setting edit does not invalidate the fact that this exact
+            // GitHub queue request was rejected before any post-merge check could run.
+            var project = await _db.Projects.SingleAsync(
+                item => item.Id == setup.ProjectId, TestContext.Current.CancellationToken);
+            project.Update(reviewCheckCommand: "dotnet test");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
             var request = new DeviceRemoteLandingFailureRequest(
                 setup.ProjectId,
