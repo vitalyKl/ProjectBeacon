@@ -5,7 +5,7 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 public sealed class GitHubLandingMergeExecutorTests
 {
     [Fact]
-    public void MergeApiArguments_PinTheExactTaskHeadAndUseTheRepositoryMergeMethod()
+    public void MergeApiArguments_PinTheExactTaskHeadAndDelegateQueueSelectionToGitHub()
     {
         const string repository = "acme/project-beacon";
         const int pullRequestNumber = 42;
@@ -19,13 +19,44 @@ public sealed class GitHubLandingMergeExecutorTests
             {
                 "api",
                 "--method", "PUT",
-                "repos/acme/project-beacon/pulls/42/merge",
+                "repos/acme/project-beacon/pulls/42/merge-async",
                 "-f", "sha=" + expectedHeadSha,
-                "-f", "merge_method=merge"
+                "-f", "merge_action=default"
             },
             arguments);
+        Assert.DoesNotContain("bypass_rules", arguments);
         Assert.DoesNotContain("--admin", arguments);
         Assert.DoesNotContain("--force", arguments);
+    }
+
+    [Theory]
+    [InlineData("""{"status":"pending","details":{"uuid":"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1","expected_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}""", "pending", "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", null)]
+    [InlineData("""{"status":"enqueued","details":{"uuid":"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1"}}""", "enqueued", "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", null)]
+    [InlineData("""{"status":"merged","details":{"sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}""", "merged", null, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")]
+    [InlineData("""{"status":"failed","details":{"message":"Merge queue failed"}}""", "failed", null, null)]
+    public void AsyncMergeResponse_ParsesPendingEnqueuedMergedAndFailedStates(
+        string json,
+        string expectedStatus,
+        string? expectedRequestId,
+        string? expectedMergeSha)
+    {
+        var result = GitHubLandingMergeExecutor.ParseAsyncMergeResponse(json);
+
+        Assert.Null(result.Error);
+        Assert.Equal(expectedStatus, result.Status);
+        Assert.Equal(expectedRequestId, result.MergeRequestId);
+        Assert.Equal(expectedMergeSha, result.MergeCommitSha);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("""{"status":"unknown","details":{}}""")]
+    public void AsyncMergeResponse_RejectsMalformedOrUnsupportedStates(string json)
+    {
+        var result = GitHubLandingMergeExecutor.ParseAsyncMergeResponse(json);
+
+        Assert.NotNull(result.Error);
     }
 
     [Theory]
