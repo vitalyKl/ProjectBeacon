@@ -46,7 +46,7 @@ public sealed record DeviceRemoteLandingFailureRequest(
     string SourceBranch,
     string TargetBranch,
     string SourceSha,
-    string MergeRequestId,
+    string? MergeRequestId,
     DateTime VerifiedAtUtc);
 
 public sealed record DeviceRemoteLandingFailureResult(
@@ -89,13 +89,20 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         DeviceRemoteLandingFailureRequest request,
         CancellationToken ct = default)
     {
+        Guid? parsedMergeRequestId = null;
+        if (request.MergeRequestId is not null)
+        {
+            if (!Guid.TryParse(request.MergeRequestId, out var parsed) || parsed == Guid.Empty)
+                return Result.Failure<DeviceRemoteLandingFailureResult>(
+                    "The GitHub async merge request ID is invalid.", ErrorKind.Validation);
+            parsedMergeRequestId = parsed;
+        }
+
         if (deviceId == Guid.Empty || request.ProjectId == Guid.Empty
             || request.TaskId == Guid.Empty || request.LandingAttemptId == Guid.Empty
             || request.ReviewRunId == Guid.Empty || request.PullRequestNumber < 1
             || request.VerifiedAtUtc == default
             || request.VerifiedAtUtc > DateTime.UtcNow.AddMinutes(2)
-            || !Guid.TryParse(request.MergeRequestId, out var mergeRequestId)
-            || mergeRequestId == Guid.Empty
             || !IsValidGitHubRepository(request.Repository)
             || !IsCanonicalPullRequestUrl(request.PullRequestUrl, request.Repository, request.PullRequestNumber)
             || !string.Equals(request.SourceBranch, $"beacon/task/{request.TaskId:N}", StringComparison.Ordinal)
@@ -172,9 +179,9 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         if (attempt.Status != LandingAttemptStatus.ExecutePending
             || attempt.DeviceId != deviceId
             || attempt.ReviewRunId != request.ReviewRunId
+            || !attempt.IsGitHubMergeQueued
             || !attempt.TryReadGitHubMergeRequestId(out var expectedRequestId)
-            || string.IsNullOrWhiteSpace(expectedRequestId)
-            || !string.Equals(expectedRequestId, mergeRequestId.ToString("D"), StringComparison.Ordinal)
+            || !string.Equals(expectedRequestId, parsedMergeRequestId?.ToString("D"), StringComparison.Ordinal)
             || !string.Equals(attempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(attempt.SourceBranch, request.SourceBranch, StringComparison.Ordinal)
             || !string.Equals(attempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal))
