@@ -5,6 +5,44 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 public sealed class AgentTaskGitHubRemoteLandingOperationsTests
 {
     [Theory]
+    [InlineData(false, null, "pending", true)]
+    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", null, true)]
+    [InlineData(false, null, "enqueued", true)]
+    [InlineData(true, null, null, true)]
+    [InlineData(false, null, null, false)]
+    public void HasAcceptedAsyncMerge_RequiresAnExplicitAcceptedRequest(
+        bool legacyQueuedMarker,
+        string? requestId,
+        string? persistedStatus,
+        bool expected)
+    {
+        Assert.Equal(expected,
+            AgentTaskGitHubRemoteLandingOperations.HasAcceptedAsyncMerge(
+                legacyQueuedMarker, requestId, persistedStatus));
+    }
+
+    [Theory]
+    [InlineData(false, null, "pending", null, false)]
+    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", "pending", null, false)]
+    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", "pending", "pending", false)]
+    [InlineData(false, null, "pending", "enqueued", true)]
+    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", "enqueued", null, true)]
+    [InlineData(false, null, "enqueued", null, true)]
+    [InlineData(true, null, null, null, true)]
+    [InlineData(false, null, null, "failed", false)]
+    public void HasConfirmedMergeQueueEntry_RequiresEnqueuedEvidence(
+        bool legacyQueuedMarker,
+        string? requestId,
+        string? persistedStatus,
+        string? currentAsyncStatus,
+        bool expected)
+    {
+        Assert.Equal(expected,
+            AgentTaskGitHubRemoteLandingOperations.HasConfirmedMergeQueueEntry(
+                legacyQueuedMarker, persistedStatus, currentAsyncStatus));
+    }
+
+    [Theory]
     [InlineData("OPEN", "GitHubAsyncMergeFailed")]
     [InlineData("CLOSED", "GitHubPullRequestClosedWithoutMerge")]
     public void UnmergedPullRequestState_MapsToAnExplicitFailureCode(string state, string expectedFailureCode)
