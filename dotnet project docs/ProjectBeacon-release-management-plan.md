@@ -406,3 +406,17 @@ After the server and target-discovery regression tests, the workstation loop now
 **Текущее состояние CI:** старый run [#45763146032](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) выполняется на более раннем head `8ff19877` и не проверяет эти изменения. Реализационный head перед последним journal-only commit: `c5982175ec5040cdafdb2a05dace1f8e2fe9dd2b`; CI на нём не зарегистрирован. Текущий journal-only commit: `4c4bd0baa6beaf14c9af49521986a35f36056568`. Полный Linux/Windows/macOS CI нужно запустить на итоговом HEAD после синхронизации плана и журнала.
 
 **Нерешённое:** end-to-end acceptance на пользовательском проекте с реальным merge queue (pending/enqueued/merged/failed, UUID missing/expired, ReviewCheckCommand drift). Rulesets API вернул пустой список; classic branch/tag protection и production reviewers недоступны текущей интеграции, поэтому production tag/deploy запрещены до ручной проверки администратором.
+
+### UI regression coverage and latest-head correction (26 ноября 2026)
+
+После реализации failure endpoint добавлен BUnit-тест FailedGitHubMerge_ShowsLocalizedFailureReason в ProjectBeacon.Web.Tests/Bunit/TaskPipelinePanelTests.cs. Он проверяет, что пользователь видит понятное локализованное сообщение при LandingAttemptStatus.Failed и GitHubAsyncMergeFailed, а не только machine code.
+
+Повторная проверка implementation branch подтвердила:
+
+- ровно один device endpoint POST /v1/devices/me/remote-landings/failure;
+- AutoSync вызывает его только для терминального async failed после повторной проверки exact OPEN PR/head/base/URL;
+- успешная reconciliation не вызывается для отказа;
+- сервер сверяет UUID и неизменность project ReviewCheckCommand, записывает audit/failure state, но оставляет Task InProgress/Approved;
+- Application, AutoSync loop и UI regression tests покрывают этот поток.
+
+Implementation head на момент этого обновления плана: 43747d09cd31bd3adcc1fb9ed7ee7b26965f0e0e; журнал в feat/release-management обновлён после этого source commit и запуска CI на окончательной вершине ещё нет. Run #45763146032 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) относится к более раннему head 8ff19877 и не считается проверкой текущих изменений. После journal update необходимо получить новый точный HEAD и запустить Linux/Windows/macOS matrix.
