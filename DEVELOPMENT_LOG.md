@@ -1509,3 +1509,26 @@ The run was triggered on the exact old head `f1692d47`. Linux and macOS complete
 2. Complete async GitHub merge-queue live acceptance in a disposable repository: pending expiry, recovery from a live GraphQL queue entry, queue removal, closed-unmerged PR, merge completion, and PR/head/base drift.
 3. Classic `v*` tag protection and required reviewers for GitHub Environment `production` remain unverified through the connector. Do not create production tags or deploy.
 4. Continue user-project acceptance for Release/landing UI, RLS/authorization, localized states and failure/recovery behavior. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-26 — Correct bUnit 1.40 DOM assertion
+
+**Source commit:** `99d90d9798a43c86458b686852731b36d19c49ed`
+
+The exact CI run [#45860968625](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45860968625), on prior head `ffcdcdbb2ac7230f489ee9f5a70ebaf9d2ce85fd`, exposed one compile error in the new BUnit test:
+
+- `IRenderedComponent<TaskPipelinePanel>.FindComponent<MudAlert>()` is not available in the repository's pinned bUnit `1.40.0` API. The Linux compiler reported `CS1061` at `TaskPipelinePanelTests.cs:91`.
+- The production component and the test's user-visible pending text/UUID-redaction assertions were not implicated.
+- Replaced the unsupported component lookup with the existing, supported DOM query `cut.Find(".mud-alert")`. This asserts that the pending informational alert is rendered without coupling the test to a MudBlazor severity-specific CSS class. The component's own `LandingFailureSeverity` maps pending/enqueued codes to `Severity.Info`; no production behavior changed.
+
+### Validation
+
+- Run #45860968625 is on the previous source head and is not valid for this fix. Linux completed with the BUnit compile error; Windows and macOS were still executing the old source when last polled.
+- Current source head after this test-only fix: `99d90d9798a43c86458b686852731b36d19c49ed`.
+- A fresh full Linux/Windows/macOS CI run is required on the exact post-journal head. No local .NET build is claimed; this environment has no .NET SDK.
+
+### Next
+
+1. Trigger and inspect CI on the post-journal head.
+2. Check the Windows/macOS results from the prior run for any errors not visible in Linux's completed log.
+3. Continue only after the current source compiles and the seven test modules, TRX guards and format checks pass.
