@@ -874,3 +874,42 @@ A follow-up compatibility review showed that an older daemon advertising only gi
 1. Trigger CI on the current branch head after the journal/plan commits.
 2. Review all three platform jobs and any diagnostics from the new async merge tests.
 3. If green, continue the remaining product acceptance for release settings, localization, RLS, UI error states and independent project version schemes.
+
+
+## 2026-11-26 — Complete GitHub async-merge failure reporting
+
+**Implementation head before this journal entry:** `c5982175ec5040cdafdb2a05dace1f8e2fe9dd2b`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)  
+**Scope:** GitHub-authoritative landing only; no SaaS Control Plane or billing changes.
+
+### Implemented
+
+- The pinned workstation's AutoSync verifier now distinguishes a terminal GitHub async-merge `failed` state from `pending`, `enqueued`, expired/unreadable request records and ordinary PR status changes.
+- Before reporting failure, the workstation rereads the PR and requires the same open PR identity, exact task head SHA, review base and canonical GitHub URL. A stale UUID or changed/closed/merged PR is not reported as a terminal failure.
+- AutoSync posts the exact device-bound failure proof to `POST /v1/devices/me/remote-landings/failure`. It does not call the successful reconciliation endpoint for a failed request.
+- The API route is device-authenticated. The server checks the device/project runtime binding, AutoSync capability (and the explicit AutoSync-independent reconciliation capability when relevant), task/device pin, current Approved state, exact LandingAttempt, ReviewRun, source/base, queued async UUID, unchanged ReviewCheckCommand hash, latest Approve verdict and absence of active pipeline sessions.
+- Only after all checks does the server mark the attempt `Failed` with `GitHubAsyncMergeFailed`, set the escalation code and write a device audit event. The task remains InProgress/Approved; no RemoteLandingProof is written and no task is closed.
+- Task Pipeline UI now maps `GitHubAsyncMergeFailed` to a localized, actionable landing reason.
+- Removed a duplicate API handler and redundant `/fail` alias. The single supported route is `/failure`, matching the AutoSync client.
+- Added Application coverage for exact UUID acceptance/rejection and task remaining open. Added an AutoSync loop test proving the failure endpoint is called and successful reconciliation is not called for a terminal failure.
+
+### Verification state
+
+- Full CI run [#45763146032](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) is running on the earlier async-landing head `8ff19877b27e8fd699eaa5047eec7b26965f0e0e`; it does **not** include the definitive-failure reporting slice.
+- Exact current implementation head before this log update: `c5982175ec5040cdafdb2a05dace1f8e2fe9dd2b`. No CI run is registered for this exact head yet.
+- The AutoSync loop test for failure reporting is present in `ProjectBeacon.Cli.Tests/DaemonAutoSyncLoopTests.cs`; Application tests cover the server transition. The new cross-platform matrix must validate these together.
+- Previously green runs #45582326452 and #45586302515 predate the async merge queue implementation and are not evidence for this slice.
+- Local .NET SDK/test harness is unavailable in this execution environment; acceptance is based on the exact GitHub Actions head and its full job results.
+
+### Remaining blockers
+
+1. Trigger and inspect Linux, Windows and macOS CI on the final head after this journal update; resolve any compiler/test/analyzer/format failures.
+2. Validate a real user project with an enabled GitHub merge queue: normal enqueued→merged path, definitive async failed path, lost/expired UUID with PR polling fallback, and ReviewCheckCommand drift.
+3. GitHub rulesets API returned no repository/inherited rulesets. Classic branch/tag protection and Production Environment required reviewers remain unverified due connector permissions. An administrator must confirm these before any production tag/deploy.
+4. The implementation has not been merged into `main`; no production tag/deployment has been created.
+
+### Next
+
+1. Run CI on the exact post-journal branch head and fix failures.
+2. Finish end-to-end merge-queue acceptance on a separate user project and verify the UI recovery path after `GitHubAsyncMergeFailed`.
+3. Reconcile plan/journal against the final PR state, then request review/merge separately. Do not publish a release as part of this implementation slice.
