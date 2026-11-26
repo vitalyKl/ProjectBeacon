@@ -47,7 +47,9 @@ public sealed record DeviceRemoteLandingFailureRequest(
     string TargetBranch,
     string SourceSha,
     string? MergeRequestId,
-    DateTime VerifiedAtUtc);
+    DateTime VerifiedAtUtc,
+    string FailureCode = "GitHubAsyncMergeFailed",
+    string PullRequestState = "OPEN");
 
 public sealed record DeviceRemoteLandingFailureResult(
     Guid LandingAttemptId,
@@ -98,6 +100,12 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             parsedMergeRequestId = parsed;
         }
 
+        var expectedPullRequestState = request.FailureCode switch
+        {
+            "GitHubAsyncMergeFailed" => "OPEN",
+            "GitHubPullRequestClosedWithoutMerge" => "CLOSED",
+            _ => null
+        };
         if (deviceId == Guid.Empty || request.ProjectId == Guid.Empty
             || request.TaskId == Guid.Empty || request.LandingAttemptId == Guid.Empty
             || request.ReviewRunId == Guid.Empty || request.PullRequestNumber < 1
@@ -107,9 +115,11 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             || !IsCanonicalPullRequestUrl(request.PullRequestUrl, request.Repository, request.PullRequestNumber)
             || !string.Equals(request.SourceBranch, $"beacon/task/{request.TaskId:N}", StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(request.TargetBranch)
-            || !IsGitSha(request.SourceSha))
+            || !IsGitSha(request.SourceSha)
+            || expectedPullRequestState is null
+            || !string.Equals(request.PullRequestState, expectedPullRequestState, StringComparison.Ordinal))
             return Result.Failure<DeviceRemoteLandingFailureResult>(
-                "The GitHub async merge failure identity is invalid.", ErrorKind.Validation);
+                "The GitHub async merge failure identity or unmerged PR state is invalid.", ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
         var device = await db.DaemonDevices.IgnoreQueryFilters().AsNoTracking()
@@ -175,7 +185,7 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 "The GitHub async merge failure belongs to an older landing attempt. The latest attempt must be resolved instead.",
                 ErrorKind.Conflict);
 
-        var expectedFailureCode = "GitHubAsyncMergeFailed";
+        var expectedFailureCode = request.FailureCode;
         if (attempt.Status != LandingAttemptStatus.ExecutePending
             || attempt.DeviceId != deviceId
             || attempt.ReviewRunId != request.ReviewRunId
@@ -257,7 +267,10 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 sourceSha = request.SourceSha,
                 reviewRunId = request.ReviewRunId.ToString("D"),
                 policyCode = expectedFailureCode,
-                resultCode = "QueuedMergeFailed"
+                pullRequestState = request.PullRequestState,
+                resultCode = request.FailureCode == "GitHubPullRequestClosedWithoutMerge"
+                    ? "QueuedPullRequestClosed"
+                    : "QueuedMergeFailed"
             })));
 
         try
