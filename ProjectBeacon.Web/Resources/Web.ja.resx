@@ -3282,8 +3282,11 @@ orthstar</value>
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>マージはすでにターゲットブランチに反映されている可能性がありますが、マージ後の検証に失敗したか、結果を確認できませんでした。revert を要求する前にターゲットを確認してください。</value>
   </data>
+  <data name="LandingReasonGitHubMergePending" xml:space="preserve">
+    <value>GitHub は非同期マージ要求を受け付け、現在処理中です。マージキューへの登録はまだ確認されていません。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
+  </data>
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
-    <value>GitHub はマージ要求を受け付けました。マージキューでの処理、または GitHub によるマージ完了を待っています。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
+    <value>GitHub は PR をマージキューに登録しました。GitHub によるマージ完了を待っています。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
   </data>
   <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
     <value>GitHub は非同期マージ要求を拒否しました。マージキューの失敗理由を確認し、必要な変更を行ってから、新しいランディングプレビューを要求してください。</value>
