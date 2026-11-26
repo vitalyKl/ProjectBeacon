@@ -3267,6 +3267,9 @@
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
     <value>GitHub принял запрос на слияние. Ожидается обработка merge queue или завершение слияния на стороне GitHub. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
   </data>
+  <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
+    <value>GitHub отклонил асинхронный запрос на слияние. Проверьте причину отказа merge queue, внесите необходимые изменения и запросите новый предварительный просмотр слияния.</value>
+  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>Попытка слияния вернула причину, которую интерфейс пока не распознаёт. Проверьте журнал рабочей станции и передайте службе поддержки диагностический ID ниже.</value>
   </data>
