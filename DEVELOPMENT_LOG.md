@@ -1386,3 +1386,16 @@ The GitHub async merge request UUID is retained in `LandingAttempt.FailureCode`,
 2. Trigger a new full CI on the latest head after this journal update.
 3. Confirm Application and Domain pass on exact current head, then verify remaining CLI/Infrastructure/Web/Worker and formatter steps.
 4. Keep merge queue live acceptance and production tag/reviewer protections as separate outstanding blockers.
+
+
+### CI #45841796175 — final cross-platform outcome
+
+The previous run is now fully complete. Linux, Windows and macOS all finished with the same source-level failures:
+
+- All three Build steps failed on the single compiler error `CS1061` at `PipelineHandlerTests.LandingRecovery.cs(135,46)`: the test attempted to read `GitHubMergeRequestStatus` from `LandingAttemptDto`. The assertion has been removed in commit `78b8edd8a2cf889ad15b7388e8de7aec495750d7`; the persisted entity-marker assertion remains.
+- All three Application test modules failed because the test assembly was not produced after the Build error; this is not an independent runtime regression.
+- The Linux Domain module and Windows/macOS Domain modules all ran and each reported the same four test failures. The TRX stack traces showed `ArgumentException: Candidate check output hash is invalid` from four new test fixtures passing a 40-character string. Fixed to 64-character SHA-256 fixtures in `605e0cfddd7f5af9241f0ffba35de06e27178e6f`.
+- Linux API, CLI (701 tests), Infrastructure, Web and Worker passed. Windows/macOS API and CLI passed; their later module/format outcomes did not override the compile/domain failures.
+- The old run remains red by design; its results cannot be reused for the fixed head.
+
+**Current branch head after these corrections and journal updates:** `bbb039d6f17853470a713f1dddf4162ebf28ff32`. Trigger a fresh full CI for this exact head. No green claim is made until all Linux/Windows/macOS jobs and formatting pass.
