@@ -1199,3 +1199,34 @@ The GitHub async merge endpoint can enqueue a PR for a merge queue. The queue va
 2. Exercise both direct merge and merge-queue paths against a disposable GitHub repository with the required `merge_group` workflow checks configured. This environment has not performed a live queue merge.
 3. Verify legacy `v*` tag protection and required reviewers for GitHub Environment `production` in repository settings. No production tag/deploy is permitted until confirmed.
 4. Keep PR #230 open for review; do not merge this development PR as part of the release workflow.
+
+
+## 2026-11-26 — Restrict tree divergence handling to confirmed merge-queue requests
+
+The initial queue compatibility change was deliberately narrowed after rechecking the GitHub async response states.
+
+### Final rule
+
+- **Immediate async response `status=merged`:** GitLand still requires the actual merge commit tree to equal the Preview candidate exactly. If the base changed in the preflight-to-merge window or GitHub produced a different tree without an acknowledged queue state, the attempt becomes `LandedUnverified` with `GitHubMergeTreeMismatch`; it is not silently accepted.
+- **Async response `pending` or `enqueued`:** the attempt stays `ExecutePending` and records the queued request state. AutoSync later confirms the exact PR/head is `MERGED`, confirms the merge commit is reachable from the fetched remote target, validates the actual merge-group tree SHA, and executes the pinned ReviewCheck on that actual commit. It does not require the merge-group tree to equal the local Preview candidate because GitHub may have incorporated a newer base or earlier queued PRs.
+- **AutoSync distinction:** a persisted successful post-merge proof identifies an immediate `Landed` attempt and keeps exact candidate-tree equality; a queued attempt has no persisted post-merge proof yet and uses the queue-only relaxed tree validation before running the check.
+- The server still compares request candidate tree, PR/source/review identity, merge request UUID where present, merge commit and post-merge exit/hash against the immutable LandingAttempt. Only then can it record RemoteLandingProof and close the task.
+- Normal local GitLand never uses this relaxation and remains exact-tree-only.
+
+### Changes after the first queue compatibility commit
+
+- Updated the GitHub-origin immediate merge path back to strict `request.TargetTreeSha` equality.
+- Updated AutoSync to choose strict tree validation when a persisted immediate post-merge proof exists, and queue-only validation when it is still waiting for its post-merge check.
+- Corrected comments in target discovery and the shared tree validator to reflect this distinction.
+
+### Verification status
+
+- The first fresh CI run [#45789363602](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45789363602) was dispatched on head `c0c1b7b9`, before this final narrowing. It is not validation for the current source.
+- Latest source/documentation-on-implementation branch head at this entry: `05ce597c5d1e2fd6dcbec2ca195e802407efc9fd`.
+- A new full Linux/Windows/macOS CI on that exact final head is required. No live GitHub merge-queue exercise has occurred; use a disposable repository with merge_group checks configured.
+
+### Next
+
+1. Finish or inspect the older run #45789363602 without treating it as final acceptance.
+2. Trigger a fresh exact-head CI after all source, tests and journal entries are committed.
+3. If green, test immediate merge tree strictness and queued merge-group divergence in a disposable GitHub repository.
