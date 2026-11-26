@@ -165,7 +165,7 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         {
             var proofMatches = latestLandingAttempt.ReviewRunId == request.ReviewRunId
                 && latestLandingAttempt.DeviceId == deviceId
-                && !string.Equals(latestLandingAttempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase) == false
+                && string.Equals(latestLandingAttempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(latestLandingAttempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal);
             if (!proofMatches)
                 return Result.Failure<DeviceRemoteLandingReconciliationResult>(
@@ -195,7 +195,7 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                         request.MergeCommitSha, request.CandidateTreeSha!,
                         request.PostMergeCheckExitCode.Value, request.PostMergeCheckOutputHash!);
                 }
-                catch (ArgumentException or InvalidOperationException)
+                catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
                 {
                     return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                         "The queued GitHub merge evidence could not advance the landing attempt to Landed.",
