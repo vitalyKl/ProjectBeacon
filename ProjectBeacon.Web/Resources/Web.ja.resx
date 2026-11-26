@@ -3282,6 +3282,9 @@ orthstar</value>
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>マージはすでにターゲットブランチに反映されている可能性がありますが、マージ後の検証に失敗したか、結果を確認できませんでした。revert を要求する前にターゲットを確認してください。</value>
   </data>
+  <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
+    <value>GitHub はマージ要求を受け付けました。マージキューでの処理、または GitHub によるマージ完了を待っています。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
+  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>ランディング処理が、画面で認識できない理由を返しました。ワークステーションのログを確認し、診断 ID をサポートに伝えてください。</value>
   </data>
