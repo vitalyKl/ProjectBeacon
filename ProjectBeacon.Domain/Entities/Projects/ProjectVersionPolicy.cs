@@ -343,7 +343,6 @@ public static class ProjectVersionPolicyCatalog
         error = null;
         var captureGroups = 0;
         var hasNamedVersionGroup = false;
-        var hasNamedVersionBackreference = false;
         var inCharacterClass = false;
 
         for (var index = 0; index < pattern.Length;)
@@ -382,12 +381,11 @@ public static class ProjectVersionPolicyCatalog
                         error = "Only the version named backreference is supported.";
                         return false;
                     }
-                    hasNamedVersionBackreference = true;
                     index += marker.Length;
                     continue;
                 }
 
-                var portableEscape = escaped is 'd' or 'D' or 's' or 'S' or 't' or 'r' or 'n' or 'f' or 'v' or ']' or '-' or '^' ;
+                var portableEscape = escaped is 'd' or 'D' or 's' or 'S' or 't' or 'r' or 'n' or 'f' or 'v' or ']' or '-' or '^';
                 if ((int)escaped == 92)
                     portableEscape = true;
                 if (!inCharacterClass)
@@ -474,12 +472,6 @@ public static class ProjectVersionPolicyCatalog
             error = "A portable version selector must contain exactly one capture group.";
             return false;
         }
-        if (hasNamedVersionBackreference && !hasNamedVersionGroup)
-        {
-            error = "A version backreference requires a named version capture group.";
-            return false;
-        }
-
         try
         {
             _ = new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
@@ -491,6 +483,7 @@ public static class ProjectVersionPolicyCatalog
             return false;
         }
     }
+
     private static bool IsSupportedCalendarFormat(string? format)
     {
         if (string.IsNullOrWhiteSpace(format))
