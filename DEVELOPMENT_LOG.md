@@ -1532,3 +1532,37 @@ The exact CI run [#45860968625](https://github.com/vitalyKl/ProjectBeacon/action
 1. Trigger and inspect CI on the post-journal head.
 2. Check the Windows/macOS results from the prior run for any errors not visible in Linux's completed log.
 3. Continue only after the current source compiles and the seven test modules, TRX guards and format checks pass.
+
+
+## 2026-11-26 — Correct second unsupported bUnit API call
+
+**Prior failing head:** `c25fe43bcfb59d4c8f0c102a0d72c78ccde791e2`  
+**Fix commit:** `f3a16483b88e53d3831e975002641ebf57216a05`  
+**CI:** [#45862576833](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45862576833)
+
+### Finding
+
+The earlier test-only correction replaced `FindComponent<MudAlert>()` with `cut.Find(".mud-alert")`. Both APIs are unavailable on this repository's typed `IRenderedComponent<TaskPipelinePanel>` with pinned bUnit `1.40.0`. CI failed to compile `ProjectBeacon.Web.Tests/Bunit/TaskPipelinePanelTests.cs:91` on Linux, Windows and macOS.
+
+The Linux Web test and TRX guard failures were secondary consequences: the Web test assembly did not compile, so the expected seventh TRX report was not produced. No production-code failure was implicated in this specific incident.
+
+### Correction
+
+Removed the DOM/CSS existence assertion instead of replacing it with another unsupported bUnit API. The test still asserts both relevant user-visible contracts:
+
+- the pending GitHub merge status message is rendered;
+- the internal merge-request UUID is not exposed in the rendered markup.
+
+This avoids coupling the test to a MudBlazor CSS class or DOM-query extension. No production UI behavior changed.
+
+### Validation
+
+- The fix is committed on `feat/release-management` as `f3a16483b88e53d3831e975002641ebf57216a05`.
+- CI #45862576833 tested the previous head and is not evidence for this fix. Linux and Windows jobs failed Build because of the same unsupported `Find` call; Linux also failed the Web/TRX follow-on steps because the Web test report was absent. macOS had the same Build failure and was still completing subsequent jobs at the last inspection.
+- A fresh full Linux/Windows/macOS CI run is required on the exact post-journal head. No local .NET build is claimed; .NET SDK is unavailable in this execution environment.
+
+### Next
+
+1. Trigger and inspect full cross-platform CI on the exact current branch head.
+2. Do not add another bUnit DOM helper assertion unless its availability is verified against the pinned package.
+3. Keep PR #230 open and unmerged until exact-head CI and disposable-repository merge-queue acceptance are complete.
