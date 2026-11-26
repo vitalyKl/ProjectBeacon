@@ -106,17 +106,25 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         var matchingMerged = matching.Where(pull => pull.State == "MERGED").ToArray();
         if (matchingMerged.Length == 0)
         {
-            if (!string.IsNullOrWhiteSpace(target.MergeRequestId))
+            var open = matching.Where(pull => pull.State == "OPEN").ToArray();
+            if (open.Length > 1)
+                return new VerificationResult(null, "Remote landing skipped: more than one open PR matches the queued merge request.");
+            if (open.Length == 1 && !string.IsNullOrWhiteSpace(target.MergeRequestId))
             {
-                var open = matching.Where(pull => pull.State == "OPEN").ToArray();
-                if (open.Length > 1)
-                    return new VerificationResult(null, "Remote landing skipped: more than one open PR matches the queued merge request.");
-                if (open.Length == 1)
-                {
-                    var asyncState = await ReadAsyncMergeRequestStateAsync(
-                        ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
-                    return new VerificationResult(null, asyncState.StatusMessage);
-                }
+                var asyncState = await ReadAsyncMergeRequestStateAsync(
+                    ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
+                return new VerificationResult(null, asyncState.StatusMessage);
+            }
+            if (open.Length == 1 && target.LandingAttemptId is not null)
+            {
+                // Some already-enqueued responses do not return a new request UUID.
+                // The PR remains the durable polling authority until it reaches MERGED.
+                var queuedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+                    ghPath, repositoryRoot, repository, open[0].Number, ct);
+                if (queuedSnapshot.Error is not null)
+                    return new VerificationResult(null, "Remote landing could not inspect the queued PR state.");
+                return new VerificationResult(null,
+                    $"GitHub PR #{open[0].Number} is still {queuedSnapshot.View!.MergeStateStatus}; waiting for MERGED.");
             }
             return new VerificationResult(null, null);
         }
