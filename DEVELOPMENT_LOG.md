@@ -1230,3 +1230,24 @@ The initial queue compatibility change was deliberately narrowed after recheckin
 1. Finish or inspect the older run #45789363602 without treating it as final acceptance.
 2. Trigger a fresh exact-head CI after all source, tests and journal entries are committed.
 3. If green, test immediate merge tree strictness and queued merge-group divergence in a disposable GitHub repository.
+
+
+## 2026-11-26 — Do not redispatch an already queued GitHub merge
+
+### Finding
+
+After GitHub returned `pending` or `enqueued`, a later manual Execute request could reach `ExecuteLandingHandler` after the original workstation command had completed. Without a queue-state guard, it could overwrite `GitHubMergeQueued` with a new dispatch lease and enqueue a second GitLand Execute while GitHub was already processing the same PR.
+
+### Changes
+
+- Added `LandingAttempt.IsGitHubMergeQueued`, which is true only for the explicit `GitHubMergeQueued` or `GitHubMergeQueued:{uuid}` states.
+- `ExecuteLandingHandler` now returns the existing attempt without dispatching another command when GitHub has already acknowledged the PR as pending/enqueued. AutoSync remains the polling/reconciliation owner until the exact PR becomes `MERGED` or the async request fails.
+- A generic `CommandCompletionUnknown` is deliberately not classified as a confirmed queued merge: it can also be produced by local GitLand, so an explicit retry must remain possible. AutoSync may still perform its read-only remote check for the uncertain case.
+- Added Domain tests proving queue markers (with and without an async UUID) are distinct from generic unknown completion, and an Application test proving repeated Execute does not insert a second GitLand command after a queue acknowledgement.
+
+### Verification
+
+- Source/test head after the guard and tests: `77b73cf187022c39b072e4ca50a2fa0434931fa4`.
+- CI #45789363602 (run 1655) was started on `c0c1b7b9` and is not validation for the current branch head.
+- The final queue-only tree narrowing, target comment, queue retry guard and new tests all require a fresh full Linux/Windows/macOS CI on the exact current head.
+- No live merge-queue test, production tag/deployment, or PR merge has been performed.
