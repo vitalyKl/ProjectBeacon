@@ -904,3 +904,24 @@ CI [#45862576833](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4586257
 Source head до журналирования: `6efd63f9982dec21cf6d99789af316471043c008`. CI #45898748221 проверял старый `f24e8f15` и не валидирует удаление дубликата. Следующий полный Linux/Windows/macOS CI должен использовать точную post-journal вершину. Локальная .NET сборка не заявляется.
 
 Остаток: завершить exact-head CI; live async merge-queue acceptance в disposable GitHub repository; подтвердить классическую tag protection `v*` и reviewers Environment `production` через администратора. PR #230 не сливать до снятия этих условий. SaaS Control Plane и billing остаются вне scope.
+
+
+## Дополнение — exact-head CI прошёл на Linux, Windows и macOS (27 ноября 2026)
+
+**Проверенный implementation source HEAD:** `e87f4e6fc962b82102957b6d48c4ea7eac45f475`  
+**GitHub Actions:** [#45899056564](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45899056564)  
+**Итог:** все три платформенных jobs завершились `success`.
+
+- Linux: Python release-manifest tests, Restore, Build, EF model drift, API/Application/CLI/Domain/Infrastructure/Web/Worker, TRX guards и `dotnet format` — success.
+- Windows: Restore, Build, EF model drift, все семь .NET test modules и `dotnet format` — success.
+- macOS: Restore, Build, EF model drift, все семь .NET test modules и `dotnet format` — success.
+- Это подтверждает исправление предыдущих `CS1010/CS1012` и `CS1022/CS0116`, единый Regex/TOML selector contract и новые regression tests на точном проверенном source SHA.
+- Windows/macOS намеренно пропускают PostgreSQL persistence tests через `BEACON_TEST_SKIP_POSTGRES=1`; PostgreSQL service-container lane исполняется в Linux job. Эти platform skips не считаются успешным DB integration test.
+- После CI добавлен journal-only commit в implementation branch; source SHA, валидированный run, остался неизменным.
+
+**Оставшиеся условия до merge/release:**
+
+1. Live async merge-queue acceptance в disposable GitHub repository: pending→enqueued, истечение 24h UUID и recovery по GraphQL queue entry, queue removal, direct/queued merge completion, closed-unmerged PR, PR/head/base drift и post-merge check failure. Unit tests/CI не заменяют эту проверку.
+2. Администратор должен проверить классическую tag protection `v*` и required reviewers для GitHub Environment `production`. Подключённая интеграция не позволяет подтвердить эти параметры.
+3. Провести полный user-project acceptance Release Management: проектные настройки, роли/RLS, UI ошибок, локализация, Candidate/Publish/recovery.
+4. PR #230 пока остаётся open/unmerged. Не создавать production tag и не запускать deploy до выполнения пунктов 1–2. SaaS Control Plane и billing не затрагиваются.
