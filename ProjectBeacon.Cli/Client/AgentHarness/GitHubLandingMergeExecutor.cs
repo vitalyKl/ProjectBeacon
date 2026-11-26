@@ -5,9 +5,10 @@ using System.Text.Json;
 using ProjectBeacon.Cli.Client;
 
 /// <summary>
-/// Server-authorized GitHub landing for a Beacon GitLand Execute command.
-/// Repository, PR, task branch and review base are derived from the pinned worktree;
-/// the GitHub API still enforces repository branch protection and required reviews/checks.
+/// Server-authorized asynchronous GitHub landing for a Beacon GitLand Execute command.
+/// Repository, PR, task branch and review base are derived from the pinned worktree.
+/// GitHub evaluates branch and repository rules when the queued or direct merge is executed,
+/// not when the asynchronous merge request is first accepted.
 /// </summary>
 internal static class GitHubLandingMergeExecutor
 {
