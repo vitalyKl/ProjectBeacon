@@ -240,24 +240,46 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         string? postMergeCheckOutputHash = null;
         if (target.LandingAttemptId is not null)
         {
-            if (!AgentTaskGitOperations.IsGitSha(target.CandidateTreeSha ?? string.Empty)
-                || string.IsNullOrWhiteSpace(target.PostMergeCheckCommand))
-                return new VerificationResult(null, "Remote landing skipped: queued Beacon merge is missing its candidate tree or pinned post-merge check command.");
+            if (!AgentTaskGitOperations.IsGitSha(target.CandidateTreeSha ?? string.Empty))
+                return new VerificationResult(null, "Remote landing skipped: Beacon landing is missing its reviewed candidate tree.");
 
             var mergeTree = await AgentTaskGitOperations.Git(
                 repositoryRoot, Array.Empty<string>(), ct,
                 "rev-parse", "--verify", finalView.MergeCommitSha + "^{tree}");
             if (!AgentTaskGitOperations.Succeeded(mergeTree)
                 || !string.Equals(mergeTree.StdOut.Trim(), target.CandidateTreeSha, StringComparison.OrdinalIgnoreCase))
-                return new VerificationResult(null, "Remote landing skipped: queued GitHub merge tree differs from the reviewed candidate tree.");
+                return new VerificationResult(null, "Remote landing skipped: GitHub merge tree differs from the reviewed candidate tree.");
 
-            var postMergeCheck = await RunPostMergeCheckAsync(
-                repositoryRoot, localRoot, finalView.MergeCommitSha!, target.CandidateTreeSha!,
-                target.PostMergeCheckCommand, ct);
-            if (postMergeCheck.Error is not null || postMergeCheck.ExitCode != 0 || postMergeCheck.OutputHash is null)
-                return new VerificationResult(null, "Remote landing skipped: post-merge check failed (" + (postMergeCheck.Error ?? "PostMergeCheckFailed") + ").");
-            postMergeCheckExitCode = postMergeCheck.ExitCode;
-            postMergeCheckOutputHash = postMergeCheck.OutputHash;
+            var hasPersistedPostMergeProof = target.PersistedPostMergeCheckExitCode is not null
+                || !string.IsNullOrWhiteSpace(target.PersistedPostMergeCheckOutputHash);
+            if (hasPersistedPostMergeProof)
+            {
+                // GitLand already ran the pinned check before recording Landed. Reuse
+                // that immutable server-persisted evidence; the project setting may have
+                // changed since then and must not retroactively invalidate a completed land.
+                if (target.PersistedPostMergeCheckExitCode != 0
+                    || !IsSha256(target.PersistedPostMergeCheckOutputHash)
+                    || !string.IsNullOrWhiteSpace(target.PostMergeCheckCommand))
+                    return new VerificationResult(null, "Remote landing skipped: persisted post-merge evidence is incomplete or mixed with a queued check command.");
+
+                postMergeCheckExitCode = target.PersistedPostMergeCheckExitCode;
+                postMergeCheckOutputHash = target.PersistedPostMergeCheckOutputHash;
+            }
+            else
+            {
+                // A queued async merge has no post-merge evidence yet. Run only the
+                // command whose hash still matches the immutable Review proof.
+                if (string.IsNullOrWhiteSpace(target.PostMergeCheckCommand))
+                    return new VerificationResult(null, "Remote landing skipped: queued Beacon merge is missing its pinned post-merge check command.");
+
+                var postMergeCheck = await RunPostMergeCheckAsync(
+                    repositoryRoot, localRoot, finalView.MergeCommitSha!, target.CandidateTreeSha!,
+                    target.PostMergeCheckCommand, ct);
+                if (postMergeCheck.Error is not null || postMergeCheck.ExitCode != 0 || postMergeCheck.OutputHash is null)
+                    return new VerificationResult(null, "Remote landing skipped: post-merge check failed (" + (postMergeCheck.Error ?? "PostMergeCheckFailed") + ").");
+                postMergeCheckExitCode = postMergeCheck.ExitCode;
+                postMergeCheckOutputHash = postMergeCheck.OutputHash;
+            }
         }
 
         var request = new DeviceRemoteLandingReconciliationRequest(
@@ -427,6 +449,9 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             entries.Add(new WorktreeEntry(path, branch));
         return entries;
     }
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     private static string[] SplitLines(string value) =>
         value.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
