@@ -1360,3 +1360,29 @@ The GitHub async merge request UUID is retained in `LandingAttempt.FailureCode`,
 2. Live disposable GitHub merge-queue acceptance; unit tests are not a substitute.
 3. Classic tag protection `v*` and required reviewers for Environment `production` remain unverified through the current integration. No production tag/deployment is permitted.
 4. PR #230 remains open and unmerged; do not merge the development PR as part of release publication.
+
+
+## 2026-11-26 — Correct two regressions found by async-merge state CI
+
+**Failed CI:** [#45841796175](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45841796175), run 1658, exact head `c877b4039712bff62e75f233f7f5fd21a21bb0c4`.  
+**Follow-up source/test commits:** `78b8edd8a2cf889ad15b7388e8de7aec495750d7`, `605e0cfddd7f5af9241f0ffba35de06e27178e6f`.
+
+### Exact findings
+
+1. **Application test project did not compile:** `PipelineHandlerTests.LandingRecovery.cs(135,46)` read `GitHubMergeRequestStatus` from `LandingAttemptDto`, although the property belongs to the `LandingAttempt` entity. This produced `CS1061` on Linux. The assertion was unnecessary for the DTO contract: the test already checks the persisted failure marker on the entity after reload. Removed only the invalid DTO assertion; no API/DTO field was added.
+2. **Four Domain tests had invalid fixtures:** their `RecordPreview` calls passed a 40-character string in the `candidateCheckOutputHash` position, while that field must be a 64-character SHA-256. Updated the four new test fixtures to use 64 characters. No production validation was weakened.
+
+### CI interpretation
+
+- Linux Build failed with the single `CS1061` above. Application test step then could not start its executable because the test assembly was not produced; this was a consequence of the compile error, not an independent application behavior failure.
+- Linux Domain module ran and reported exactly four failures, all the invalid candidate-check-output-hash fixtures listed above.
+- Linux API, CLI (701 tests), Infrastructure, Web and Worker modules passed.
+- Windows/macOS were still running when the compiler error and Domain failures were diagnosed; do not count the old run as a successful cross-platform validation.
+- The fixes are committed, but the exact new head has not yet been validated. A new full Linux/Windows/macOS run is required.
+
+### Next
+
+1. Let run #45841796175 finish and record its final platform outcomes; it remains a historical failing run.
+2. Trigger a new full CI on the latest head after this journal update.
+3. Confirm Application and Domain pass on exact current head, then verify remaining CLI/Infrastructure/Web/Worker and formatter steps.
+4. Keep merge queue live acceptance and production tag/reviewer protections as separate outstanding blockers.
