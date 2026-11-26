@@ -129,9 +129,9 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     return await BuildQueueFailureAsync(
                         ghPath, repositoryRoot, projectId, repository, closed[0], target, closedAttemptId,
                         expectedPullRequestState: "CLOSED",
-                        failureCode: "GitHubPullRequestClosedWithoutMerge",
+                        failureCode: FailureCodeForUnmergedPullRequestState("CLOSED")!,
                         reason: "The queued GitHub pull request was closed without being merged.",
-                        ct);
+                        ct: ct);
             }
 
             if (open.Length == 1 && target.LandingAttemptId is { } landingAttemptId)
@@ -145,9 +145,9 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                         return await BuildQueueFailureAsync(
                             ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
                             expectedPullRequestState: "OPEN",
-                            failureCode: "GitHubAsyncMergeFailed",
+                            failureCode: FailureCodeForUnmergedPullRequestState("OPEN")!,
                             reason: asyncState.StatusMessage ?? "GitHub async merge request failed.",
-                            ct);
+                            ct: ct);
                     if (string.Equals(asyncState.Status, "pending", StringComparison.Ordinal))
                         return new VerificationResult(null, asyncState.StatusMessage);
                 }
@@ -170,7 +170,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                             expectedPullRequestState: "OPEN",
                             failureCode: "GitHubAsyncMergeFailed",
                             reason: "GitHub removed the PR from its merge queue before it merged.",
-                            ct);
+                            ct: ct);
 
                     // UNMERGEABLE is a current queue-entry condition, not proof that
                     // GitHub removed or permanently failed the request. Keep monitoring;
