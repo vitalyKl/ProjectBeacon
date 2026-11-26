@@ -204,14 +204,10 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 "The queued merge failure does not match the latest successful Review proof.",
                 ErrorKind.Conflict);
 
-        var currentCheckCommand = project.ReviewCheckCommand?.Trim();
-        var currentCheckHash = string.IsNullOrWhiteSpace(currentCheckCommand)
-            ? null
-            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(currentCheckCommand))).ToLowerInvariant();
-        if (!string.Equals(currentCheckHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
-            return Result.Failure<DeviceRemoteLandingFailureResult>(
-                "The project's ReviewCheckCommand changed after the landing request. Restore the reviewed command before resolving this queued attempt.",
-                ErrorKind.Conflict);
+        // This is a definitive failure report, not a merge or post-merge proof.
+        // The attempt is still bound to its immutable successful ReviewRun/hash above;
+        // later edits to the project's mutable ReviewCheckCommand must not prevent a
+        // failed queue request from leaving ExecutePending.
 
         var latestVerdict = await db.ReviewVerdicts.IgnoreQueryFilters().AsNoTracking()
             .Where(verdict => verdict.ProjectId == request.ProjectId && verdict.TaskId == request.TaskId)
