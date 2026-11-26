@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Devices;
 
+using System.Security.Cryptography;
+using System.Text;
 using Application.Common;
 using Application.Persistence;
 using Application.Projects;
@@ -142,12 +144,18 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 }
                 else if (landingAttempt.TryReadGitHubMergeRequestId(out mergeRequestId)
                     && landingAttempt.CandidateTreeSha is { Length: 40 or 64 } candidateTreeValue
-                    && candidateTreeValue.All(Uri.IsHexDigit)
-                    && !string.IsNullOrWhiteSpace(reviewCheckCommand))
+                    && candidateTreeValue.All(Uri.IsHexDigit))
                 {
                     landingAttemptId = landingAttempt.Id;
                     candidateTreeSha = candidateTreeValue;
-                    postMergeCheckCommand = reviewCheckCommand.Trim();
+                    var configuredCheck = reviewCheckCommand?.Trim();
+                    if (!string.IsNullOrWhiteSpace(configuredCheck))
+                    {
+                        var configuredHash = Convert.ToHexString(
+                            SHA256.HashData(Encoding.UTF8.GetBytes(configuredCheck))).ToLowerInvariant();
+                        if (string.Equals(configuredHash, landingAttempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+                            postMergeCheckCommand = configuredCheck;
+                    }
                 }
                 else
                 {
