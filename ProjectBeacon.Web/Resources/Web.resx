@@ -3473,8 +3473,11 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>The merge may already be on the target branch, but post-merge verification failed or could not be confirmed. Inspect the target before requesting a revert.</value>
   </data>
+  <data name="LandingReasonGitHubMergePending" xml:space="preserve">
+    <value>GitHub accepted the asynchronous merge request and is still processing it. A merge-queue entry has not been confirmed yet. The task stays open until Beacon verifies the merged commit and post-merge check.</value>
+  </data>
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
-    <value>GitHub accepted the merge request. It is waiting for the merge queue or for GitHub to finish the merge. The task will stay open until Beacon verifies the merged commit and post-merge check.</value>
+    <value>GitHub has placed the pull request in the merge queue. It is waiting for GitHub to complete the merge. The task stays open until Beacon verifies the merged commit and post-merge check.</value>
   </data>
   <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
     <value>GitHub rejected the asynchronous merge request. Review the merge queue failure, address any required changes, then request a fresh landing preview.</value>
