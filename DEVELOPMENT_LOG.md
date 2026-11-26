@@ -913,3 +913,15 @@ A follow-up compatibility review showed that an older daemon advertising only gi
 1. Run CI on the exact post-journal branch head and fix failures.
 2. Finish end-to-end merge-queue acceptance on a separate user project and verify the UI recovery path after `GitHubAsyncMergeFailed`.
 3. Reconcile plan/journal against the final PR state, then request review/merge separately. Do not publish a release as part of this implementation slice.
+
+
+## 2026-11-26 — UI assertion and current-head correction
+
+After the failure-reporting entry above, the branch received UI regression coverage:
+
+- Added `ProjectBeacon.Web.Tests/Bunit/TaskPipelinePanelTests.cs::FailedGitHubMerge_ShowsLocalizedFailureReason`. It constructs an InProgress/Approved task with a Failed landing attempt and verifies that the panel renders the human-readable localized GitHub async merge rejection message.
+- Rechecked `DeviceEndpoints.cs`: exactly one `/v1/devices/me/remote-landings/failure` route and one `ReportRemoteLandingFailure` handler remain.
+- Rechecked `DaemonAutoSyncLoopTests.cs`: the definitive-failure test verifies one failure POST, zero successful-reconciliation POSTs, exact LandingAttempt/merge request IDs and no cycle exception.
+- Rechecked Application reconciliation tests: a wrong async request UUID is rejected without changing the attempt; the exact UUID records Failed and an audit event while keeping the task InProgress/Approved with no RemoteLandingProof.
+- Current implementation head before this journal correction: `43747d09cd31bd3adcc1fb9ed7ee94ea5b7b9b4c`. The latest commit adds the BUnit assertion; previous journal text naming `c5982175` is the pre-UI-test head and is superseded by this correction.
+- CI run [#45763146032](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) is still an older-head run (head `8ff19877`); there is no CI run for `43747d09`. A full run on the post-journal exact HEAD remains mandatory.
