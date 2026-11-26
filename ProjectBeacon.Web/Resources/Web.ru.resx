@@ -3264,8 +3264,11 @@
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>Слияние могло уже попасть в целевую ветку, но проверка после слияния завершилась ошибкой или её результат не удалось подтвердить. Проверьте целевую ветку, прежде чем запрашивать откат.</value>
   </data>
+  <data name="LandingReasonGitHubMergePending" xml:space="preserve">
+    <value>GitHub принял асинхронный запрос на слияние и ещё обрабатывает его. Появление PR в merge queue пока не подтверждено. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
+  </data>
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
-    <value>GitHub принял запрос на слияние. Ожидается обработка merge queue или завершение слияния на стороне GitHub. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
+    <value>GitHub поместил PR в merge queue. Ожидается завершение слияния на стороне GitHub. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
   </data>
   <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
     <value>GitHub отклонил асинхронный запрос на слияние. Проверьте причину отказа merge queue, внесите необходимые изменения и запросите новый предварительный просмотр слияния.</value>
