@@ -450,3 +450,20 @@ CI #45763146032 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146
 2. Запустить полный CI на финальной вершине implementation branch.
 3. Провести end-to-end acceptance с реальной GitHub merge queue, включая окончательный отказ и retry через новый Preview.
 4. Не создавать production tag/deploy до ручной проверки tag/branch protection и production Environment reviewers администратором.
+
+
+## Дополнение — исправление Application CI для async merge failure (26 ноября 2026)
+
+На CI [#45764313765](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45764313765), run 1648, Linux TRX выявил две конкретные Application failures на pre-fix head `eb76ae90`:
+
+1. Новый тест `RecordsOnlyTheExactVerifiedGitHubQueueFailureAndKeepsTaskOpen` завершался исключением audit allowlist: anonymous object сериализовал `request.Repository` как PascalCase `Repository`, который отклоняется `AuditEvent.ValidateDetails`. Исправлено: failure audit payload теперь использует только существующие allowlisted scalar keys `deviceId`, `sourceBranch`, `targetBranch`, `sourceSha`, `reviewRunId`, `policyCode`, `resultCode`. LandingAttempt ID остаётся TargetId; audit не хранит лишний свободный PR/request metadata.
+2. `IgnoreQueryFiltersAllowlistTests.ProductionTenantFilterBypasses_MatchReviewedPathAndCountAllowlist` ожидал 9 call sites, фактическое число стало 18 в `DeviceRemoteLandingReconciliationHandler.cs`. Дополнительные 9 относятся к новому ReportFailureAsync. Все 18 call sites проверены: каждая выборка device/project/runtime/task/attempt/review/verdict/session ограничена authenticated deviceId и точными project/task/attempt identity. Manifest `docs/ignore-query-filters.allowlist` обновлён до 18 с раздельным обоснованием успешного reconciliation и failure report.
+
+Остальные Linux Application test failures и TRX details:
+- #45764313765 выявил ровно эти два теста.
+- Linux CLI, Domain, Infrastructure, Web и Worker прошли; TRX guard завершился с 2,663 результатами, 7 модулями и одним разрешённым platform skip.
+- Windows/macOS Application step также был помечен failed до перезапуска; после исправлений требуется повторная полная матрица.
+
+Source fixes находятся в `feat/release-management`; исходный post-fix HEAD `2260a7c8c99a6f488286a784751e67f97a57966a`. Журнал implementation branch обновлён последующим commit; требуется новый CI на текущем post-journal HEAD. До зелёного результата не считать async landing slice принятым.
+
+Отдельная функциональная граница остаётся намеренной: при отсутствии async request UUID AutoSync продолжает PR polling и может подтвердить exact eventual MERGED proof, но не может безопасно связать terminal failure с конкретной попыткой. Такой outcome не переводится в Failed без UUID; требуется manual/retryable diagnosis. Не делать автоматический вывод о Failed по одному лишь открытому/blocked PR.
