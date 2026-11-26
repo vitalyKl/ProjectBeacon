@@ -534,3 +534,18 @@ CI [#45775571535](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4577557
 Важно: run 1651 выполнялся на source head `43b61140` и не включает два более поздних workflow commits (`14a8b606` для ci.yml и `21690113` для release.yml) с `if: ${{ !cancelled() }}`. Эти изменения устраняют ложные missing-binary/zero-tests failure при concurrency cancel, но требуют новой полной матрицы на текущем implementation HEAD после записи журнала.
 
 Журнал implementation branch зафиксировал run 1651 отдельным commit `13a157373004b49be000fb735c83f5fff4dbb7ef`. Дальнейший шаг: exact-head CI с cancellation-safe test gating, затем merge-queue user-project acceptance. Не смешивать эту проверку с production tag/deploy; classic protection/reviewers ещё не подтверждены.
+
+
+## Windows bUnit / SQLite teardown race — 26 ноября 2026
+
+CI [#45778443033](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45778443033), run 1652, выявил один Windows-only Web failure:
+
+- `ProjectBeacon.Web.Tests.Bunit.ChatPollRecoveryTests.ChatDock_PollSurvivesTransientFailure` прошёл свой функциональный assertion, но teardown упал с `InvalidOperationException: Collection was modified` из `Microsoft.Data.Sqlite.SqliteConnection.Close()`.
+- На Linux и macOS полные jobs завершились успешно; на Windows все остальные test modules прошли. Web: 249 passed, 3 PostgreSQL skips и 1 failure.
+- Причина — общий fixture `BUnitRenderBase.Dispose()` закрывал in-memory SQLite connection раньше, чем bUnit renderer освобождал компоненты, их poll loops и scoped DbContexts.
+- Исправление в implementation branch: сначала dispose bUnit renderer, затем root BeaconDbContext, затем SQLite connection. Тест оставлен без retries/timeouts и без подавления исключения.
+- Source fix: `41cf2f82ea6e3adb3db74793e0262775c10160a5`; journal commit: `a37e6f5a8115650b579cc756eddc148db76ad4f8`.
+
+**Проверка:** CI #45778443033 относится к предыдущему source head `13a15737`. Новый полный Linux/Windows/macOS CI обязателен для текущего post-journal head. Считать teardown fix принятым только после прохождения Windows Web и общей матрицы.
+
+Состояние GitHub-authoritative landing не меняется: executor использует GitHub async merge API, не включает bypass rules, а merge queue остаётся авторитетным; задача закрывается только после сверки точного PR/head, merge commit, target ancestry, candidate tree и pinned post-merge check. End-to-end сценарии merge queue ещё нужно проверить. Не запускать production tags/deploy до подтверждения классической tag protection и Production Environment reviewers.
