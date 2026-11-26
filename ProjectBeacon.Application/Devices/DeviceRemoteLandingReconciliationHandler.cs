@@ -356,7 +356,7 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.AutoSyncV1))
             return Result.Forbidden<DeviceRemoteLandingStatusResult>(
                 "An active AutoSync-capable device token is required.");
-        
+
         var project = await db.Projects.IgnoreQueryFilters()
             .FirstOrDefaultAsync(item => item.Id == request.ProjectId, ct);
         if (project is null)
