@@ -237,7 +237,9 @@
             "GitPolicyChangedSincePreview" => "LandingReasonGitPolicyChangedSincePreview",
             "TaskNotApprovedForExecute" => "LandingReasonTaskApprovalRequired",
             "AutomaticLandingNotAllowed" => "LandingReasonManualActionRequired",
-            _ when code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal) => "LandingReasonGitHubMergeQueued",
+            _ when code.StartsWith("GitHubMergePending", StringComparison.Ordinal) => "LandingReasonGitHubMergePending",
+            _ when code.StartsWith("GitHubMergeEnqueued", StringComparison.Ordinal)
+                || code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal) => "LandingReasonGitHubMergeQueued",
             "GitHubAsyncMergeFailed" => "LandingReasonGitHubAsyncMergeFailed",
             _ => ResolveLandingReasonCategory(code)
         };
@@ -295,11 +297,13 @@
     }
 
     private static Severity LandingFailureSeverity(string code) =>
-        code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal)
-            ? Severity.Info
-            : string.Equals(code, "CommandCompletionUnknown", StringComparison.Ordinal)
-                ? Severity.Warning
-                : Severity.Error;
+        code.StartsWith("GitHubMergePending", StringComparison.Ordinal)
+            || code.StartsWith("GitHubMergeEnqueued", StringComparison.Ordinal)
+            || code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal)
+                ? Severity.Info
+                : string.Equals(code, "CommandCompletionUnknown", StringComparison.Ordinal)
+                    ? Severity.Warning
+                    : Severity.Error;
 
     private Color LandingStatusColor(LandingAttemptStatus status) => status switch
     {
