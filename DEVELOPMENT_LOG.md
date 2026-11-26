@@ -1136,3 +1136,35 @@ After the failure-reporting entry above, the branch received UI regression cover
 2. Reconcile an already-`Landed` attempt using its immutable stored post-merge exit code/hash (do not rerun a potentially changed project command); queued async merges still need the pinned ReviewCheck to run on the final merged tree.
 3. Add regression coverage for immediate merge and ReviewCheckCommand drift, then run full CI on the new exact head.
 4. Continue live merge-queue acceptance; no production tag, deployment or PR merge was performed.
+
+## 2026-11-26 — Preserve immutable post-merge proof during AutoSync reconciliation
+
+**Baseline CI:** [#45783053165](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45783053165), run 1653, green on `a37e6f5a8115650b579cc756eddc148db76ad4f8`.
+**Source/test head for this follow-up:** `1c9cfdd43477c46375cecf9a809a386f06d9a48a`.
+
+### Finding
+
+A direct GitHub async merge can return `merged` immediately. GitLand then verifies the exact candidate tree and pinned ReviewCheck and records `LandingAttempt.Status = Landed`, together with the candidate tree SHA, post-merge exit code and output hash.
+
+The AutoSync target builder previously exported only `LandingAttemptId` for this state. The daemon's remote verifier requires a candidate tree and post-merge evidence to reconcile the exact remote merge, so this left already-verified immediate merges stuck in `Approved`. Re-running the project setting's current ReviewCheckCommand was also incorrect: a later settings change must not retroactively invalidate a completed, immutable landing proof.
+
+### Changes
+
+- `DeviceAutoSyncTargetsHandler` now includes the persisted candidate tree, post-merge exit code and output hash for an already-`Landed` attempt.
+- `AgentTaskGitHubRemoteLandingOperations` still verifies that GitHub's merge commit tree exactly matches the candidate. For an already-`Landed` attempt it reuses the immutable stored check proof and does not rerun the mutable project setting.
+- An async request still pending/enqueued has no post-merge result yet; its AutoSync target continues to include only the ReviewCheckCommand whose hash matches the immutable Review proof. The pinned workstation executes that check on the exact eventual GitHub merge commit.
+- `ReconcileDeviceRemoteLandingHandler` now compares the incoming candidate tree, post-merge exit code and output hash against the persisted `Landed` attempt, in addition to checking the exact merge commit.
+- Application tests assert that a later ReviewCheckCommand edit does not remove or invalidate persisted proof for a completed land, while queued merges receive no fabricated post-merge proof.
+- Reconciliation tests now reject missing post-merge proof and a mismatched candidate tree; they accept the exact persisted proof even after the project setting has changed.
+
+### Verification
+
+- The preceding exact-head CI #45783053165 passed all platforms and all seven test modules plus formatting; Windows Web regression passed.
+- The source and tests in this entry were added after that green run and are **not covered** by it.
+- No local .NET SDK is available here. A new full Linux/Windows/macOS CI run on the current branch head is required before this slice is accepted.
+
+### Next
+
+1. Run the exact-head CI and fix any build, test or formatting failures.
+2. Keep live merge-queue acceptance open: pending → merged, enqueued → merged, definitive failed with exact request UUID, expired request, missing UUID, PR/base/head drift and ReviewCheck drift.
+3. Verify GitHub `v*` tag protection and required reviewers on the Production Environment before any production publication. No production tag, deployment or PR merge was performed.
