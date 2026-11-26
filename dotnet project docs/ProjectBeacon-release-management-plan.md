@@ -875,3 +875,18 @@ CI [#45862576833](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4586257
 **Проверка:** implementation source/test HEAD до обновления журнала — `a1a3361ae96332345f9bd3c0f0c04722ff1fd428`. Последний зелёный CI [#45864599646](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45864599646) был запущен на более раннем `149548ce` и не покрывает этот срез. Требуется свежий полный Linux/Windows/macOS CI после обновления журнала. Локальный .NET build не заявляется: SDK отсутствует в среде выполнения.
 
 **Остаток:** live merge-queue acceptance в disposable GitHub repository; подтверждение администратором классической tag protection `v*` и required reviewers Environment `production`; полный exact-head CI и user-project acceptance. До проверки production protection не создавать production tag и не запускать deployment. SaaS Control Plane и billing не затрагиваются.
+
+
+## Дополнение — исправление компиляции portable Regex validator (27 ноября 2026)
+
+Полная матрица CI [#45898337610](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45898337610) на exact head `cf919a332fb4df18f7be80eb18735b4cfb7ede65` обнаружила одинаковую ошибку компиляции C# на Linux, Windows и macOS: `CS1010/CS1012` в строке 386 `ProjectVersionPolicy.cs` из-за некорректно сохранённого character literal. Ошибки остальных методов и отсутствие test binaries были каскадными, а не независимыми test failures.
+
+Исправлено в `feat/release-management`:
+
+- проверка backslash теперь использует числовой код символа вместо проблемного C# character literal;
+- portable Regex scanner переписан на последовательные явные ветви для escapes, character classes, групп и единственного version capture;
+- удалено неиспользуемое состояние и восстановлено нормальное форматирование метода.
+
+Текущая реализационная вершина перед журналированием исправления: `3f89c04df347cdc87a1aa5b64185fa3fef424285`. Run #45898337610 проверял старую вершину и **не** валидирует исправление. Нужен новый полный Linux/Windows/macOS CI на post-journal HEAD. Локальный .NET build не заявляется.
+
+Остаток без изменений: live merge-queue acceptance в disposable GitHub repository; классическая tag protection `v*` и required reviewers Environment `production` должны быть подтверждены администратором. PR #230 не сливать до зелёного exact-head CI и live acceptance. SaaS Control Plane и billing вне scope.
