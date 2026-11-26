@@ -58,6 +58,29 @@ public sealed record DeviceRemoteLandingFailureResult(
     string FailureCode,
     string AttemptStatus);
 
+public sealed record DeviceRemoteLandingStatusRequest(
+    Guid ProjectId,
+    Guid TaskId,
+    Guid LandingAttemptId,
+    Guid ReviewRunId,
+    string Repository,
+    int PullRequestNumber,
+    string PullRequestUrl,
+    string SourceBranch,
+    string TargetBranch,
+    string SourceSha,
+    string MergeRequestId,
+    string MergeRequestStatus,
+    string PullRequestState,
+    DateTime VerifiedAtUtc);
+
+public sealed record DeviceRemoteLandingStatusResult(
+    Guid LandingAttemptId,
+    Guid ProjectId,
+    Guid TaskId,
+    string MergeRequestStatus,
+    bool AlreadyRecorded);
+
 public sealed record DeviceRemoteLandingReconciliationResult(
     Guid ProofId,
     Guid ProjectId,
@@ -292,6 +315,208 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         return Result.Ok(new DeviceRemoteLandingFailureResult(
             attempt.Id, attempt.ProjectId, attempt.TaskId, expectedFailureCode,
             attempt.Status.ToString()));
+    }
+
+
+    /// <summary>
+    /// Persists the pinned workstation's observation that the exact pending GitHub
+    /// async merge request entered the merge queue. This transition is monotonic:
+    /// it neither closes the task nor records a successful landing proof.
+    /// </summary>
+    public async Task<Result<DeviceRemoteLandingStatusResult>> ReportAsyncMergeStatusAsync(
+        Guid deviceId,
+        DeviceRemoteLandingStatusRequest request,
+        CancellationToken ct = default)
+    {
+        if (request.MergeRequestStatus != "enqueued"
+            || request.PullRequestState != "OPEN"
+            || deviceId == Guid.Empty
+            || request.ProjectId == Guid.Empty
+            || request.TaskId == Guid.Empty
+            || request.LandingAttemptId == Guid.Empty
+            || request.ReviewRunId == Guid.Empty
+            || request.PullRequestNumber < 1
+            || request.VerifiedAtUtc == default
+            || request.VerifiedAtUtc > DateTime.UtcNow.AddMinutes(2)
+            || !Guid.TryParse(request.MergeRequestId, out var requestId)
+            || requestId == Guid.Empty
+            || !IsValidGitHubRepository(request.Repository)
+            || !IsCanonicalPullRequestUrl(request.PullRequestUrl, request.Repository, request.PullRequestNumber)
+            || !string.Equals(request.SourceBranch, $"beacon/task/{request.TaskId:N}", StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(request.TargetBranch)
+            || !IsGitSha(request.SourceSha))
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "The GitHub enqueued status identity, request UUID, or open PR state is invalid.", ErrorKind.Validation);
+
+        var normalizedRequestId = requestId.ToString("D");
+        await using var db = _dbFactory.CreateDbContext();
+        var device = await db.DaemonDevices.IgnoreQueryFilters().AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == deviceId, ct);
+        if (device is null || device.IsRevoked
+            || !WorkstationCapabilities.Supports(device.ProbeJson, WorkstationCapabilities.AutoSyncV1))
+            return Result.Forbidden<DeviceRemoteLandingStatusResult>(
+                "An active AutoSync-capable device token is required.");
+        
+        var project = await db.Projects.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == request.ProjectId, ct);
+        if (project is null)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "Project not found.", ErrorKind.NotFound);
+        if (!ProjectGitPolicyCatalog.TryRead(
+                project.GitPolicyJson, project.GitPolicyRevision, out var gitPolicy))
+            return Result.Forbidden<DeviceRemoteLandingStatusResult>(
+                "The project Git policy is invalid; remote landing status reports are disabled.");
+        if (!gitPolicy.AutoSyncEnabled
+            && !WorkstationCapabilities.Supports(
+                device.ProbeJson, WorkstationCapabilities.RemoteLandingReconcileV1))
+            return Result.Forbidden<DeviceRemoteLandingStatusResult>(
+                "This workstation does not advertise the AutoSync-independent remote landing protocol.");
+
+        var runtimeAttached = await db.ProjectRuntimes.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(runtime => runtime.ProjectId == request.ProjectId
+                && runtime.DeviceId == deviceId, ct);
+        if (!runtimeAttached)
+            return Result.Forbidden<DeviceRemoteLandingStatusResult>(
+                "The device is not attached to the requested project.");
+
+        var task = await db.Tasks.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == request.TaskId
+                && item.ProjectId == request.ProjectId, ct);
+        if (task is null)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "Task not found.", ErrorKind.NotFound);
+        if (task.PipelineDeviceId != deviceId)
+            return Result.Forbidden<DeviceRemoteLandingStatusResult>(
+                "Only the workstation pinned to this task can report its GitHub merge-queue status.");
+        if (task.Status != TaskItemStatus.InProgress
+            || task.PipelineStage != TaskPipelineStage.Approved)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "The task must remain InProgress and pipeline-approved while a queued merge is monitored.",
+                ErrorKind.Conflict);
+
+        var attempt = await db.LandingAttempts.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(item => item.Id == request.LandingAttemptId
+                && item.ProjectId == request.ProjectId
+                && item.TaskId == request.TaskId, ct);
+        if (attempt is null)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "Landing attempt not found.", ErrorKind.NotFound);
+
+        var latestAttemptId = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.ProjectId == request.ProjectId && item.TaskId == request.TaskId)
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.Id)
+            .Select(item => (Guid?)item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (latestAttemptId != attempt.Id)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "The enqueue observation belongs to an older landing attempt.", ErrorKind.Conflict);
+
+        if (attempt.Status != LandingAttemptStatus.ExecutePending
+            || attempt.DeviceId != deviceId
+            || attempt.ReviewRunId != request.ReviewRunId
+            || !string.Equals(attempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(attempt.SourceBranch, request.SourceBranch, StringComparison.Ordinal)
+            || !string.Equals(attempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal)
+            || !attempt.TryReadGitHubMergeRequestId(out var expectedRequestId)
+            || !string.Equals(expectedRequestId, normalizedRequestId, StringComparison.Ordinal))
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "The GitHub enqueue observation does not match the exact pending Beacon landing attempt.",
+                ErrorKind.Conflict);
+
+        var reviewRun = await db.ReviewRuns.IgnoreQueryFilters().AsNoTracking()
+            .Where(run => run.ProjectId == request.ProjectId && run.TaskId == request.TaskId)
+            .OrderByDescending(run => run.StartedAt)
+            .ThenByDescending(run => run.Id)
+            .FirstOrDefaultAsync(ct);
+        if (reviewRun is null || reviewRun.Id != attempt.ReviewRunId
+            || !reviewRun.IsLandingProof()
+            || reviewRun.CheckedDeviceId != deviceId
+            || !string.Equals(reviewRun.CheckedSourceSha, attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(reviewRun.CheckedBaseBranch, attempt.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(reviewRun.CheckCommandHash, attempt.ReviewCommandHash, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "The enqueue observation does not match the latest successful Review proof.", ErrorKind.Conflict);
+
+        var verdict = await db.ReviewVerdicts.IgnoreQueryFilters().AsNoTracking()
+            .Where(item => item.ProjectId == request.ProjectId && item.TaskId == request.TaskId)
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.Id)
+            .FirstOrDefaultAsync(ct);
+        if (verdict is null || verdict.Kind != ReviewVerdictKind.Approve)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "The latest pipeline review verdict must still be Approve.", ErrorKind.Conflict);
+
+        var activeSession = await db.PipelineSessions.IgnoreQueryFilters().AsNoTracking()
+            .AnyAsync(session => session.ProjectId == request.ProjectId
+                && session.TaskId == request.TaskId
+                && (session.Status == SessionStatus.Ready
+                    || session.Status == SessionStatus.Active
+                    || session.Status == SessionStatus.WaitingForUser), ct);
+        if (activeSession)
+            return Result.Failure<DeviceRemoteLandingStatusResult>(
+                "A pipeline session is still active or queued for this task. The enqueue status was not recorded.",
+                ErrorKind.Conflict);
+
+        bool alreadyRecorded;
+        try
+        {
+            alreadyRecorded = !attempt.RecordGitHubMergeEnqueued(normalizedRequestId);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Result.Failure<DeviceRemoteLandingStatusResult>(exception.Message, ErrorKind.Conflict);
+        }
+        catch (ArgumentException exception)
+        {
+            return Result.Failure<DeviceRemoteLandingStatusResult>(exception.Message, ErrorKind.Validation);
+        }
+
+        if (!alreadyRecorded)
+        {
+            var actor = new ActorContext(
+                ActorType.Device, null, false, null, deviceId,
+                request.ProjectId, project.OrgId, ApiTokenCapability.None);
+            db.AuditEvents.Add(AuditEventFactory.ForActor(
+                actor,
+                "task.remote_landing.merge_enqueued",
+                "LandingAttempt",
+                attempt.Id.ToString("D"),
+                project.OrgId,
+                request.ProjectId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    deviceId,
+                    repository = request.Repository,
+                    pullRequestNumber = request.PullRequestNumber,
+                    pullRequestUrl = request.PullRequestUrl,
+                    sourceBranch = request.SourceBranch,
+                    targetBranch = request.TargetBranch,
+                    sourceSha = request.SourceSha,
+                    reviewRunId = request.ReviewRunId,
+                    mergeRequestId = normalizedRequestId,
+                    resultCode = "GitHubMergeEnqueued"
+                })));
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Failure<DeviceRemoteLandingStatusResult>(
+                    "The landing attempt changed while its GitHub enqueue status was being recorded. Refresh and retry.",
+                    ErrorKind.Conflict);
+            }
+            catch (DbUpdateException)
+            {
+                return Result.Failure<DeviceRemoteLandingStatusResult>(
+                    "The GitHub enqueue status could not be recorded because of a concurrent update.",
+                    ErrorKind.Conflict);
+            }
+        }
+
+        return Result.Ok(new DeviceRemoteLandingStatusResult(
+            attempt.Id, attempt.ProjectId, attempt.TaskId, "enqueued", alreadyRecorded));
     }
 
     private static bool IsValidGitHubRepository(string? repository)
