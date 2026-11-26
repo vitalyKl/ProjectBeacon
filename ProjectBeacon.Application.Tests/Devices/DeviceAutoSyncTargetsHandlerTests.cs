@@ -115,6 +115,10 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
         Guid taskId;
         Guid reviewRunId;
         string sourceSha;
+        Guid queuedTaskId;
+        string queuedSourceSha;
+        string queuedMergeRequestId;
+        string queuedCandidateTree;
         const string localRoot = "/workspace/beacon-managed-landing";
 
         using (TenantScope.EnterUnscoped())
@@ -128,6 +132,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             var project = Project.Create("AutoSync disabled", null, org.Id);
             project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
                 0, [], 200, 20_000, "Off", autoSyncEnabled: false));
+            project.Update(reviewCheckCommand: "dotnet test --no-build");
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -177,6 +182,40 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
                 new string('6', 40), candidateTree, 0, new string('7', 64));
             _db.LandingAttempts.Add(landingAttempt);
 
+            // A second Beacon-managed task is waiting in GitHub's merge queue. It must
+            // remain eligible for reconciliation without enabling repository AutoSync.
+            var queuedTask = TaskItem.Create(
+                "Beacon-managed queued merge", projectId, description: "Waiting for GitHub merge queue.");
+            queuedTask.PinPipelineDevice(deviceId);
+            queuedTask.StartPipeline();
+            queuedTask.EnterExecuting();
+            queuedTask.EnterReview();
+            queuedTask.SetApproved();
+            _db.Tasks.Add(queuedTask);
+            queuedTaskId = queuedTask.Id;
+            var queuedReview = ReviewRun.Start(
+                projectId, queuedTaskId, ReviewerType.Agent, targetRunId: Guid.NewGuid());
+            queuedReview.SetCheckCommandHash(new string('b', 64));
+            queuedSourceSha = new string('b', 40);
+            queuedReview.CompleteCheck(
+                "Review check passed.", "queued-review-artifact",
+                queuedSourceSha, new string('c', 40), deviceId, "main");
+            _db.ReviewRuns.Add(queuedReview);
+            _db.ReviewVerdicts.Add(ReviewVerdict.Create(
+                queuedTaskId, projectId, ReviewVerdictKind.Approve, "Approved."));
+
+            queuedCandidateTree = new string('8', 40);
+            var queuedAttempt = LandingAttempt.Start(
+                projectId, queuedTaskId, queuedReview.Id, user.Id, deviceId,
+                "main", queuedSourceSha, new string('c', 40), new string('b', 64),
+                "Beacon requested an async GitHub merge.");
+            queuedAttempt.RecordPreview(
+                "main", new string('9', 40), queuedCandidateTree, new string('a', 64), 0, null);
+            queuedAttempt.MarkExecutePending();
+            queuedMergeRequestId = Guid.NewGuid().ToString("D");
+            queuedAttempt.MarkGitHubMergeQueued(queuedMergeRequestId);
+            _db.LandingAttempts.Add(queuedAttempt);
+
             // An external/manual merge without a Beacon LandingAttempt is not eligible
             // while AutoSync is disabled, even when the task has a current approved Review.
             var externalTask = TaskItem.Create(
@@ -223,10 +262,19 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             Assert.Equal(projectId, target.ProjectId);
             Assert.Equal(localRoot, target.LocalRoot);
             Assert.False(target.AutoSyncEnabled);
-            var landing = Assert.Single(target.RemoteLandings!);
-            Assert.Equal(taskId, landing.TaskId);
-            Assert.Equal(reviewRunId, landing.ReviewRunId);
-            Assert.Equal(sourceSha, landing.SourceSha);
+            var landings = target.RemoteLandings!;
+            Assert.Equal(2, landings.Count);
+
+            var landed = Assert.Single(landings.Where(item => item.TaskId == taskId));
+            Assert.Equal(reviewRunId, landed.ReviewRunId);
+            Assert.Equal(sourceSha, landed.SourceSha);
+            Assert.Null(landed.MergeRequestId);
+
+            var queued = Assert.Single(landings.Where(item => item.TaskId == queuedTaskId));
+            Assert.Equal(queuedSourceSha, queued.SourceSha);
+            Assert.Equal(queuedMergeRequestId, queued.MergeRequestId);
+            Assert.Equal(queuedCandidateTree, queued.CandidateTreeSha);
+            Assert.Equal("dotnet test --no-build", queued.PostMergeCheckCommand);
         }
     }
 
