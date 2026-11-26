@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import tomllib
 import unittest
 from contextlib import redirect_stderr
 from io import StringIO
@@ -13,7 +14,9 @@ from verify_release_manifest import (
     fail,
     is_safe_git_tag_name,
     read_regex_version,
+    read_toml_version,
     read_xml_version,
+    validate_portable_dotnet_regex,
     validate_tag_pattern,
 )
 
@@ -36,6 +39,44 @@ class ReleaseManifestSafetyTests(unittest.TestCase):
 
         self.assertIn("expected invalid test input", stderr.getvalue())
         self.assertNotIn("::error::", stderr.getvalue())
+
+
+class VersionSourceParityTests(unittest.TestCase):
+    def test_toml_projection_accepts_only_string_and_integer_scalars(self) -> None:
+        self.assertEqual("0.7.5.9", read_toml_version(
+            tomllib.loads('version = "0.7.5.9"'), "version"))
+        self.assertEqual("7", read_toml_version(
+            tomllib.loads("version = 7"), "version"))
+
+        for source in ("version = 1.25", "version = true", "version = [7]"):
+            with self.subTest(source=source), self.assertRaises(SystemExit):
+                read_toml_version(tomllib.loads(source), "version")
+
+    def test_regex_validation_uses_the_same_portable_grammar(self) -> None:
+        accepted = (
+            r"^version=(?<version>[0-9.]+)$",
+            r"(?=version=)version=(?<version>\d+)",
+            r"version=(?<version>\d+)\k<version>",
+        )
+        rejected = (
+            r"version=(?<version>\w+)",
+            r"version=(?<version>\0)",
+            r"version=(?<version>\a)",
+            r"version=(?<version>\x30+)",
+            r"version=(?<version>\p{L}+)",
+            r"version=(?<version>\d+)\1",
+            r"version=(?<version>\d+)\k<other>",
+            r"version=\k<version>(?<version>\d+)",
+            r"(?i)version=(?<version>\d+)",
+            r"version=(?<version>[a-z-[aeiou]]+)",
+            r"version=(?<version>[0-9]+)(?<other>[0-9]+)",
+        )
+        for selector in accepted:
+            with self.subTest(selector=selector):
+                self.assertEqual((True, None), validate_portable_dotnet_regex(selector))
+        for selector in rejected:
+            with self.subTest(selector=selector):
+                self.assertFalse(validate_portable_dotnet_regex(selector)[0])
 
 
 class ReleaseManifestProjectionTests(unittest.TestCase):
