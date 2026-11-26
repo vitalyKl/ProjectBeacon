@@ -145,6 +145,29 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void LiveQueueEvidence_CanRecoverUnknownExecuteWithoutAsyncRequestUuid()
+    {
+        var attempt = Start();
+        attempt.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkCommandCompletionUnknown();
+
+        Assert.True(attempt.TryReadGitHubMergeRequestId(out var requestId));
+        Assert.Null(requestId);
+        Assert.True(attempt.RecordGitHubMergeEnqueuedWithoutRequestId());
+        Assert.Equal("GitHubMergeEnqueued", attempt.FailureCode);
+        Assert.Equal("enqueued", attempt.GitHubMergeRequestStatus);
+        Assert.True(attempt.IsGitHubMergeAccepted);
+        Assert.True(attempt.IsGitHubMergeQueued);
+        Assert.False(attempt.RecordGitHubMergeEnqueuedWithoutRequestId());
+
+        var unverified = Start();
+        unverified.RecordPreview("main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        unverified.MarkExecutePending();
+        Assert.Throws<InvalidOperationException>(unverified.RecordGitHubMergeEnqueuedWithoutRequestId);
+    }
+
+    [Fact]
     public void ExecuteCannotBeRepeatedOrLandedWithDifferentTree()
     {
         var attempt = Start();
