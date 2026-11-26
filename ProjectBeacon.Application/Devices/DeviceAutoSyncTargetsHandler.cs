@@ -141,11 +141,12 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                     landingAttemptId = landingAttempt.Id;
                 }
                 else if (landingAttempt.TryReadGitHubMergeRequestId(out mergeRequestId)
-                    && landingAttempt.CandidateTreeSha is { Length: 40 or 64 } && landingAttempt.CandidateTreeSha.All(Uri.IsHexDigit)
+                    && landingAttempt.CandidateTreeSha is { Length: 40 or 64 } candidateTreeValue
+                    && candidateTreeValue.All(Uri.IsHexDigit)
                     && !string.IsNullOrWhiteSpace(reviewCheckCommand))
                 {
                     landingAttemptId = landingAttempt.Id;
-                    candidateTreeSha = landingAttempt.CandidateTreeSha;
+                    candidateTreeSha = candidateTreeValue;
                     postMergeCheckCommand = reviewCheckCommand.Trim();
                 }
                 else
