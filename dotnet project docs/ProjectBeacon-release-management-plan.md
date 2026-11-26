@@ -467,3 +467,22 @@ CI #45763146032 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146
 Source fixes находятся в `feat/release-management`; исходный post-fix HEAD `2260a7c8c99a6f488286a784751e67f97a57966a`. Журнал implementation branch обновлён последующим commit; требуется новый CI на текущем post-journal HEAD. До зелёного результата не считать async landing slice принятым.
 
 Отдельная функциональная граница остаётся намеренной: при отсутствии async request UUID AutoSync продолжает PR polling и может подтвердить exact eventual MERGED proof, но не может безопасно связать terminal failure с конкретной попыткой. Такой outcome не переводится в Failed без UUID; требуется manual/retryable diagnosis. Не делать автоматический вывод о Failed по одному лишь открытому/blocked PR.
+
+
+## Дополнение — исправление Windows CLI CI после async landing (26 ноября 2026)
+
+CI [#45765744398](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45765744398), run 1649, выполнялся на точном implementation head `a1f277731f66ccadc319f204eede3db3632b6251`:
+
+- Linux и macOS завершились успешно.
+- Windows Build, EF model check, API/Application/Domain/Infrastructure/Web/Worker завершились успешно; CLI test module выявил три ошибки:
+  - `NativeCommandRunnerTests.ArgvCommandRunsWithoutShellAndReturnsStructuredResultAndLogId`: `dotnet --version` истёк по 15-секундному тестовому timeout, поэтому корректный результат runner имел `timedOut=true` и `exitCode=null`; тест ошибочно пытался читать null как число.
+  - `NativeAgentRuntimeTests.NativeRuntimeWaitsForCommandApprovalBeforeRunningArgvAndResumesAfterReply` для решений once и always: polling ждал только 4 секунды, тогда как процесс команды ещё выполнялся.
+
+Исправления в `feat/release-management`:
+- Изолированный command environment задаёт `DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1`, `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`. User CLI config/credentials не разделяются.
+- Direct runner test получает 60-секундный timeout, проверяет `timedOut=false` до чтения exit code и показывает duration/outputTail при сбое.
+- Approval/resume test ожидает завершение ограниченного 60-секундного process timeout до 50 секунд и выводит последний tool result при ошибке.
+
+Source/test commits: `90b6990815beb12c44bcf26c84e16784c6b1366e`, `6b3669b2339a3081fd34bebe53b1471d561bdcd9`, `fd953347cc89b6c4e07b9722850b1e6dc97ab8e5`. Журнал implementation branch обновлён commit `0854badef909e0b85b6b8479f8a390f48a403ce1`. Текущий full head после journal update должен быть проверен новым cross-platform CI; прежние Linux/macOS success из #45765744398 не проверяют post-fix Windows код.
+
+Остаток не меняется: real project acceptance GitHub merge queue (pending/enqueued/merged/failed и неопределённый no-UUID), плюс ручная проверка классических tag/branch protection и required reviewers Production Environment. Не создавать production tag/deploy до административной проверки.
