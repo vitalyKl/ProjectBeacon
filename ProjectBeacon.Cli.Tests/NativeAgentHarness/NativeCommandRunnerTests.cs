@@ -39,13 +39,15 @@ public sealed class NativeCommandRunnerTests
             var args = new JsonObject
             {
                 ["argv"] = new JsonArray { JsonValue.Create("dotnet"), JsonValue.Create("--version") },
-                ["timeoutSeconds"] = 15
+                ["timeoutSeconds"] = 60
             };
             var result = await NativeCommandRunner.ExecuteAsync(root, sessionId, args, CancellationToken.None);
             Assert.False(result.IsError, result.Text);
 
             using var document = JsonDocument.Parse(result.Text);
             var payload = document.RootElement;
+            Assert.False(payload.GetProperty("timedOut").GetBoolean(),
+                $"dotnet --version timed out after {payload.GetProperty("durationMs").GetInt64()}ms: {payload.GetProperty("outputTail").GetString()}");
             Assert.Equal(0, payload.GetProperty("exitCode").GetInt32());
             Assert.True(payload.GetProperty("durationMs").GetInt64() >= 0);
             Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("outputTail").GetString()));
