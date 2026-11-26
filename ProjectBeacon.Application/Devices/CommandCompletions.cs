@@ -753,17 +753,20 @@ internal sealed class GitLandCompletion : ICommandCompletion
                     {
                         var mergeRequestId = ReadString(root, "mergeRequestId");
                         var mergeRequestStatus = ReadString(root, "mergeRequestStatus");
+                        var requestIdValid = string.IsNullOrWhiteSpace(mergeRequestId)
+                            ? string.Equals(mergeRequestStatus, "enqueued", StringComparison.Ordinal)
+                            : Guid.TryParse(mergeRequestId, out var parsedMergeRequestId)
+                                && parsedMergeRequestId != Guid.Empty;
                         var identityMatches = attempt.Status == LandingAttemptStatus.ExecutePending
                             && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
                             && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
                             && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
                             && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
-                            && Guid.TryParse(mergeRequestId, out var parsedMergeRequestId)
-                            && parsedMergeRequestId != Guid.Empty
+                            && requestIdValid
                             && mergeRequestStatus is "pending" or "enqueued";
                         if (identityMatches)
                         {
-                            attempt.MarkGitHubMergeQueued(mergeRequestId!);
+                            attempt.MarkGitHubMergeQueued(mergeRequestId);
                             resultCode = "GitHubMergeQueued";
                             action = "pipeline.landing.execute_queued";
                         }
