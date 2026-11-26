@@ -644,3 +644,17 @@ Live merge queue не тестировалась. End-to-end тестирова�
 Эта граница важна: обычное изменение base между проверкой и непосредственным merge не должно быть принято как merge-group сценарий, если GitHub не подтвердил queued state.
 
 Изменения находятся в `feat/release-management`; последняя implementation/journal вершина на момент записи: `cf6410071c6df28dbda627faa69b05ad556958df`. Run [#45789363602](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45789363602) был запущен на более ранней вершине `c0c1b7b9` и не валидирует это уточнение. Нужен новый полный CI на точной окончательной вершине и live acceptance на disposable репозитории с merge-group checks. До этого feature slice остаётся непроверенным; production tags/deploy запрещены до отдельной административной проверки защиты.
+
+
+## Дополнение — защита от повторной отправки уже поставленного в очередь PR (26 ноября 2026)
+
+Повторный ручной Execute после того, как GitHub уже подтвердил `pending` или `enqueued`, не должен перезаписывать queue marker и ставить новую workstation-команду.
+
+В реализации `feat/release-management`:
+
+- Добавлен явный `LandingAttempt.IsGitHubMergeQueued`, распознающий только `GitHubMergeQueued` / `GitHubMergeQueued:{uuid}`.
+- `ExecuteLandingHandler` возвращает текущую попытку без повторного dispatch, если GitHub уже принял PR для фоновой обработки/merge queue. AutoSync остаётся единственным polling owner до фактического `MERGED` либо definitive async failure.
+- Общий `CommandCompletionUnknown` не считается явным подтверждением очереди: такое состояние может относиться к локальному GitLand и должно оставаться retryable. Для uncertain состояния разрешена только безопасная попытка восстановления; GitHub async endpoint возвращает уже существующий запрос или текущее состояние PR.
+- Добавлены Domain и Application tests: UUID/no-UUID queue marker, отличие от generic unknown, отсутствие второй GitLand команды при повторном Execute.
+
+Текущий implementation source/test head: `77b73cf187022c39b072e4ca50a2fa0434931fa4`; журнал следующего commit должен быть добавлен до нового exact-head CI. Предыдущий run [#45789363602](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45789363602) стартовал на более старом `c0c1b7b9` и не валидирует этот guard и queue-only narrowing. Нужен новый CI на окончательном implementation head; live merge queue всё ещё не тестировалась. Production tag/deploy и merge PR #230 не выполнялись.
