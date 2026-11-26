@@ -455,7 +455,7 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
         if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Execute"))
             return Result.Ok(RequestLandingHandler.ToDto(attempt));
 
-        if (attempt.IsGitHubMergeQueued)
+        if (attempt.IsGitHubMergeAccepted)
         {
             // GitHub already accepted this exact PR into background processing or its
             // merge queue. Do not overwrite that durable state with a second Execute;
