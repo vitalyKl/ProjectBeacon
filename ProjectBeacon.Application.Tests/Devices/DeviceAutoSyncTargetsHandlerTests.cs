@@ -124,6 +124,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
         Guid queuedTaskId;
         string queuedSourceSha;
         string queuedCandidateTree;
+        string queuedMergeRequestId;
         const string localRoot = "/workspace/beacon-managed-landing";
 
         using (TenantScope.EnterUnscoped())
@@ -187,8 +188,8 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
                 new string('6', 40), candidateTree, 0, new string('7', 64));
             _db.LandingAttempts.Add(landingAttempt);
 
-            // A second Beacon-managed task is waiting in GitHub's merge queue. It must
-            // remain eligible for reconciliation without enabling repository AutoSync.
+            // A second Beacon-managed task has a pending asynchronous GitHub merge
+            // request. It remains eligible for polling without enabling repository AutoSync.
             var queuedTask = TaskItem.Create(
                 "Beacon-managed queued merge", projectId, description: "Waiting for GitHub merge queue.");
             queuedTask.PinPipelineDevice(deviceId);
@@ -217,7 +218,8 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             queuedAttempt.RecordPreview(
                 "main", new string('9', 40), queuedCandidateTree, new string('a', 64), 0, null);
             queuedAttempt.MarkExecutePending();
-            queuedAttempt.MarkGitHubMergeQueued(null);
+            queuedMergeRequestId = Guid.NewGuid().ToString("D");
+            queuedAttempt.MarkGitHubMergeQueued(queuedMergeRequestId, "pending");
             _db.LandingAttempts.Add(queuedAttempt);
 
             // An external/manual merge without a Beacon LandingAttempt is not eligible
@@ -280,7 +282,9 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
 
             var queued = Assert.Single(landings, item => item.TaskId == queuedTaskId);
             Assert.Equal(queuedSourceSha, queued.SourceSha);
-            Assert.Null(queued.MergeRequestId);
+            Assert.Equal(queuedMergeRequestId, queued.MergeRequestId);
+            Assert.Equal("pending", queued.MergeRequestStatus);
+            Assert.False(queued.GitHubMergeQueued);
             Assert.Equal(queuedCandidateTree, queued.CandidateTreeSha);
             Assert.Equal("dotnet test --no-build", queued.PostMergeCheckCommand);
             Assert.Null(queued.PersistedPostMergeCheckExitCode);
