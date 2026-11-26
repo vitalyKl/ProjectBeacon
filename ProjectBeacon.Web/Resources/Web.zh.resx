@@ -3285,6 +3285,9 @@ orthstar</value>
   <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
     <value>GitHub 已接受合并请求。请求正在等待合并队列处理或等待 GitHub 完成合并。Beacon 确认合并提交和合并后检查之前，任务会保持未完成状态。</value>
   </data>
+  <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
+    <value>GitHub 拒绝了异步合并请求。请检查合并队列失败原因，完成所需更改后重新请求 landing 预览。</value>
+  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>合并尝试返回了界面无法识别的原因。请检查工作站日志，并向支持人员提供下面的诊断 ID。</value>
   </data>
