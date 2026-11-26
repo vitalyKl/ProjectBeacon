@@ -1312,3 +1312,51 @@ AutoSync reconciled an exact merged PR and reported definitive asynchronous merg
 - Source fix is committed in `fb00cf6d37f9b93d0319054361014cd69db8177b`; run a fresh full Linux/Windows/macOS CI on the exact head after this journal update.
 - If the next Application test run passes, verify remaining CLI/Domain/Infrastructure/Web/Worker modules and formatting across the matrix.
 - Disposable live merge-queue acceptance is still outstanding. Production tag protection `v*` and required reviewers for Environment `production` remain unverified; no production tag/deploy is permitted.
+
+
+## 2026-11-26 — Preserve GitHub async pending/enqueued state across the 24-hour request window
+
+**Branch:** `feat/release-management`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)  
+**Last fully green baseline before this slice:** [CI #45796862947](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45796862947), exact head `e2cc19ed38937fe3cc86d38f10f23b9cc6f7fb28`.
+
+### Finding
+
+The GitHub async merge request UUID is retained in `LandingAttempt.FailureCode`, but the prior marker did not preserve whether GitHub's response was `pending` or `enqueued`. GitHub keeps async request records for a limited 24-hour period. If a request was only `pending`, its UUID could later become unreadable while the PR remained open and had no merge-queue entry. Treating that missing entry as queue removal would incorrectly fail a still-running request.
+
+### Changes
+
+- `LandingAttempt` now stores distinct markers:
+  - `GitHubMergePending:{uuid}` for an accepted `pending` request;
+  - `GitHubMergeEnqueued:{uuid}` for an `enqueued` request;
+  - `GitHubMergeEnqueued` when GitHub confirms queue insertion without a UUID.
+- Added `GitHubMergeRequestStatus`, `IsGitHubMergePending`, and `IsGitHubMergeAccepted`. Any acknowledged async request prevents a second Execute dispatch; only explicit `enqueued` state is treated as proof of queue entry.
+- `GitLandCompletion` persists the workstation's `mergeRequestStatus` together with its request UUID. A `pending` response without UUID is rejected by the domain transition.
+- AutoSync target discovery now sends `MergeRequestStatus` to the pinned workstation.
+- AutoSync distinguishes two separate facts:
+  - an accepted pending/enqueued async request (enough to recognize the Beacon-managed PR, including closed-unmerged verification);
+  - a confirmed merge-queue entry (required before an absent queue entry can be reported as queue removal).
+- When the persisted state is `pending` and its UUID can no longer be read, a missing/expired async request response is not treated as queue removal. The verifier reports the unresolved request and keeps polling. If a later query returns `enqueued`, normal merge-queue polling begins.
+- Legacy `GitHubMergeQueued` no-UUID state is preserved as enqueued. Legacy UUID markers remain accepted for exact PR polling, but unknown subtype does not become evidence of queue removal when its UUID expires.
+- No database migration was needed: status remains in the existing bounded `FailureCode` string and the workstation target DTO uses an optional backward-compatible field.
+
+### Regression tests
+
+- Domain tests cover pending UUID, enqueued UUID, enqueued without UUID, rejection of pending without UUID, and legacy marker compatibility.
+- Application tests verify that the persisted pending status and UUID reach AutoSync target discovery.
+- GitLand completion tests verify that the exact result marker and pending UUID are written to the LandingAttempt.
+- Application landing recovery tests verify that a repeated Execute does not enqueue a second command for an acknowledged pending merge.
+- CLI tests distinguish accepted async requests from confirmed queue entries, including the expiry case: persisted `pending` + unreadable UUID + missing queue status remains non-terminal.
+
+### Verification state
+
+- The prior baseline CI #45796862947 passed Linux, Windows and macOS on `e2cc19ed38937fe3cc86d38f10f23b9cc6f7fb28`; it does not include the current changes.
+- Source/test changes are committed, but this exact new head has not yet been validated by CI. Run the full Linux/Windows/macOS matrix and fix any compile/test/format failures before treating this slice as accepted.
+- No live disposable-repository merge-queue test has been performed. It remains necessary to verify pending >24h expiry, pending→enqueued, enqueued UUID expiry with a live queue entry, queue removal, closed-unmerged PR and eventual merge.
+
+### Remaining blockers
+
+1. Full exact-head CI on the current branch.
+2. Live disposable GitHub merge-queue acceptance; unit tests are not a substitute.
+3. Classic tag protection `v*` and required reviewers for Environment `production` remain unverified through the current integration. No production tag/deployment is permitted.
+4. PR #230 remains open and unmerged; do not merge the development PR as part of release publication.
