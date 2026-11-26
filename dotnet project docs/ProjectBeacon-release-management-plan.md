@@ -806,3 +806,28 @@ Beacon сохранял первоначальный статус GitHub async m
 2. Провести live acceptance async merge queue в disposable GitHub repository: pending expiry, восстановление по live GraphQL entry, queue removal, закрытие PR без merge, завершение merge, расхождение PR/head/base.
 3. Классические `v*` tag protection и required reviewers для Environment `production` остаются непроверенными через connector. Production tag/deploy запрещён до административной проверки.
 4. Продолжить user-project acceptance: Release/landing UI, RLS/authorization, локализация и ошибки/recovery. SaaS Control Plane и биллинг остаются вне объёма работ.
+
+
+## Дополнение — устранение CI-регрессий GitHub landing (26 ноября 2026)
+
+CI [#45859153428](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45859153428) был запущен на старом exact head `f1692d47e60afa071cd7bc60cf25d834f4ddc0dd`. Linux и macOS завершились с ошибками; Windows на момент последней проверки ещё выполнял CLI tests. Этот run не валидирует исправления ниже.
+
+### Исправленные причины
+
+- **Build / xUnit CS0407:** тест `LandingAttemptTests.cs:167` передавал bool-returning method group в `Assert.Throws(Action)`. Переведено на statement lambda, игнорирующую return value. Commit `a67f3aaef8235357f52b9ebe31fb39f326a6bf8c`.
+- **Audit allowlist:** серверное событие async merge использовало безопасные GitHub repository/PR/request identifiers, отсутствовавшие в общем whitelist. Добавлены узкие типизированные regex-проверки для `owner/repository` и canonical HTTPS PR URL; числовой PR number и UUID request проходят стандартные scalar validations. Добавлены положительные и отрицательные Domain tests. Commits `856b67bb4f2843951eab33d51f46c68c2a9e7f61`, `c65007a9a9af21eee9561353eac662eaff41e30f`.
+- **Tenant bypass manifest:** фактическое количество `IgnoreQueryFilters()` в `DeviceRemoteLandingReconciliationHandler.cs` равно 27, а reviewed manifest содержал 18. Запись обновлена на 27. Пересчитаны все 40 manifest entries по текущим исходным файлам — значения совпали. Commit `c38eab3709b4857e07574cf07b4a84347747b8fb`.
+- **BUnit Alert assertion:** test ожидает текстовую причину pending merge и отсутствие UUID, но дополнительно проверял внутреннее CSS-имя `mud-alert-info`, которого MudBlazor не выдаёт. CSS-зависимая проверка заменена на semantic assertion `MudAlert.Severity == Info`. Commit `b218893f54fea16792ec005af399e795df1a3a6b`.
+
+### Статус
+
+Исходный async merge-queue implementation и эти исправления находятся в `feat/release-management`, PR #230. Журнал текущей ветки обновлён; последние исходные/test commits перед журнальной записью: `b218893f54fea16792ec005af399e795df1a3a6b`; journal commit: `ffcdcdbb2ac7230f489ee9f5a70ebaf9d2ce85fd`.
+
+Новый full CI требуется на точном post-journal HEAD. Существующий зелёный CI [#45582326452](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45582326452) относится к предыдущему срезу и не включает новую async merge-queue реализацию. Локальный .NET SDK недоступен; локальная сборка не заявляется.
+
+### Следующие шаги
+
+1. Запустить точный cross-platform CI (Linux/Windows/macOS) на post-journal HEAD, исправить оставшиеся build/test/format ошибки.
+2. Завершить live async merge-queue acceptance на disposable GitHub repository: pending expiry, восстановление по live GraphQL entry, queue removal, close-without-merge, успешный merge и drift PR/head/base.
+3. Администратору подтвердить классическую tag protection `v*` и required reviewers Environment `production`; не создавать production tags и не запускать deploy до проверки.
+4. Продолжать user-project acceptance UI, RLS/authorization и локализованных failure/recovery states. SaaS Control Plane и billing не затрагивать.
