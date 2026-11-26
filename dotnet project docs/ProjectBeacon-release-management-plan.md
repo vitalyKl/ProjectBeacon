@@ -772,3 +772,37 @@ CI [#45841796175](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4584179
 **Проверка:** run #45844150177 остаётся красным и не подтверждает test fix. Нужен новый полный Linux/Windows/macOS CI на точной вершине после тестового исправления и записи журнала.
 
 Остаток не меняется: требуется live acceptance GitHub merge queue в disposable repository; требуется административная проверка защиты тегов `v*` и required reviewers для `production`. Production tag/deploy не выполнять до снятия этих блокеров.
+
+
+## Дополнение — сохранение GitHub merge-queue state между AutoSync-циклами (26 ноября 2026)
+
+### Обнаруженный дефект
+
+Beacon сохранял первоначальный статус GitHub async merge request (`pending`), но переход в `enqueued` видел только внутри текущего AutoSync-цикла. При пропуске цикла статус в БД оставался `pending`. GitHub хранит запись async request ограниченное время; после её истечения UUID endpoint может вернуть not-found, хотя сама запись PR всё ещё находится в merge queue. Поэтому Beacon мог бесконечно оставаться в pending и не мог отличить удаление из очереди от истечения временной async-записи.
+
+### Реализованное исправление
+
+В ветке `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230):
+
+- `LandingAttempt.RecordGitHubMergeEnqueued(requestId)` монотонно переводит только точный сохранённый UUID из pending в enqueued; повторный вызов идемпотентен. Несовпадающий UUID, unknown state и состояние вне ExecutePending отклоняются.
+- Новый device-only endpoint `POST /v1/devices/me/remote-landings/status` сохраняет только явное состояние enqueued для открытого PR. Сервер проверяет закреплённую станцию, runtime, latest landing attempt, UUID, Source/Base, последнюю успешную Review, Approve и отсутствие активной pipeline session. Отчёт не создаёт merge proof и не закрывает задачу.
+- Pinned workstation повторно читает точный PR snapshot до status report. AutoSync отправляет этот отчёт отдельно от reconcile и не считает его успешным merge.
+- Если async UUID уже истёк, но GraphQL всё ещё показывает действительную queue entry точного открытого PR, AutoSync может восстановить pending → enqueued. Отсутствие entry при неизвестном/истёкшем async request не считается доказанным удалением из очереди.
+- Failure reconciliation принимает явный отказ GitHub для точного принятого async request в состояниях pending или enqueued. Generic `CommandCompletionUnknown` без точного accepted request по-прежнему не считается отказом.
+- TaskPipelinePanel различает pending и enqueued, показывает локализованные информационные сообщения en/ru/de/ja/zh и не раскрывает UUID.
+
+Добавлены Domain, Application, CLI, API authorization inventory и Web/BUnit тесты, включая идемпотентность, несовпадение UUID, AutoSync round-trip, отсутствие закрытия задачи и проверку, что пользователь видит понятные pending/enqueued сообщения.
+
+### Проверка
+
+- Предыдущий CI [#45850686745](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45850686745) запускался на старом HEAD `9505ab11`, до этого среза. Все три платформы завершили тестовые модули, но завершились ошибкой `Verify formatting`. Linux log сообщил xUnit1026: неиспользуемый параметр `requestId` в theory `HasConfirmedMergeQueueEntry_RequiresEnqueuedEvidence`. Параметр и избыточные InlineData удалены в commit `b5082889d4bb1ceb2b5d71b197b8d6bab9c3e1c0`. Старый прогон не проверяет ни это исправление, ни новый slice.
+- Implementation head перед обновлением журнала: `4e042dece7fa251c2b273fb55326af58fbe30bf5`; журнальная запись сохранена отдельным commit `a7f9a5a6abe7292dfeb8d2e473bc58baa01548b9`.
+- Новый полный CI требуется для точного post-journal HEAD; текущий slice не считается проверенным до зелёных Linux/Windows/macOS jobs.
+- Локальный .NET SDK в этой среде недоступен; локальная сборка не заявляется.
+
+### Оставшиеся блокеры
+
+1. Получить зелёный кроссплатформенный CI на точной текущей вершине.
+2. Провести live acceptance async merge queue в disposable GitHub repository: pending expiry, восстановление по live GraphQL entry, queue removal, закрытие PR без merge, завершение merge, расхождение PR/head/base.
+3. Классические `v*` tag protection и required reviewers для Environment `production` остаются непроверенными через connector. Production tag/deploy запрещён до административной проверки.
+4. Продолжить user-project acceptance: Release/landing UI, RLS/authorization, локализация и ошибки/recovery. SaaS Control Plane и биллинг остаются вне объёма работ.
