@@ -238,6 +238,7 @@
             "TaskNotApprovedForExecute" => "LandingReasonTaskApprovalRequired",
             "AutomaticLandingNotAllowed" => "LandingReasonManualActionRequired",
             _ when code.StartsWith("GitHubMergeQueued", StringComparison.Ordinal) => "LandingReasonGitHubMergeQueued",
+            "GitHubAsyncMergeFailed" => "LandingReasonGitHubAsyncMergeFailed",
             _ => ResolveLandingReasonCategory(code)
         };
 
