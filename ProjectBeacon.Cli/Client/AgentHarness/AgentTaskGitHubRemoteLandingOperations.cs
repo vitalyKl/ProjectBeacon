@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Cli.Client.AgentHarness;
 
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Application.Devices;
 using ProjectBeacon.Application.Runtime;
 using ProjectBeacon.Cli.Client;
@@ -98,12 +100,26 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         if (listed.Error is not null)
             return new VerificationResult(null, "Remote landing could not read the GitHub PR list: " + listed.Error);
 
-        var matchingMerged = listed.PullRequests
-            .Where(pull => pull.State == "MERGED"
-                && string.Equals(pull.BaseRefName, target.TargetBranch, StringComparison.Ordinal))
+        var matching = listed.PullRequests
+            .Where(pull => string.Equals(pull.BaseRefName, target.TargetBranch, StringComparison.Ordinal))
             .ToArray();
+        var matchingMerged = matching.Where(pull => pull.State == "MERGED").ToArray();
         if (matchingMerged.Length == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(target.MergeRequestId))
+            {
+                var open = matching.Where(pull => pull.State == "OPEN").ToArray();
+                if (open.Length > 1)
+                    return new VerificationResult(null, "Remote landing skipped: more than one open PR matches the queued merge request.");
+                if (open.Length == 1)
+                {
+                    var asyncState = await ReadAsyncMergeRequestStateAsync(
+                        ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
+                    return new VerificationResult(null, asyncState.StatusMessage);
+                }
+            }
             return new VerificationResult(null, null);
+        }
         if (matchingMerged.Length != 1)
             return new VerificationResult(null, "Remote landing skipped: more than one merged PR matches the task branch and review base.");
 
@@ -121,6 +137,17 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             || !DateTimeOffset.TryParse(
                 view.MergedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var mergedAt))
             return new VerificationResult(null, null);
+
+        if (!string.IsNullOrWhiteSpace(target.MergeRequestId))
+        {
+            var asyncState = await ReadAsyncMergeRequestStateAsync(
+                ghPath, repositoryRoot, repository, pullRequest.Number, target.MergeRequestId, ct);
+            if (asyncState.MergeCommitSha is not null
+                && !string.Equals(asyncState.MergeCommitSha, view.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
+                return new VerificationResult(null, "Remote landing skipped: async merge result SHA does not match the merged PR.");
+            // A missing/expired async request record does not override the authoritative
+            // merged PR state; GitHub retains these records only for a limited period.
+        }
 
         var fetch = await AgentTaskGitOperations.RunRemoteGitAsync(
             repositoryRoot, Array.Empty<string>(), ct, originUrls[0],
@@ -166,6 +193,31 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             || !string.IsNullOrWhiteSpace(finalStatus.StdOut))
             return new VerificationResult(null, null);
 
+        int? postMergeCheckExitCode = null;
+        string? postMergeCheckOutputHash = null;
+        if (target.MergeRequestId is not null)
+        {
+            if (target.LandingAttemptId is null
+                || !AgentTaskGitOperations.IsGitSha(target.CandidateTreeSha ?? string.Empty)
+                || string.IsNullOrWhiteSpace(target.PostMergeCheckCommand))
+                return new VerificationResult(null, "Remote landing skipped: queued Beacon merge is missing its candidate tree or pinned post-merge check command.");
+
+            var mergeTree = await AgentTaskGitOperations.Git(
+                repositoryRoot, Array.Empty<string>(), ct,
+                "rev-parse", "--verify", finalView.MergeCommitSha + "^{tree}");
+            if (!AgentTaskGitOperations.Succeeded(mergeTree)
+                || !string.Equals(mergeTree.StdOut.Trim(), target.CandidateTreeSha, StringComparison.OrdinalIgnoreCase))
+                return new VerificationResult(null, "Remote landing skipped: queued GitHub merge tree differs from the reviewed candidate tree.");
+
+            var postMergeCheck = await RunPostMergeCheckAsync(
+                repositoryRoot, localRoot, finalView.MergeCommitSha!, target.CandidateTreeSha!,
+                target.PostMergeCheckCommand, ct);
+            if (postMergeCheck.Error is not null || postMergeCheck.ExitCode != 0 || postMergeCheck.OutputHash is null)
+                return new VerificationResult(null, "Remote landing skipped: post-merge check failed (" + (postMergeCheck.Error ?? "PostMergeCheckFailed") + ").");
+            postMergeCheckExitCode = postMergeCheck.ExitCode;
+            postMergeCheckOutputHash = postMergeCheck.OutputHash;
+        }
+
         var request = new DeviceRemoteLandingReconciliationRequest(
             projectId,
             target.TaskId,
@@ -179,8 +231,134 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             finalView.MergeCommitSha!,
             remoteBaseSha,
             mergedAt.UtcDateTime,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            target.LandingAttemptId,
+            target.MergeRequestId,
+            target.CandidateTreeSha,
+            postMergeCheckExitCode,
+            postMergeCheckOutputHash);
         return new VerificationResult(request, $"GitHub PR #{pullRequest.Number} merge verified for task {target.TaskId:D}.");
+    }
+
+    private sealed record AsyncMergeState(string? Status, string? MergeCommitSha, string? StatusMessage);
+
+    private static async Task<AsyncMergeState> ReadAsyncMergeRequestStateAsync(
+        string ghPath,
+        string workingDirectory,
+        string repository,
+        int pullRequestNumber,
+        string mergeRequestId,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(mergeRequestId, out var parsed) || parsed == Guid.Empty)
+            return new AsyncMergeState(null, null, "Remote landing skipped: GitHub async merge request ID is invalid.");
+
+        var result = await AgentTaskGitOperations.RunGitHubCliAsync(
+            ghPath, workingDirectory, ct,
+            "api", $"repos/{repository}/pulls/{pullRequestNumber}/merge-async/{parsed:D}");
+        if (result.ExitCode != 0 || result.TimedOut)
+            return new AsyncMergeState(null, null,
+                "GitHub async merge request is not currently readable; waiting for the PR merge state. " +
+                AgentTaskGitOperations.Clip(result.StdErr.Trim()));
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(result.StdOut);
+            var root = document.RootElement;
+            var status = root.TryGetProperty("status", out var state)
+                && state.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? state.GetString()?.ToLowerInvariant()
+                    : null;
+            var details = root.TryGetProperty("details", out var detailsValue)
+                && detailsValue.ValueKind == System.Text.Json.JsonValueKind.Object
+                    ? detailsValue
+                    : default;
+            var mergeSha = details.ValueKind == System.Text.Json.JsonValueKind.Object
+                && details.TryGetProperty("sha", out var detailsSha)
+                && detailsSha.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? detailsSha.GetString()
+                    : null;
+            var message = details.ValueKind == System.Text.Json.JsonValueKind.Object
+                && details.TryGetProperty("message", out var detailsMessage)
+                && detailsMessage.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? detailsMessage.GetString()
+                    : null;
+            return status switch
+            {
+                "pending" => new AsyncMergeState(status, mergeSha, "GitHub async merge is pending."),
+                "enqueued" => new AsyncMergeState(status, mergeSha, "GitHub PR is in the merge queue; waiting for the actual merge."),
+                "failed" => new AsyncMergeState(status, mergeSha, "GitHub async merge request failed: " + (message ?? "no failure details")),
+                "merged" => new AsyncMergeState(status, mergeSha, null),
+                _ => new AsyncMergeState(status, mergeSha, "GitHub returned an unsupported async merge request state.")
+            };
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new AsyncMergeState(null, null, "GitHub returned malformed async merge request JSON.");
+        }
+    }
+
+    private sealed record PostMergeCheckResult(int? ExitCode, string? OutputHash, string? Error);
+
+    private static async Task<PostMergeCheckResult> RunPostMergeCheckAsync(
+        string repositoryRoot,
+        string projectRoot,
+        string mergeCommitSha,
+        string expectedTreeSha,
+        string checkCommand,
+        CancellationToken ct)
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "beacon-remote-landing-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var add = await AgentTaskGitOperations.Git(
+                repositoryRoot, Array.Empty<string>(), ct,
+                "worktree", "add", "--detach", temp, mergeCommitSha);
+            if (!AgentTaskGitOperations.Succeeded(add))
+                return new PostMergeCheckResult(null, null, "PostMergeCheckWorktreeFailed");
+
+            var relativeProject = Path.GetRelativePath(repositoryRoot, projectRoot);
+            var checkDirectory = Path.GetFullPath(Path.Combine(temp, relativeProject));
+            var relativeCheck = Path.GetRelativePath(temp, checkDirectory);
+            if (Path.IsPathRooted(relativeCheck)
+                || relativeCheck == ".."
+                || relativeCheck.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || !Directory.Exists(checkDirectory))
+                return new PostMergeCheckResult(null, null, "PostMergeCheckProjectMissing");
+
+            var check = EvalCheck.Execute(checkDirectory, checkCommand);
+            var output = check.Output ?? string.Empty;
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(output))).ToLowerInvariant();
+            var head = await AgentTaskGitOperations.Git(temp, Array.Empty<string>(), ct, "rev-parse", "--verify", "HEAD");
+            var tree = await AgentTaskGitOperations.Git(temp, Array.Empty<string>(), ct, "rev-parse", "--verify", "HEAD^{tree}");
+            var status = await AgentTaskGitOperations.Git(temp, Array.Empty<string>(), ct, "status", "--porcelain", "--untracked-files=all");
+            if (!AgentTaskGitOperations.Succeeded(head)
+                || !string.Equals(head.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                || !AgentTaskGitOperations.Succeeded(tree)
+                || !string.Equals(tree.StdOut.Trim(), expectedTreeSha, StringComparison.OrdinalIgnoreCase)
+                || !AgentTaskGitOperations.Succeeded(status)
+                || !string.IsNullOrWhiteSpace(status.StdOut))
+                return new PostMergeCheckResult(-2, hash, "PostMergeCheckModifiedFiles");
+            if (check.ExitCode != 0)
+                return new PostMergeCheckResult(check.ExitCode, hash, "PostMergeCheckFailed");
+            return new PostMergeCheckResult(0, hash, null);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return new PostMergeCheckResult(null, null, "PostMergeCheckError:" + exception.GetType().Name);
+        }
+        finally
+        {
+            await AgentTaskGitOperations.Git(
+                repositoryRoot, Array.Empty<string>(), CancellationToken.None,
+                "worktree", "remove", "--force", temp);
+            await AgentTaskGitOperations.Git(
+                repositoryRoot, Array.Empty<string>(), CancellationToken.None,
+                "worktree", "prune");
+        }
     }
 
     internal static IReadOnlyList<WorktreeEntry> ParseWorktrees(string output)
