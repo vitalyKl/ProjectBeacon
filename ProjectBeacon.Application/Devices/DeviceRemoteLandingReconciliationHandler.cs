@@ -54,8 +54,7 @@ public sealed record DeviceRemoteLandingFailureResult(
     Guid ProjectId,
     Guid TaskId,
     string FailureCode,
-    string AttemptStatus,
-    bool AlreadyRecorded);
+    string AttemptStatus);
 
 public sealed record DeviceRemoteLandingReconciliationResult(
     Guid ProofId,
@@ -279,7 +278,7 @@ public sealed class ReconcileDeviceRemoteLandingHandler
 
         return Result.Ok(new DeviceRemoteLandingFailureResult(
             attempt.Id, attempt.ProjectId, attempt.TaskId, expectedFailureCode,
-            attempt.Status.ToString(), AlreadyRecorded: false));
+            attempt.Status.ToString()));
     }
 
     private static bool IsValidGitHubRepository(string? repository)
