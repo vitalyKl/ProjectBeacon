@@ -100,6 +100,31 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsValidatedGitHubPullRequestMergeMetadata()
+    {
+        const string json = """{"repository":"acme/project-beacon","pullRequestNumber":42,"pullRequestUrl":"https://github.com/acme/project-beacon/pull/42","mergeRequestId":"6a7c3d51-8397-49e4-86b5-4e7a4ac4f71a","resultCode":"GitHubMergeEnqueued"}""";
+
+        var auditEvent = Create(json);
+
+        Assert.Equal(json, auditEvent.DetailsJson);
+    }
+
+    [Theory]
+    [InlineData("repository", "acme/project beacon")]
+    [InlineData("repository", "https://github.com/acme/project-beacon")]
+    [InlineData("pullRequestUrl", "https://github.com/acme/project-beacon/pull/42?tab=checks")]
+    [InlineData("pullRequestUrl", "https://attacker.example/acme/project-beacon/pull/42")]
+    public void Create_RejectsUnsafeGitHubRepositoryAndPullRequestMetadata(string key, string value)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            [key] = value
+        });
+
+        Assert.Throws<ArgumentException>(() => Create(json));
+    }
+
+    [Fact]
     public void Create_RejectsFreeFormReleaseAndReviewContent()
     {
         Assert.Throws<ArgumentException>(() =>
