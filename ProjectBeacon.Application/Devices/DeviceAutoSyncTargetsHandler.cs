@@ -129,6 +129,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
             string? mergeRequestId = null;
             string? candidateTreeSha = null;
             string? postMergeCheckCommand = null;
+            int? persistedPostMergeCheckExitCode = null;
+            string? persistedPostMergeCheckOutputHash = null;
             if (landingAttempt is not null)
             {
                 var proofMatches = landingAttempt.ReviewRunId == review.Id
@@ -139,16 +141,31 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 if (!proofMatches)
                     continue;
 
+                var hasCandidateTree = landingAttempt.CandidateTreeSha is { Length: 40 or 64 } candidateTreeValue
+                    && candidateTreeValue.All(Uri.IsHexDigit);
                 if (landingAttempt.Status == Domain.Enums.LandingAttemptStatus.Landed)
                 {
+                    // GitLand already ran the immutable post-merge check before it recorded
+                    // Landed. Export that persisted proof rather than re-running a mutable
+                    // Project.ReviewCheckCommand during a later AutoSync cycle.
+                    if (!hasCandidateTree
+                        || landingAttempt.PostMergeCheckExitCode != 0
+                        || landingAttempt.PostMergeCheckOutputHash is not { Length: 64 } persistedHash
+                        || !persistedHash.All(Uri.IsHexDigit))
+                        continue;
+
                     landingAttemptId = landingAttempt.Id;
+                    candidateTreeSha = landingAttempt.CandidateTreeSha;
+                    persistedPostMergeCheckExitCode = landingAttempt.PostMergeCheckExitCode;
+                    persistedPostMergeCheckOutputHash = persistedHash;
                 }
                 else if (landingAttempt.TryReadGitHubMergeRequestId(out mergeRequestId)
-                    && landingAttempt.CandidateTreeSha is { Length: 40 or 64 } candidateTreeValue
-                    && candidateTreeValue.All(Uri.IsHexDigit))
+                    && hasCandidateTree)
                 {
+                    // A queued request has no post-merge proof yet. The pinned workstation
+                    // must run the exact ReviewCheckCommand after GitHub reports MERGED.
                     landingAttemptId = landingAttempt.Id;
-                    candidateTreeSha = candidateTreeValue;
+                    candidateTreeSha = landingAttempt.CandidateTreeSha;
                     var configuredCheck = reviewCheckCommand?.Trim();
                     if (!string.IsNullOrWhiteSpace(configuredCheck))
                     {
@@ -175,7 +192,9 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 landingAttemptId,
                 mergeRequestId,
                 candidateTreeSha,
-                postMergeCheckCommand));
+                postMergeCheckCommand,
+                persistedPostMergeCheckExitCode,
+                persistedPostMergeCheckOutputHash));
         }
 
         return targets;
@@ -198,4 +217,6 @@ public sealed record DeviceRemoteLandingTargetDto(
     Guid? LandingAttemptId = null,
     string? MergeRequestId = null,
     string? CandidateTreeSha = null,
-    string? PostMergeCheckCommand = null);
+    string? PostMergeCheckCommand = null,
+    int? PersistedPostMergeCheckExitCode = null,
+    string? PersistedPostMergeCheckOutputHash = null);
