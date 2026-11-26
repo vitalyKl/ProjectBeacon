@@ -142,7 +142,7 @@ public sealed class DaemonAutoSyncLoopTests
                     landingAttemptId, requestId, new string('b', 40), "dotnet test --no-build")
             ]);
         var response = new DeviceRemoteLandingFailureResult(
-            landingAttemptId, projectId, taskId, "GitHubAsyncMergeFailed", "Failed", AlreadyRecorded: false);
+            landingAttemptId, projectId, taskId, "GitHubAsyncMergeFailed", "Failed");
 
         var api = new AutoSyncLandingApi(target, reconciliation: null, failure: response);
         using var http = new HttpClient(api) { BaseAddress = new Uri("http://localhost/") };
