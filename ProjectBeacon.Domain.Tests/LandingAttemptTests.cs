@@ -246,30 +246,82 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
-    public void GitHubMergeQueue_KeepsExecutePendingAndSupportsMissingRequestUuid()
+    public void GitHubMergeRequest_PendingAndEnqueuedRemainDistinctAfterPersistence()
     {
         var requestId = Guid.NewGuid().ToString("D");
-        var withRequestId = Start();
-        withRequestId.RecordPreview(
+        var pending = Start();
+        pending.RecordPreview(
             "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
-        withRequestId.MarkExecutePending();
-        withRequestId.MarkGitHubMergeQueued(requestId);
+        pending.MarkExecutePending();
+        pending.MarkGitHubMergeQueued(requestId, "pending");
 
-        Assert.Equal(LandingAttemptStatus.ExecutePending, withRequestId.Status);
-        Assert.Equal("GitHubMergeQueued:" + requestId, withRequestId.FailureCode);
-        Assert.True(withRequestId.TryReadGitHubMergeRequestId(out var storedRequestId));
-        Assert.Equal(requestId, storedRequestId);
+        Assert.Equal(LandingAttemptStatus.ExecutePending, pending.Status);
+        Assert.Equal("GitHubMergePending:" + requestId, pending.FailureCode);
+        Assert.Equal("pending", pending.GitHubMergeRequestStatus);
+        Assert.True(pending.IsGitHubMergePending);
+        Assert.False(pending.IsGitHubMergeQueued);
+        Assert.True(pending.IsGitHubMergeAccepted);
+        Assert.True(pending.TryReadGitHubMergeRequestId(out var pendingId));
+        Assert.Equal(requestId, pendingId);
 
-        var alreadyEnqueued = Start();
-        alreadyEnqueued.RecordPreview(
-            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
-        alreadyEnqueued.MarkExecutePending();
-        alreadyEnqueued.MarkGitHubMergeQueued(null);
+        var enqueued = Start();
+        enqueued.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+        enqueued.MarkExecutePending();
+        enqueued.MarkGitHubMergeQueued(requestId, "enqueued");
 
-        Assert.Equal(LandingAttemptStatus.ExecutePending, alreadyEnqueued.Status);
-        Assert.Equal("GitHubMergeQueued", alreadyEnqueued.FailureCode);
-        Assert.True(alreadyEnqueued.TryReadGitHubMergeRequestId(out var missingRequestId));
-        Assert.Null(missingRequestId);
+        Assert.Equal("GitHubMergeEnqueued:" + requestId, enqueued.FailureCode);
+        Assert.Equal("enqueued", enqueued.GitHubMergeRequestStatus);
+        Assert.False(enqueued.IsGitHubMergePending);
+        Assert.True(enqueued.IsGitHubMergeQueued);
+        Assert.True(enqueued.IsGitHubMergeAccepted);
+        Assert.True(enqueued.TryReadGitHubMergeRequestId(out var enqueuedId));
+        Assert.Equal(requestId, enqueuedId);
+    }
+
+    [Fact]
+    public void GitHubEnqueuedWithoutUuid_RemainsQueueAcknowledged()
+    {
+        var attempt = Start();
+        attempt.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkGitHubMergeQueued(null, "enqueued");
+
+        Assert.Equal(LandingAttemptStatus.ExecutePending, attempt.Status);
+        Assert.Equal("GitHubMergeEnqueued", attempt.FailureCode);
+        Assert.Equal("enqueued", attempt.GitHubMergeRequestStatus);
+        Assert.True(attempt.IsGitHubMergeQueued);
+        Assert.True(attempt.TryReadGitHubMergeRequestId(out var requestId));
+        Assert.Null(requestId);
+    }
+
+    [Fact]
+    public void GitHubPendingWithoutUuid_IsRejectedRatherThanMistakenForQueueEntry()
+    {
+        var attempt = Start();
+        attempt.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+        attempt.MarkExecutePending();
+
+        Assert.Throws<ArgumentException>(() => attempt.MarkGitHubMergeQueued(null, "pending"));
+        Assert.Throws<ArgumentException>(() => attempt.MarkGitHubMergeQueued(Guid.NewGuid().ToString("D"), "unknown"));
+    }
+
+    [Fact]
+    public void LegacyQueuedMarker_RemainsEnqueuedForBackwardCompatibility()
+    {
+        var attempt = Start();
+        attempt.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkGitHubMergeQueued(null);
+
+        Assert.Equal("GitHubMergeEnqueued", attempt.FailureCode);
+        Assert.Equal("enqueued", attempt.GitHubMergeRequestStatus);
+        Assert.True(attempt.IsGitHubMergeQueued);
+        Assert.True(attempt.TryReadGitHubMergeRequestId(out var requestId));
+        Assert.Null(requestId);
     }
 
     [Fact]
