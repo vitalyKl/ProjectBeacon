@@ -269,12 +269,12 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             var landings = target.RemoteLandings!;
             Assert.Equal(2, landings.Count);
 
-            var landed = Assert.Single(landings.Where(item => item.TaskId == taskId));
+            var landed = Assert.Single(landings, item => item.TaskId == taskId);
             Assert.Equal(reviewRunId, landed.ReviewRunId);
             Assert.Equal(sourceSha, landed.SourceSha);
             Assert.Null(landed.MergeRequestId);
 
-            var queued = Assert.Single(landings.Where(item => item.TaskId == queuedTaskId));
+            var queued = Assert.Single(landings, item => item.TaskId == queuedTaskId);
             Assert.Equal(queuedSourceSha, queued.SourceSha);
             Assert.Null(queued.MergeRequestId);
             Assert.Equal(queuedCandidateTree, queued.CandidateTreeSha);
@@ -287,8 +287,9 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var changedCommandResult = await handler.HandleAsync(deviceId, TestContext.Current.CancellationToken);
             Assert.True(changedCommandResult.Success, changedCommandResult.Error);
-            var queuedAfterEdit = Assert.Single(changedCommandResult.Value!.Single().RemoteLandings!
-                .Where(item => item.TaskId == queuedTaskId));
+            var queuedAfterEdit = Assert.Single(
+                changedCommandResult.Value!.Single().RemoteLandings!,
+                item => item.TaskId == queuedTaskId);
             Assert.Null(queuedAfterEdit.PostMergeCheckCommand);
         }
     }
