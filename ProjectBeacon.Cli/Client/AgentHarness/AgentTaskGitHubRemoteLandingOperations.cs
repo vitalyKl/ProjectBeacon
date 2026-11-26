@@ -116,48 +116,55 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             var open = matching.Where(pull => pull.State == "OPEN").ToArray();
             if (open.Length > 1)
                 return new VerificationResult(null, "Remote landing skipped: more than one open PR matches the queued merge request.");
-            if (open.Length == 1 && !string.IsNullOrWhiteSpace(target.MergeRequestId))
+            if (open.Length == 1 && target.LandingAttemptId is { } landingAttemptId)
             {
-                var asyncState = await ReadAsyncMergeRequestStateAsync(
-                    ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
-                if (string.Equals(asyncState.Status, "failed", StringComparison.Ordinal)
-                    && target.LandingAttemptId is { } landingAttemptId)
+                AsyncMergeState? asyncState = null;
+                if (!string.IsNullOrWhiteSpace(target.MergeRequestId))
                 {
-                    var failedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
-                        ghPath, repositoryRoot, repository, open[0].Number, ct);
-                    if (failedSnapshot.Error is not null)
-                        return new VerificationResult(null, "GitHub reported a failed async merge, but the PR state could not be re-confirmed.");
-                    var failedView = failedSnapshot.View!;
-                    if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
-                            failedView, "OPEN", target.TargetBranch, target.SourceSha)
-                        || !string.Equals(failedView.Url, open[0].Url, StringComparison.Ordinal))
-                        return new VerificationResult(null, "GitHub async merge failed, but the exact open PR identity could not be re-confirmed.");
-
-                    var failureRequest = new DeviceRemoteLandingFailureRequest(
-                        projectId,
-                        target.TaskId,
-                        landingAttemptId,
-                        target.ReviewRunId,
-                        repository,
-                        open[0].Number,
-                        failedView.Url,
-                        target.SourceBranch,
-                        target.TargetBranch,
-                        target.SourceSha,
-                        target.MergeRequestId,
-                        DateTime.UtcNow);
-                    return new VerificationResult(null, failureRequest, asyncState.StatusMessage);
+                    asyncState = await ReadAsyncMergeRequestStateAsync(
+                        ghPath, repositoryRoot, repository, open[0].Number, target.MergeRequestId, ct);
+                    if (string.Equals(asyncState.Status, "failed", StringComparison.Ordinal))
+                        return await BuildQueueFailureAsync(
+                            ghPath, repositoryRoot, repository, open[0], target, landingAttemptId,
+                            asyncState.StatusMessage ?? "GitHub async merge request failed.", ct);
+                    if (string.Equals(asyncState.Status, "pending", StringComparison.Ordinal))
+                        return new VerificationResult(null, asyncState.StatusMessage);
                 }
-                return new VerificationResult(null, asyncState.StatusMessage);
-            }
-            if (open.Length == 1 && target.LandingAttemptId is not null)
-            {
-                // Some already-enqueued responses do not return a new request UUID.
-                // The PR remains the durable polling authority until it reaches MERGED.
+
+                var queueAcknowledged = target.GitHubMergeQueued
+                    || string.Equals(asyncState?.Status, "enqueued", StringComparison.Ordinal);
+                if (queueAcknowledged)
+                {
+                    var queue = await ReadMergeQueueEntryAsync(
+                        ghPath, repositoryRoot, repository, open[0].Number, ct);
+                    if (queue.Error is not null)
+                        return new VerificationResult(null,
+                            "GitHub confirmed this PR was enqueued, but its current merge-queue state could not be read. " + queue.Error);
+                    if (!string.Equals(queue.PullRequestState, "OPEN", StringComparison.Ordinal))
+                        return new VerificationResult(null,
+                            "GitHub merge-queue status returned a PR state that changed during polling; retrying on the next AutoSync cycle.");
+                    if (queue.EntryState is null
+                        || string.Equals(queue.EntryState, "UNMERGEABLE", StringComparison.Ordinal))
+                        return await BuildQueueFailureAsync(
+                            ghPath, repositoryRoot, repository, open[0], target, landingAttemptId,
+                            queue.EntryState is null
+                                ? "GitHub removed the PR from its merge queue before it merged."
+                                : "GitHub marked the merge-queue entry UNMERGEABLE.",
+                            ct);
+
+                    return new VerificationResult(null,
+                        $"GitHub PR #{open[0].Number} remains in the merge queue ({queue.EntryState}, position {queue.Position?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}); waiting for MERGED.");
+                }
+
+                if (asyncState is not null)
+                    return new VerificationResult(null, asyncState.StatusMessage);
+
+                // A generic CommandCompletionUnknown can also come from local GitLand.
+                // Do not infer queue removal without an explicit GitHub queue acknowledgement.
                 var queuedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
                     ghPath, repositoryRoot, repository, open[0].Number, ct);
                 if (queuedSnapshot.Error is not null)
-                    return new VerificationResult(null, "Remote landing could not inspect the queued PR state.");
+                    return new VerificationResult(null, "Remote landing could not inspect the open PR state.");
                 return new VerificationResult(null,
                     $"GitHub PR #{open[0].Number} is still {queuedSnapshot.View!.MergeStateStatus}; waiting for MERGED.");
             }
@@ -308,6 +315,110 @@ internal static class AgentTaskGitHubRemoteLandingOperations
     }
 
     private sealed record AsyncMergeState(string? Status, string? MergeCommitSha, string? StatusMessage);
+
+    internal sealed record MergeQueueEntryState(string? PullRequestState, string? EntryState, int? Position, string? Error);
+
+    private static async Task<VerificationResult> BuildQueueFailureAsync(
+        string ghPath,
+        string workingDirectory,
+        string repository,
+        AgentTaskGitOperations.PullRequestInfo pullRequest,
+        DeviceRemoteLandingTargetDto target,
+        Guid landingAttemptId,
+        string reason,
+        CancellationToken ct)
+    {
+        var snapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+            ghPath, workingDirectory, repository, pullRequest.Number, ct);
+        if (snapshot.Error is not null)
+            return new VerificationResult(null, "GitHub reported a queue failure, but the exact PR could not be re-confirmed. " + snapshot.Error);
+        var view = snapshot.View!;
+        if (view.State != "OPEN"
+            || !string.Equals(view.BaseBranch, target.TargetBranch, StringComparison.Ordinal)
+            || !string.Equals(view.HeadSha, target.SourceSha, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(view.Url, pullRequest.Url, StringComparison.Ordinal))
+            return new VerificationResult(null, "GitHub queue failure could not be bound to the exact open PR/source/base identity.");
+
+        var request = new DeviceRemoteLandingFailureRequest(
+            target.ProjectId,
+            target.TaskId,
+            landingAttemptId,
+            target.ReviewRunId,
+            repository,
+            pullRequest.Number,
+            view.Url,
+            target.SourceBranch,
+            target.TargetBranch,
+            target.SourceSha,
+            target.MergeRequestId,
+            DateTime.UtcNow);
+        return new VerificationResult(null, request, reason);
+    }
+
+    internal static (MergeQueueEntryState? State, string? Error) ParseMergeQueueEntryResponse(string json)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.TryGetProperty("errors", out var errors)
+                && errors.ValueKind == System.Text.Json.JsonValueKind.Array
+                && errors.GetArrayLength() > 0)
+                return (null, "GitHub GraphQL returned an error while reading the merge queue.");
+            if (!root.TryGetProperty("data", out var data)
+                || data.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !data.TryGetProperty("repository", out var repository)
+                || repository.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !repository.TryGetProperty("pullRequest", out var pullRequest)
+                || pullRequest.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return (null, "GitHub GraphQL returned incomplete repository/PR data for the merge queue.");
+            var prState = pullRequest.TryGetProperty("state", out var state)
+                && state.ValueKind == System.Text.Json.JsonValueKind.String ? state.GetString() : null;
+            if (string.IsNullOrWhiteSpace(prState))
+                return (null, "GitHub GraphQL returned no pull request state for the merge queue.");
+            if (!pullRequest.TryGetProperty("mergeQueueEntry", out var entry)
+                || entry.ValueKind == System.Text.Json.JsonValueKind.Null)
+                return (new MergeQueueEntryState(prState, null, null, null), null);
+            if (entry.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !entry.TryGetProperty("state", out var entryState)
+                || entryState.ValueKind != System.Text.Json.JsonValueKind.String)
+                return (null, "GitHub GraphQL returned an invalid merge queue entry.");
+            int? position = entry.TryGetProperty("position", out var positionValue)
+                && positionValue.ValueKind == System.Text.Json.JsonValueKind.Number
+                && positionValue.TryGetInt32(out var parsedPosition)
+                    ? parsedPosition : null;
+            return (new MergeQueueEntryState(prState, entryState.GetString(), position, null), null);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return (null, "GitHub GraphQL returned malformed merge queue JSON.");
+        }
+    }
+
+    private static async Task<MergeQueueEntryState> ReadMergeQueueEntryAsync(
+        string ghPath,
+        string workingDirectory,
+        string repository,
+        int pullRequestNumber,
+        CancellationToken ct)
+    {
+        var parts = repository.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || pullRequestNumber < 1)
+            return new MergeQueueEntryState(null, null, null, "The GitHub repository or PR identity is invalid.");
+        const string query = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { state mergeQueueEntry { state position } } } }";
+        var result = await AgentTaskGitOperations.RunGitHubCliAsync(
+            ghPath, workingDirectory, ct,
+            "api", "graphql",
+            "-f", "query=" + query,
+            "-f", "owner=" + parts[0],
+            "-f", "name=" + parts[1],
+            "-F", "number=" + pullRequestNumber.ToString(CultureInfo.InvariantCulture));
+        if (result.ExitCode != 0 || result.TimedOut)
+            return new MergeQueueEntryState(null, null, null,
+                "Could not query GitHub GraphQL mergeQueueEntry. " + AgentTaskGitOperations.Clip(result.StdErr.Trim()));
+        var parsed = ParseMergeQueueEntryResponse(result.StdOut);
+        return parsed.State ?? new MergeQueueEntryState(null, null, null, parsed.Error);
+    }
 
     private static async Task<AsyncMergeState> ReadAsyncMergeRequestStateAsync(
         string ghPath,
