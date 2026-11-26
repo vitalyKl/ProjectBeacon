@@ -849,3 +849,29 @@ CI [#45862576833](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4586257
 Исправление в `feat/release-management`, commit `f3a16483b88e53d3831e975002641ebf57216a05`: удалена только DOM/CSS-проверка существования alert. Сохранены assertions на отображение pending-сообщения и отсутствие UUID в пользовательском markup. Production UI не менялся.
 
 **Статус проверки:** старый CI не валидирует этот фикс. Требуется новый full Linux/Windows/macOS CI на точном post-journal HEAD. Локальный .NET SDK отсутствует. PR #230 не сливать до зелёного exact-head CI и live merge-queue acceptance в disposable repository.
+
+
+## Дополнение — финальная проверка Regex/TOML parity (27 ноября 2026)
+
+В реализации S1/S3 закрыты ещё два расхождения между серверным Version Policy и tag-triggered Python release gate. Изменения находятся в `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230):
+
+### Regex
+
+- .NET валидатор заменён на детерминированную проверку той же переносимой грамматики, которую использует Python.
+- Разрешены ровно одна группа захвата (именованная `(?<version>...)` или обычная группа 1), non-capturing groups, look-ahead и согласованный набор escapes.
+- Именованный backreference `\k<version>` допускается только после объявления группы.
+- .NET-only/несовместимые escapes (`\0`, `\a`, `\x`, `\p` и др.), look-behind, inline options, numeric backreferences, word-class/boundary escapes, вложенные/вычитаемые character classes отвергаются уже при сохранении политики.
+
+### TOML
+
+- Оба обработчика принимают только строковые и целочисленные TOML значения.
+- Float, bool, arrays, tables и date/time не считаются version projections. Это устраняет различия в текстовом преобразовании дробных значений между Tomlyn и Python `tomllib`.
+
+### Product UI и тесты
+
+- Domain и Python regression tests покрывают положительные/отрицательные Regex selectors и TOML scalar types.
+- Подсказка Project Version sources уточнена во всех пяти локалях (en/ru/de/ja/zh), включая ограничение TOML и Regex.
+
+**Проверка:** implementation source/test HEAD до обновления журнала — `a1a3361ae96332345f9bd3c0f0c04722ff1fd428`. Последний зелёный CI [#45864599646](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45864599646) был запущен на более раннем `149548ce` и не покрывает этот срез. Требуется свежий полный Linux/Windows/macOS CI после обновления журнала. Локальный .NET build не заявляется: SDK отсутствует в среде выполнения.
+
+**Остаток:** live merge-queue acceptance в disposable GitHub repository; подтверждение администратором классической tag protection `v*` и required reviewers Environment `production`; полный exact-head CI и user-project acceptance. До проверки production protection не создавать production tag и не запускать deployment. SaaS Control Plane и billing не затрагиваются.
