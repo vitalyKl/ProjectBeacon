@@ -168,7 +168,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
         {
             var attempt = LandingAttempt.Start(
                 setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
-                "main", setup.SourceSha, new string('2', 40), new string('a', 64),
+                "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
                 "Beacon-managed landing awaiting Execute.");
             _db.LandingAttempts.Add(attempt);
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -200,7 +200,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var candidateTree = new string('5', 40);
             var attempt = LandingAttempt.Start(
                 setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
-                "main", setup.SourceSha, new string('2', 40), new string('a', 64),
+                "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
                 "Beacon-managed landing with verified GitHub merge.");
             attempt.RecordPreview(
                 "main", setup.RemoteBaseSha, candidateTree, new string('6', 64), 0, null);
