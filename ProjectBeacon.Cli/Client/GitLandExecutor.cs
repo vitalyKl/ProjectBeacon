@@ -324,7 +324,7 @@ internal static class GitLandExecutor
         }
 
         var postMerge = await RunPostMergeCheckAsync(
-            workspace, request, merge.Result.MergeCommitSha, expectedTreeSha: null,
+            workspace, request, merge.Result.MergeCommitSha, null,
             filters, CancellationToken.None);
         if (postMerge.ErrorCode is not null || postMerge.ExitCode != 0
             || !IsSha256(postMerge.OutputHash))
