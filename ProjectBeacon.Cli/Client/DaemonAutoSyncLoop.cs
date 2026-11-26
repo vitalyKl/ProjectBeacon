@@ -140,6 +140,28 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
             ct.ThrowIfCancellationRequested();
             var verification = await _verifyRemoteLanding(
                 target.LocalRoot, target.ProjectId, remoteLanding, ct);
+            if (verification.FailureRequest is { } failureRequest)
+            {
+                using var failureResponse = await _http.PostAsJsonAsync(
+                    "v1/devices/me/remote-landings/failure",
+                    failureRequest, JsonOptions, ct);
+                if (failureResponse.IsSuccessStatusCode)
+                {
+                    var result = await failureResponse.Content.ReadFromJsonAsync<DeviceRemoteLandingFailureResult>(
+                        JsonOptions, ct);
+                    RecordState(remoteLanding.TaskId, "remote-landing-failed:" + result?.FailureCode,
+                        $"AutoSync task {remoteLanding.TaskId}: GitHub merge queue rejected the exact PR request. Landing attempt is {result?.AttemptStatus ?? "Failed"}; request a fresh Preview after reviewing the failure.");
+                }
+                else
+                {
+                    var errorBody = await failureResponse.Content.ReadAsStringAsync(ct);
+                    var state = $"remote-landing-failure-http:{(int)failureResponse.StatusCode}";
+                    RecordState(remoteLanding.TaskId, state,
+                        $"AutoSync task {remoteLanding.TaskId}: GitHub reported a definitive merge failure, but Beacon did not accept the failure proof (HTTP {(int)failureResponse.StatusCode}). {Clip(errorBody)}");
+                }
+                continue;
+            }
+
             if (verification.Request is null)
             {
                 if (!string.IsNullOrWhiteSpace(verification.Status))
