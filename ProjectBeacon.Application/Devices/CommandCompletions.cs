@@ -749,6 +749,32 @@ internal sealed class GitLandCompletion : ICommandCompletion
                         action = "pipeline.landing.execute_failed";
                         break;
                     }
+                case "merge_queued":
+                    {
+                        var mergeRequestId = ReadString(root, "mergeRequestId");
+                        var mergeRequestStatus = ReadString(root, "mergeRequestStatus");
+                        var identityMatches = attempt.Status == LandingAttemptStatus.ExecutePending
+                            && string.Equals(ReadString(root, "targetBranch"), attempt.TargetBranch, StringComparison.Ordinal)
+                            && string.Equals(ReadString(root, "sourceSha"), attempt.SourceSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "targetHeadSha"), attempt.TargetHeadSha, StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(ReadString(root, "candidateTreeSha"), attempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                            && Guid.TryParse(mergeRequestId, out var parsedMergeRequestId)
+                            && parsedMergeRequestId != Guid.Empty
+                            && mergeRequestStatus is "pending" or "enqueued";
+                        if (identityMatches)
+                        {
+                            attempt.MarkGitHubMergeQueued(mergeRequestId!);
+                            resultCode = "GitHubMergeQueued";
+                            action = "pipeline.landing.execute_queued";
+                        }
+                        else
+                        {
+                            FailIfInFlight(attempt, "InvalidGitHubMergeQueueEvidence");
+                            resultCode = "InvalidGitHubMergeQueueEvidence";
+                            action = "pipeline.landing.execute_failed";
+                        }
+                        break;
+                    }
                 case "landed":
                     {
                         var mergeCommit = ReadString(root, "mergeCommitSha");
