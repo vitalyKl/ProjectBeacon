@@ -12,7 +12,7 @@ public sealed class AgentTaskGitHubRemoteLandingOperationsTests
     [InlineData("UNMERGEABLE", 5)]
     public void ParseMergeQueueEntryResponse_ParsesKnownQueueStatesAndPosition(string state, int position)
     {
-        var json = $\"\\\"{\\\"data\\\":{\\\"repository\\\":{\\\"pullRequest\\\":{\\\"state\\\":\\\"OPEN\\\",\\\"mergeQueueEntry\\\":{\\\"state\\\":\\\"{{state}}\\\",\\\"position\\\":{{position}}}}}}}}\"\\";
+        var json = "{\"data\":{\"repository\":{\"pullRequest\":{\"state\":\"OPEN\",\"mergeQueueEntry\":{\"state\":\"" + state + "\",\"position\":" + position + "}}}}}";
 
         var result = AgentTaskGitHubRemoteLandingOperations.ParseMergeQueueEntryResponse(json);
 
