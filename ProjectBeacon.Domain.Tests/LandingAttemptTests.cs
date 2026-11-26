@@ -280,6 +280,43 @@ public sealed class LandingAttemptTests
     }
 
     [Fact]
+    public void GitHubPending_TransitionsMonotonicallyToEnqueuedForTheSameRequest()
+    {
+        var requestId = Guid.NewGuid().ToString("D");
+        var attempt = Start();
+        attempt.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkGitHubMergeQueued(requestId, "pending");
+
+        Assert.True(attempt.RecordGitHubMergeEnqueued(requestId));
+        Assert.Equal(LandingAttemptStatus.ExecutePending, attempt.Status);
+        Assert.Equal("GitHubMergeEnqueued:" + requestId, attempt.FailureCode);
+        Assert.Equal("enqueued", attempt.GitHubMergeRequestStatus);
+        Assert.True(attempt.IsGitHubMergeAccepted);
+        Assert.True(attempt.IsGitHubMergeQueued);
+        Assert.Null(attempt.MergeCommitSha);
+        Assert.False(attempt.RecordGitHubMergeEnqueued(requestId));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            attempt.RecordGitHubMergeEnqueued(Guid.NewGuid().ToString("D")));
+    }
+
+    [Fact]
+    public void GitHubPendingToEnqueued_RejectsUnknownOrMissingRequestIdentity()
+    {
+        var attempt = Start();
+        attempt.RecordPreview(
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
+        attempt.MarkExecutePending();
+        attempt.MarkGitHubMergeQueued(null, "enqueued");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            attempt.RecordGitHubMergeEnqueued(Guid.NewGuid().ToString("D")));
+        Assert.Throws<ArgumentException>(() => attempt.RecordGitHubMergeEnqueued("not-a-guid"));
+    }
+
+    [Fact]
     public void GitHubEnqueuedWithoutUuid_RemainsQueueAcknowledged()
     {
         var attempt = Start();
