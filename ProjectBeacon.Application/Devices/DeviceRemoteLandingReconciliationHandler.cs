@@ -212,14 +212,14 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         if (attempt.Status != LandingAttemptStatus.ExecutePending
             || attempt.DeviceId != deviceId
             || attempt.ReviewRunId != request.ReviewRunId
-            || !attempt.IsGitHubMergeQueued
+            || !attempt.IsGitHubMergeAccepted
             || !attempt.TryReadGitHubMergeRequestId(out var expectedRequestId)
             || !string.Equals(expectedRequestId, parsedMergeRequestId?.ToString("D"), StringComparison.Ordinal)
             || !string.Equals(attempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(attempt.SourceBranch, request.SourceBranch, StringComparison.Ordinal)
             || !string.Equals(attempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal))
             return Result.Failure<DeviceRemoteLandingFailureResult>(
-                "The GitHub async merge failure does not match the exact queued Beacon landing attempt.",
+                "The GitHub async merge failure does not match the exact accepted Beacon async landing attempt.",
                 ErrorKind.Conflict);
 
         var reviewRun = await db.ReviewRuns.IgnoreQueryFilters().AsNoTracking()
