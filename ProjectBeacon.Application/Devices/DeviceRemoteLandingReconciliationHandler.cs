@@ -165,7 +165,8 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             .FirstOrDefaultAsync(ct);
         if (latestLandingAttempt is not null)
         {
-            var proofMatches = latestLandingAttempt.ReviewRunId == request.ReviewRunId
+            var proofMatches = request.LandingAttemptId == latestLandingAttempt.Id
+                && latestLandingAttempt.ReviewRunId == request.ReviewRunId
                 && latestLandingAttempt.DeviceId == deviceId
                 && string.Equals(latestLandingAttempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(latestLandingAttempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal);
