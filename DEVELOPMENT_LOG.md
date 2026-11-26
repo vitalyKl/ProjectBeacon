@@ -1427,3 +1427,50 @@ The previous run is now fully complete. Linux, Windows and macOS all finished wi
 1. Trigger and inspect full CI on the post-fix head.
 2. Continue the outstanding disposable-repository GitHub merge-queue acceptance (pending expiry, pending→enqueued, queue removal, closed-unmerged PR, merge completion, and PR/head/base drift).
 3. Keep production tag/deploy blocked until an administrator verifies the `v*` tag rules and `production` Environment reviewers.
+
+
+## 2026-11-26 — Persist GitHub async merge-queue state across AutoSync cycles
+
+**Implementation head before this journal entry:** `4e042dece7fa251c2b273fb55326af58fbe30bf5`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)
+
+### Defect and intended state transition
+
+A GitHub asynchronous merge request can begin as `pending` and later become `enqueued`. Beacon persisted the initial state from GitLand completion but previously observed the later `enqueued` state only in one AutoSync cycle. If the workstation missed that cycle, the persisted state remained `pending`. GitHub retains an async request record for a limited period; after expiry the UUID endpoint can return not-found even while a merge-queue entry remains live. Beacon could then remain stuck in pending and could not safely distinguish queue removal from request-record expiry.
+
+### Implementation
+
+- Added `LandingAttempt.RecordGitHubMergeEnqueued(requestId)`: only the exact persisted request UUID can transition from pending to enqueued; repeats are idempotent; mismatched UUIDs, unknown state and attempts outside ExecutePending fail closed. The task remains ExecutePending and no merge SHA or landing proof is created.
+- Added device-only endpoint `POST /v1/devices/me/remote-landings/status` and `ReportAsyncMergeStatusAsync`. It accepts only an explicit `enqueued` observation for an OPEN PR, validates canonical repository/PR identity, exact task/attempt/request UUID/source/base, pinned device/runtime, latest successful Review proof, latest Approve verdict and absence of an active pipeline session. It records an audit event once, never closes the task, and is idempotent.
+- The pinned workstation now verifies the exact open PR/head/base twice before reporting `pending → enqueued`. AutoSync posts the status report separately from merge reconciliation; successful status persistence is not treated as a merge.
+- Added expiry recovery: when the short-lived async request record is no longer readable, a live GraphQL merge-queue entry for the same open PR can recover the missing enqueued observation. A missing queue entry while only pending/expired is **not** treated as queue removal. Only an explicitly accepted/enqueued request may produce a definitive queue-removal failure.
+- Updated failure reconciliation to accept a definitive failure for an explicitly accepted async request in either pending or enqueued state, provided the exact request UUID matches. Generic `CommandCompletionUnknown` without an accepted async request remains ineligible.
+- Updated TaskPipelinePanel reason mapping and translations (en/ru/de/ja/zh): pending and enqueued are distinct informational states, not red failure alerts. The request UUID is never shown to the user.
+
+### Tests added/updated
+
+- Domain: monotonic/idempotent pending-to-enqueued transition, mismatched UUID rejection and no transition from an unrecognized status.
+- Application: exact device/task/Review/attempt/request binding; rejects closed PR and state regression; idempotent status report and one audit record; verifies AutoSync targets subsequently return the persisted enqueued state; task remains InProgress/Approved and no RemoteLandingProof is created.
+- Application: explicit async failure is accepted while the exact request remains pending.
+- API: authorization inventory explicitly classifies the new status endpoint as Device-only.
+- CLI: AutoSync posts the status report without reconciling or closing the task; expiry recovery requires a real queue entry.
+- Web: BUnit coverage for localized pending and enqueued messages and UUID redaction.
+
+### CI status and validation
+
+- Previous run [#45850686745](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45850686745) ran on older exact head `9505ab11`, before this implementation slice. All three OS jobs completed test modules but failed `Verify formatting`. The Linux log reported xUnit1026 for an unused `requestId` parameter in `HasConfirmedMergeQueueEntry_RequiresEnqueuedEvidence`; removed that unused parameter and redundant theory data in commit `b5082889d4bb1ceb2b5d71b197b8d6bab9c3e1c0`. This older run does not validate that change or the current slice.
+- Current head before the journal update is `4e042dece7fa251c2b273fb55326af58fbe30bf5`. No CI run has yet validated the new endpoint, the client/AutoSync path, pending failure acceptance, UI localization or new tests. Trigger a fresh full Linux/Windows/macOS run on the post-journal head.
+- The .NET SDK is unavailable in this execution environment; no local build/test result is claimed.
+
+### Remaining blockers
+
+1. Run and fix cross-platform CI on the exact current head.
+2. Complete live merge-queue acceptance in a disposable GitHub repository, covering pending expiry, recovery by live GraphQL entry, queue removal, closed-unmerged PR, merge completion and PR/head/base drift.
+3. Classic `v*` tag protection and required reviewers for GitHub Environment `production` remain unverified through the connector; no production tag/deploy is permitted until an administrator verifies them.
+4. Continue user-project acceptance of Release/landing settings, RLS/authorization, localization and failure/recovery UI. SaaS Control Plane and billing remain outside this work.
+
+### Next
+
+1. Trigger exact-head cross-platform CI.
+2. Inspect the new status round-trip and test outcomes; fix any failures before further feature changes.
+3. Finish disposable-repository queue acceptance and administrative release-protection verification.
