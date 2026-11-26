@@ -389,4 +389,20 @@ After the server and target-discovery regression tests, the workstation loop now
 
 1. Завершить полный CI на итоговом implementation head и исправить все обнаруженные ошибки.
 2. Пройти end-to-end acceptance с реальным GitHub merge queue и verify PostMergeCheck.
-3. Доделать product acceptance: release/settings UI, localization, RLS, ошибки workflow и проект с независимой схемой версии. 
+3. Доделать product acceptance: release/settings UI, localization, RLS, ошибки workflow и проект с независимой схемой версии.
+
+
+## Дополнение — терминальный отказ GitHub async merge (26 ноября 2026)
+
+Реализован пропущенный failure path для GitHub-authoritative landing в `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230):
+
+- Workstation через AutoSync опрашивает exact async merge request. Только подтверждённый GitHub status `failed` вместе с повторно прочитанным неизменившимся OPEN PR (тот же repository/PR URL, source HEAD SHA и target branch) формирует failure proof.
+- `pending`, `enqueued`, недоступность/истечение async request endpoint, смена PR head/base, закрытый или уже merged PR не переводят attempt в Failed.
+- Device endpoint `POST /v1/devices/me/remote-landings/failure` передаёт доказательство в серверный `ReportFailureAsync`. Сервер повторно сверяет pinned workstation, project runtime, LandingAttempt ID, ReviewRun, UUID, source/base, ReviewCheckCommand hash, latest Approve и отсутствие активного pipeline session.
+- После точного совпадения Beacon записывает `GitHubAsyncMergeFailed` в FailureCode/EscalationCode и пишет audit event. Task остаётся InProgress/Approved, proof merge не создаётся; пользователю показывается локализованная причина и требуется новый Preview/Review после исправления причины отказа.
+- Удалено дублирующее API объявление и alias: единственный клиентский endpoint — `/failure`.
+- Application test проверяет wrong UUID vs exact UUID и отсутствие закрытия задачи. AutoSync loop test проверяет вызов failure endpoint и отсутствие вызова successful reconciliation.
+
+**Текущее состояние CI:** старый run [#45763146032](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) выполняется на более раннем head `8ff19877` и не проверяет эти изменения. Реализационный head перед последним journal-only commit: `c5982175ec5040cdafdb2a05dace1f8e2fe9dd2b`; CI на нём не зарегистрирован. Текущий journal-only commit: `4c4bd0baa6beaf14c9af49521986a35f36056568`. Полный Linux/Windows/macOS CI нужно запустить на итоговом HEAD после синхронизации плана и журнала.
+
+**Нерешённое:** end-to-end acceptance на пользовательском проекте с реальным merge queue (pending/enqueued/merged/failed, UUID missing/expired, ReviewCheckCommand drift). Rulesets API вернул пустой список; classic branch/tag protection и production reviewers недоступны текущей интеграции, поэтому production tag/deploy запрещены до ручной проверки администратором.
