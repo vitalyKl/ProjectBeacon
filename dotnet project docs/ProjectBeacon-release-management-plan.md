@@ -506,3 +506,17 @@ CI #45765744398 на head a1f277731f66ccadc319f204eede3db3632b6251: Linux и mac
 Source/test commits: 90b6990815beb12c44bcf26c84e16784c6b1366e, 6b3669b2339a3081fd34bebe53b1471d561bdcd9, fd953347cc89b6c4e07b9722850b1e6dc97ab8e5, 4457acb742cb5bf2448399a4d4c5bb39eede0e1c. Журнал implementation branch содержит точную диагностику. Не считать fix принятым до нового CI на post-journal HEAD.
 
 End-to-end acceptance с реальной GitHub merge queue всё ещё необходим: enqueued→merged, definitive failed, no/expired UUID, PR identity drift и ReviewCheckCommand drift. Tag/branch protection и production Environment reviewers остаются отдельным административным блокером.
+
+
+## CI cancellation incident и исправление test gating — 26 ноября 2026
+
+PR CI #45775401460 (run 1650) был отменён новым запуском #45775571535 (run 1651) на том же SHA `43b611406c9370e9dd022b4b61c4cffed2672127`. Поскольку workflow использовал `if: always()` для `dotnet test --no-build`, отменённый Build всё равно запускал API/остальные тесты при отсутствующих бинарниках. В Linux API завершился `Win32Exception (2)` / `Zero tests ran`, а TRX guard обнаружил 6 вместо 7 отчётов. На Windows сборка была отменена до создания test executable, последующие команды сообщали `No test projects were found` или отсутствие DLL. Это ложные статусы отменённого запуска, не подтверждённые падения тестов.
+
+Run #45775571535 (run 1651) — текущая проверка source head `43b61140`, однако он использует старую CI-конфигурацию. Его результаты будут учитываться только для кода, не для новых workflow changes.
+
+Исправление в implementation branch:
+- `.github/workflows/ci.yml`: 16 условий тестовых модулей, TRX report и TRX guard заменены с `always()` на `!cancelled()`.
+- `.github/workflows/release.yml`: восемь условий тестовых модулей и TRX guard заменены на `!cancelled()`; scan/SBOM artifact upload сохраняет `always()`.
+- При обычном Build/test failure остальные модули продолжают выполняться, чтобы собирать полный набор ошибок. При отмене или замене workflow run `--no-build` тесты больше не стартуют на неполном checkout/build output.
+
+Implementation commits: `14a8b606b99fdb96c678dd4d04873e99565a5f10`, `216901136fbd16da006b04da59910f776227d652`; implementation journal commit: `71439aae751c7ccb4804269b79458bcfeb096815`. После завершения run 1651 требуется отдельная полная CI-матрица на текущей вершине branch, чтобы проверить новые условия вместе с Windows timeout fix.
