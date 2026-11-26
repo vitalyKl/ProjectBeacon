@@ -22,17 +22,14 @@ public sealed class AgentTaskGitHubRemoteLandingOperationsTests
     }
 
     [Theory]
-    [InlineData(false, null, "pending", null, false)]
-    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", "pending", null, false)]
-    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", "pending", "pending", false)]
-    [InlineData(false, null, "pending", "enqueued", true)]
-    [InlineData(false, "9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1", "enqueued", null, true)]
-    [InlineData(false, null, "enqueued", null, true)]
-    [InlineData(true, null, null, null, true)]
-    [InlineData(false, null, null, "failed", false)]
+    [InlineData(false, "pending", null, false)]
+    [InlineData(false, "pending", "pending", false)]
+    [InlineData(false, "pending", "enqueued", true)]
+    [InlineData(false, "enqueued", null, true)]
+    [InlineData(true, null, null, true)]
+    [InlineData(false, null, "failed", false)]
     public void HasConfirmedMergeQueueEntry_RequiresEnqueuedEvidence(
         bool legacyQueuedMarker,
-        string? requestId,
         string? persistedStatus,
         string? currentAsyncStatus,
         bool expected)
