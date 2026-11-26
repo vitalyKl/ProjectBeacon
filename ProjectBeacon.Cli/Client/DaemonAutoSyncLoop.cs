@@ -140,6 +140,29 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
             ct.ThrowIfCancellationRequested();
             var verification = await _verifyRemoteLanding(
                 target.LocalRoot, target.ProjectId, remoteLanding, ct);
+            if (verification.StatusRequest is { } statusRequest)
+            {
+                using var statusResponse = await _http.PostAsJsonAsync(
+                    "v1/devices/me/remote-landings/status",
+                    statusRequest, JsonOptions, ct);
+                if (statusResponse.IsSuccessStatusCode)
+                {
+                    var result = await statusResponse.Content.ReadFromJsonAsync<DeviceRemoteLandingStatusResult>(
+                        JsonOptions, ct);
+                    var persisted = result?.AlreadyRecorded == true ? "already persisted" : "persisted";
+                    RecordState(remoteLanding.TaskId, "remote-landing-enqueued:" + result?.MergeRequestStatus,
+                        $"AutoSync task {remoteLanding.TaskId}: GitHub async merge request was confirmed enqueued and its state was {persisted}. The task remains open until the merge is verified.");
+                }
+                else
+                {
+                    var errorBody = await statusResponse.Content.ReadAsStringAsync(ct);
+                    var state = $"remote-landing-status-http:{(int)statusResponse.StatusCode}";
+                    RecordState(remoteLanding.TaskId, state,
+                        $"AutoSync task {remoteLanding.TaskId}: GitHub enqueue status was not persisted (HTTP {(int)statusResponse.StatusCode}). {Clip(errorBody)}");
+                }
+                continue;
+            }
+
             if (verification.FailureRequest is { } failureRequest)
             {
                 using var failureResponse = await _http.PostAsJsonAsync(
