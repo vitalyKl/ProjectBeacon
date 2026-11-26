@@ -1168,3 +1168,34 @@ The AutoSync target builder previously exported only `LandingAttemptId` for this
 1. Run the exact-head CI and fix any build, test or formatting failures.
 2. Keep live merge-queue acceptance open: pending → merged, enqueued → merged, definitive failed with exact request UUID, expired request, missing UUID, PR/base/head drift and ReviewCheck drift.
 3. Verify GitHub `v*` tag protection and required reviewers on the Production Environment before any production publication. No production tag, deployment or PR merge was performed.
+
+
+## 2026-11-26 — Support GitHub merge-queue merge-group trees
+
+**Implementation head:** `9fce7b94c699ac8313bc9f149347035c32404ddd`  
+**Prior full green CI:** [#45786178874](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45786178874) on `bd4378bb09d883df6d64f80542e198df775b5aef`; this run does not cover the source changes below.
+
+### Finding
+
+The GitHub async merge endpoint can enqueue a PR for a merge queue. The queue validates and merges a temporary merge-group commit built from the then-current base and earlier queued PRs. Its tree can legitimately differ from Beacon's local Preview candidate even though the exact reviewed PR head is what GitHub merged. Comparing the final queue merge tree byte-for-byte with the Preview tree would therefore strand a valid queued merge as `LandedUnverified`.
+
+### Changes
+
+- Added `GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable`: a valid actual merge tree is required in all cases; an expected candidate tree is additionally required only when a workflow expects the merge to reproduce a local candidate exactly.
+- GitHub-origin `GitLand Execute` no longer rejects a valid final merge solely because merge-queue processing included a newer base or earlier queued PRs. The async merge request still pins the exact source SHA, and the merge executor still validates repository, PR identity/base, clean task worktree, review approval, required checks and mergeability.
+- The pinned post-merge check now runs on the actual GitHub merge commit/tree. AutoSync verifies that commit is present in the fetched remote target branch, re-confirms the exact merged PR and checks the immutable result before requesting server reconciliation.
+- Normal local GitLand still passes the Preview candidate tree as the expected tree and remains strict. This relaxation applies only to the GitHub-authoritative merge path.
+- Added regression cases for strict candidate equality, queue tree divergence, malformed actual tree and malformed expected candidate SHA.
+
+### Verification
+
+- The changes are committed to `feat/release-management`; latest source/test head is `9fce7b94c699ac8313bc9f149347035c32404ddd`.
+- CI #45786178874 passed all three OS jobs on the previous head `bd4378bb`; it does **not** validate this merge-queue correction.
+- A fresh Linux/Windows/macOS CI run is required on the exact current head. No .NET tests or formatting are claimed passed for this follow-up until that run completes.
+
+### Remaining acceptance items
+
+1. Run and inspect exact-head CI; fix any compile, test or formatter issue.
+2. Exercise both direct merge and merge-queue paths against a disposable GitHub repository with the required `merge_group` workflow checks configured. This environment has not performed a live queue merge.
+3. Verify legacy `v*` tag protection and required reviewers for GitHub Environment `production` in repository settings. No production tag/deploy is permitted until confirmed.
+4. Keep PR #230 open for review; do not merge this development PR as part of the release workflow.
