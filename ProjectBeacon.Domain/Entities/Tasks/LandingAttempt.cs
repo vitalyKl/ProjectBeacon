@@ -289,6 +289,21 @@ public sealed class LandingAttempt : Entity, IProjectScoped
         Touch();
     }
 
+    /// <summary>
+    /// Records that GitHub accepted this exact PR merge request but the PR has not
+    /// reached MERGED yet (for example, it is waiting in a merge queue). The attempt
+    /// remains ExecutePending until the pinned workstation verifies the final merge.
+    /// </summary>
+    public void MarkGitHubMergeQueued(string mergeRequestId)
+    {
+        EnsureStatus(LandingAttemptStatus.ExecutePending);
+        if (!Guid.TryParse(mergeRequestId, out var parsed) || parsed == Guid.Empty)
+            throw new ArgumentException("GitHub asynchronous merge request ID must be a GUID.", nameof(mergeRequestId));
+
+        FailureCode = "GitHubMergeQueued:" + parsed.ToString("D");
+        Touch();
+    }
+
     public void ClearCommandCompletionUnknown()
     {
         if (Status is not (LandingAttemptStatus.ExecutePending or LandingAttemptStatus.RevertPending)
