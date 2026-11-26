@@ -159,13 +159,6 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 "Landing attempt not found.", ErrorKind.NotFound);
 
         var expectedFailureCode = "GitHubAsyncMergeFailed";
-        if (attempt.Status == LandingAttemptStatus.Failed
-            && string.Equals(attempt.FailureCode, expectedFailureCode, StringComparison.Ordinal)
-            && string.Equals(attempt.EscalationCode, expectedFailureCode, StringComparison.Ordinal))
-            return Result.Ok(new DeviceRemoteLandingFailureResult(
-                attempt.Id, attempt.ProjectId, attempt.TaskId, expectedFailureCode,
-                attempt.Status.ToString(), AlreadyRecorded: true));
-
         if (attempt.Status != LandingAttemptStatus.ExecutePending
             || attempt.DeviceId != deviceId
             || attempt.ReviewRunId != request.ReviewRunId
