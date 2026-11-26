@@ -496,7 +496,9 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
         landingAttempt.RecordPreview(
             "main", setup.RemoteBaseSha, new string('5', 40), new string('6', 64), 0, null);
         landingAttempt.MarkExecutePending();
-        landingAttempt.MarkGitHubMergeQueued(requestId);
+        landingAttempt.MarkGitHubMergeQueued(requestId, "pending");
+        Assert.True(landingAttempt.IsGitHubMergePending);
+        Assert.False(landingAttempt.IsGitHubMergeQueued);
         using (TenantScope.EnterUnscoped())
         {
             _db.LandingAttempts.Add(landingAttempt);
