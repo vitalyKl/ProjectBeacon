@@ -309,22 +309,21 @@ internal static class GitLandExecutor
         if (merge.ErrorCode is not null || merge.Result is null)
             return BusinessFailure(merge.ErrorCode ?? "GitHubMergeFailed");
 
-        // GitHub may merge through a queue after the base or earlier queued PRs advance.
-        // The final merge tree can therefore differ from the local Preview candidate.
-        // The exact PR head is pinned by GitHub's merge API; verify a real commit tree
-        // and run the pinned post-merge check on the actual merged commit.
+        // A direct async response with status=merged must still reproduce the Preview
+        // candidate. Queue requests returned earlier as pending/enqueued and are verified
+        // later by AutoSync against the actual merge-group commit instead.
         var mergeTree = await Git(
             workspace.RepositoryRoot, filters, CancellationToken.None,
             "rev-parse", "--verify", merge.Result.MergeCommitSha + "^{tree}");
         if (!Succeeded(mergeTree)
-            || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(null, mergeTree.StdOut.Trim()))
+            || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(request.TargetTreeSha, mergeTree.StdOut.Trim()))
         {
             return LandedUnverified(
-                request, merge.Result.MergeCommitSha, null, null, "GitHubMergeTreeUnavailable");
+                request, merge.Result.MergeCommitSha, null, null, "GitHubMergeTreeMismatch");
         }
 
         var postMerge = await RunPostMergeCheckAsync(
-            workspace, request, merge.Result.MergeCommitSha, null,
+            workspace, request, merge.Result.MergeCommitSha, request.TargetTreeSha,
             filters, CancellationToken.None);
         if (postMerge.ErrorCode is not null || postMerge.ExitCode != 0
             || !IsSha256(postMerge.OutputHash))
