@@ -363,6 +363,7 @@ public static class ProjectVersionPolicyCatalog
         var hasNamedVersionGroup = false;
         var hasNamedVersionBackReference = false;
         var inCharacterClass = false;
+        var classHasContent = false;
 
         for (var index = 0; index < pattern.Length; index++)
         {
@@ -379,13 +380,12 @@ public static class ProjectVersionPolicyCatalog
                 if (escaped == 'k')
                 {
                     const string namedBackReference = "k<version>";
-                    if (inCharacterClass
+                    if (inCharacterClass || !hasNamedVersionGroup
                         || !pattern.AsSpan(index).StartsWith(namedBackReference, StringComparison.Ordinal))
                     {
-                        error = @"Only the .NET named backreference \k<version> is supported, and only outside a character class.";
+                        error = "Only a named version backreference after its capture group is supported.";
                         return false;
                     }
-
                     hasNamedVersionBackReference = true;
                     index += namedBackReference.Length - 1;
                     continue;
@@ -393,10 +393,9 @@ public static class ProjectVersionPolicyCatalog
 
                 var portableEscape = escaped is 'd' or 'D' or 's' or 'S'
                     or 't' or 'r' or 'n' or 'f' or 'v'
-                    or '\\' or ']' or '-' or '^';
+                    or ']' or '-' or '^' || escaped == (char)92;
                 if (!inCharacterClass)
-                    portableEscape |= escaped is 'A' or 'z'
-                        or '.' or '    {
+                    portableEscape |= escaped is 'A' or 'z' or '.' or '    {
         if (string.IsNullOrWhiteSpace(format))
             return false;
 
@@ -508,8 +507,8 @@ public static class ProjectVersionPolicyCatalog
 
     private static string? ExtractToml(string selector, string content)
     {
-        // Parse the same TOML 1.0 grammar used by Python tomllib in the tag-triggered
-        // release gate. This also rejects duplicate keys and malformed unrelated sections.
+        // Match Python tomllib's TOML 1.0 parser in the tag-triggered release gate.
+        // A real parser rejects malformed documents and duplicate keys before Candidate preparation.
         var document = Toml.ToModel(content);
         object? current = document;
         foreach (var part in selector.Split('.'))
@@ -519,7 +518,7 @@ public static class ProjectVersionPolicyCatalog
             current = next;
         }
 
-        return current is string or sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal
+        return current is string or sbyte or byte or short or ushort or int or uint or long or ulong
             ? Convert.ToString(current, CultureInfo.InvariantCulture)?.Trim()
             : null;
     }
@@ -532,13 +531,15 @@ public static class ProjectVersionPolicyCatalog
             : match.Groups[1].Value;
     }
 }
- or '|' or '?' or '*' or '+'
-                        or '(' or ')' or '[' or '{' or '}';
+ or '|' or '?'
+                        or '*' or '+' or '(' or ')' or '[' or '{' or '}';
                 if (!portableEscape)
                 {
-                    error = @"Use only portable escapes (\d, \D, \s, \S, \t, \r, \n, \f, \v, \A, \z, escaped regex punctuation, or \k<version>). Unicode-category, word-character, word-boundary, numeric backreference, and engine-specific escapes are not supported.";
+                    error = "This escape is not supported by the shared .NET/Python regex grammar.";
                     return false;
                 }
+                if (inCharacterClass)
+                    classHasContent = true;
                 continue;
             }
 
@@ -550,16 +551,32 @@ public static class ProjectVersionPolicyCatalog
                     return false;
                 }
                 if (character == ']')
+                {
+                    if (!classHasContent)
+                    {
+                        error = "An empty character class is not supported; escape a literal closing bracket.";
+                        return false;
+                    }
                     inCharacterClass = false;
+                }
+                else
+                {
+                    classHasContent = true;
+                }
                 continue;
             }
 
             if (character == '[')
             {
                 inCharacterClass = true;
+                classHasContent = false;
                 continue;
             }
-
+            if (character == '}')
+            {
+                error = "An unmatched closing brace is not portable; escape it when a literal is intended.";
+                return false;
+            }
             if (character != '(')
                 continue;
 
@@ -571,23 +588,18 @@ public static class ProjectVersionPolicyCatalog
                 index += "(?<version>".Length - 1;
                 continue;
             }
-
             if (remaining.StartsWith("(?:", StringComparison.Ordinal)
                 || remaining.StartsWith("(?=", StringComparison.Ordinal)
                 || remaining.StartsWith("(?!", StringComparison.Ordinal))
             {
-                // Non-capturing groups and look-ahead assertions have matching .NET
-                // and Python syntax. Look-behind and inline-option groups do not.
                 index += 2;
                 continue;
             }
-
             if (index + 1 < pattern.Length && pattern[index + 1] == '?')
             {
-                error = "Only (?<version>...), (?:...), (?=...), and (?!...) group extensions are supported. Look-behind, inline options, balancing groups, conditionals, and atomic groups are not portable.";
+                error = "Only named version captures, non-capturing groups, and look-ahead assertions are supported.";
                 return false;
             }
-
             captureGroups++;
         }
 
@@ -598,15 +610,14 @@ public static class ProjectVersionPolicyCatalog
         }
         if (captureGroups != 1)
         {
-            error = "A portable version selector must contain exactly one capturing group: (?<version>...) or one ordinary group (...). Use (?:...) for other grouping.";
+            error = "A version regex must contain exactly one capture group: named 'version' or ordinary group 1.";
             return false;
         }
         if (hasNamedVersionBackReference && !hasNamedVersionGroup)
         {
-            error = @"\k<version> requires a named (?<version>...) capture group.";
+            error = "A named version backreference requires a named version capture group.";
             return false;
         }
-
         return true;
     }
 
