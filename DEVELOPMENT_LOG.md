@@ -826,3 +826,51 @@ A follow-up compatibility review showed that an older daemon advertising only gi
 - CI #45714185084 (run 1643) is on the earlier source/test head e0fb1f07 and does not include capability negotiation. Linux completed all 24 steps successfully. Windows had reached CLI tests and macOS Web tests at the latest poll, with no reported failures.
 - The new capability commits and tests are not yet validated by CI. A fresh complete Linux/Windows/macOS matrix must run on the current journal-updated head.
 - No production tag/deploy or PR merge was performed.
+
+
+## 2026-11-26 — GitHub async merge queue landing
+
+**Implementation branch:** `feat/release-management`  
+**Open PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)  
+**Source/test head for this slice:** `64268979e60ea6f932673c21b87dc37c6fad3ba8`
+
+### Implemented
+
+- Replaced the synchronous GitHub PR merge endpoint with the asynchronous `PUT /pulls/{number}/merge-async` flow. The request pins the exact reviewed head SHA and uses `merge_action=default`; it never requests a rules bypass.
+- Added explicit `pending` / `enqueued` handling. An accepted request is recorded as a durable queued state on the existing `LandingAttempt`; it stays `ExecutePending` and cannot close the task.
+- Handles repeated requests where GitHub returns HTTP 409 and the prior async request body, including recovery of the existing request UUID. An already-enqueued response without a UUID is also persisted; the PR state itself remains the polling authority.
+- Lost Execute acknowledgement is recoverable by read-only remote PR reconciliation. This is still not an Actor merge tool: the mutating call remains inside server-authorized GitLand Execute, and AutoSync only observes GitHub state.
+- AutoSync discovers queued Beacon landing attempts independently from repository AutoSync enablement. Legacy workstations do not receive an AutoSync-off reconciliation target without the explicit `git-remote-landing-reconcile-v1` capability.
+- The pinned workstation waits for the PR to become `MERGED`, fetches the configured target branch, verifies the merge commit is reachable, and checks the merge commit tree against the immutable previewed candidate tree.
+- The workstation re-runs the exact `ReviewCheckCommand` in a detached temporary worktree at the merge commit. It verifies HEAD/tree/clean state and sends a SHA-256 output proof. The temporary worktree is removed after the check.
+- Server reconciliation requires the exact LandingAttempt ID, ReviewRun, source SHA, target branch, device pin, async merge UUID when one exists, candidate tree, successful post-merge check and output hash. It then advances the attempt to `Landed` and closes the task in the same database save.
+- Both workstation target discovery and server reconciliation compare the current project check command with the hash pinned by the ReviewRun and LandingAttempt. A changed command leaves the task open; the new command is not substituted silently.
+- Tightened the executor documentation to make the timing explicit: GitHub evaluates branch/repository rules when the queued or direct merge is actually executed, not when the asynchronous request is first accepted.
+
+### Tests added or extended
+
+- Domain tests for queued attempts with and without a request UUID, and recovery after an uncertain Execute acknowledgement.
+- CLI tests for async API arguments, pending/enqueued/merged/failed response parsing, the 409 response body, and the no-UUID enqueued case.
+- GitLand completion test proving an enqueued/no-UUID completion remains `ExecutePending` and records a queued audit event.
+- AutoSync target-discovery test covers AutoSync disabled, queued merge discovery without UUID, the exact candidate tree and pinned check command, plus command-drift behavior.
+- Application reconciliation tests cover queued merge proof, wrong request UUID, wrong LandingAttempt ID, changed ReviewCheckCommand, and the transition to Landed/task Closed only after all exact evidence is supplied.
+
+### Verification state
+
+- CI #45715872864 passed all Linux/Windows/macOS jobs on the earlier async-landing foundation head `22fc248c7a616db0805d18b97273572c4e9db72a`. It predates this slice and does **not** validate the current changes.
+- CI #45586302515 also passed on the earlier `3eed928` head; it is not evidence for the async queue implementation.
+- Current source/test head `64268979e60ea6f932673c21b87dc37c6fad3ba8` has not yet had a fresh full CI run. A new Linux/Windows/macOS matrix is mandatory; no green status is claimed.
+- Local .NET SDK and local ProjectBeacon test harness are unavailable in this execution environment.
+
+### Remaining blockers
+
+1. Run and inspect the full CI matrix on the exact post-documentation implementation head; fix any compiler, analyzer, test or format failures.
+2. GitHub repository rulesets API returned an empty list. Classic tag/branch protection and GitHub Environment `production` reviewers remain inaccessible to this integration (403/unsupported endpoint); an administrator must verify them before a production tag/deploy.
+3. Validate end-to-end on a user project configured with a merge queue, including the case where an async merge request UUID is absent/expired and the PR itself is the only durable polling source.
+4. GitHub-authoritative merge still has to respect configured rules. No direct merge, force-push, bypass, production tag, deployment, or PR merge was performed by this work.
+
+### Next
+
+1. Trigger CI on the current branch head after the journal/plan commits.
+2. Review all three platform jobs and any diagnostics from the new async merge tests.
+3. If green, continue the remaining product acceptance for release settings, localization, RLS, UI error states and independent project version schemes.
