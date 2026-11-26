@@ -52,7 +52,7 @@ public sealed class GitHubLandingMergeExecutorTests
     [Fact]
     public void AsyncMergeResponse_ExtractsStructuredConflictBodyFromGitHubCliStderr()
     {
-        const string stderr = "gh: HTTP 409: Conflict\\n{\\\"status\\\":\\\"pending\\\",\\\"details\\\":{\\\"uuid\\\":\\\"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1\\\"}}";
+        const string stderr = "gh: HTTP 409: Conflict\n{\"status\":\"pending\",\"details\":{\"uuid\":\"9a9de4e8-6f1c-4f08-a1d0-13a9dfdc7cc1\"}}";
 
         var result = GitHubLandingMergeExecutor.ParseAsyncMergeResponse(stderr);
 
