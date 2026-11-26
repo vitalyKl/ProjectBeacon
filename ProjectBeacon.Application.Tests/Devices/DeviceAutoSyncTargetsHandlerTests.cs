@@ -273,12 +273,18 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             Assert.Equal(reviewRunId, landed.ReviewRunId);
             Assert.Equal(sourceSha, landed.SourceSha);
             Assert.Null(landed.MergeRequestId);
+            Assert.Equal(new string('4', 40), landed.CandidateTreeSha);
+            Assert.Equal(0, landed.PersistedPostMergeCheckExitCode);
+            Assert.Equal(new string('7', 64), landed.PersistedPostMergeCheckOutputHash);
+            Assert.Null(landed.PostMergeCheckCommand);
 
             var queued = Assert.Single(landings, item => item.TaskId == queuedTaskId);
             Assert.Equal(queuedSourceSha, queued.SourceSha);
             Assert.Null(queued.MergeRequestId);
             Assert.Equal(queuedCandidateTree, queued.CandidateTreeSha);
             Assert.Equal("dotnet test --no-build", queued.PostMergeCheckCommand);
+            Assert.Null(queued.PersistedPostMergeCheckExitCode);
+            Assert.Null(queued.PersistedPostMergeCheckOutputHash);
 
             // A project command edit must not silently replace the command pinned by Review.
             var project = await _db.Projects.SingleAsync(
@@ -287,6 +293,14 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var changedCommandResult = await handler.HandleAsync(deviceId, TestContext.Current.CancellationToken);
             Assert.True(changedCommandResult.Success, changedCommandResult.Error);
+            var landedAfterEdit = Assert.Single(
+                changedCommandResult.Value!.Single().RemoteLandings!,
+                item => item.TaskId == taskId);
+            Assert.Equal(new string('4', 40), landedAfterEdit.CandidateTreeSha);
+            Assert.Equal(0, landedAfterEdit.PersistedPostMergeCheckExitCode);
+            Assert.Equal(new string('7', 64), landedAfterEdit.PersistedPostMergeCheckOutputHash);
+            Assert.Null(landedAfterEdit.PostMergeCheckCommand);
+
             var queuedAfterEdit = Assert.Single(
                 changedCommandResult.Value!.Single().RemoteLandings!,
                 item => item.TaskId == queuedTaskId);
