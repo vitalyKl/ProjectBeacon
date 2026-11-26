@@ -116,6 +116,24 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             var open = matching.Where(pull => pull.State == "OPEN").ToArray();
             if (open.Length > 1)
                 return new VerificationResult(null, "Remote landing skipped: more than one open PR matches the queued merge request.");
+
+            var queueAcknowledged = target.GitHubMergeQueued || !string.IsNullOrWhiteSpace(target.MergeRequestId);
+            if (open.Length == 0
+                && queueAcknowledged
+                && target.LandingAttemptId is { } closedAttemptId)
+            {
+                var closed = matching.Where(pull => pull.State == "CLOSED").ToArray();
+                if (closed.Length > 1)
+                    return new VerificationResult(null, "Remote landing skipped: more than one closed PR matches the queued merge request.");
+                if (closed.Length == 1)
+                    return await BuildQueueFailureAsync(
+                        ghPath, repositoryRoot, projectId, repository, closed[0], target, closedAttemptId,
+                        expectedPullRequestState: "CLOSED",
+                        failureCode: "GitHubPullRequestClosedWithoutMerge",
+                        reason: "The queued GitHub pull request was closed without being merged.",
+                        ct);
+            }
+
             if (open.Length == 1 && target.LandingAttemptId is { } landingAttemptId)
             {
                 AsyncMergeState? asyncState = null;
@@ -126,12 +144,15 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     if (string.Equals(asyncState.Status, "failed", StringComparison.Ordinal))
                         return await BuildQueueFailureAsync(
                             ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
-                            asyncState.StatusMessage ?? "GitHub async merge request failed.", ct);
+                            expectedPullRequestState: "OPEN",
+                            failureCode: "GitHubAsyncMergeFailed",
+                            reason: asyncState.StatusMessage ?? "GitHub async merge request failed.",
+                            ct);
                     if (string.Equals(asyncState.Status, "pending", StringComparison.Ordinal))
                         return new VerificationResult(null, asyncState.StatusMessage);
                 }
 
-                var queueAcknowledged = target.GitHubMergeQueued
+                queueAcknowledged = target.GitHubMergeQueued
                     || string.Equals(asyncState?.Status, "enqueued", StringComparison.Ordinal);
                 if (queueAcknowledged)
                 {
@@ -146,7 +167,10 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     if (queue.EntryState is null)
                         return await BuildQueueFailureAsync(
                             ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
-                            "GitHub removed the PR from its merge queue before it merged.", ct);
+                            expectedPullRequestState: "OPEN",
+                            failureCode: "GitHubAsyncMergeFailed",
+                            reason: "GitHub removed the PR from its merge queue before it merged.",
+                            ct);
 
                     // UNMERGEABLE is a current queue-entry condition, not proof that
                     // GitHub removed or permanently failed the request. Keep monitoring;
@@ -328,6 +352,8 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         AgentTaskGitOperations.PullRequestInfo pullRequest,
         DeviceRemoteLandingTargetDto target,
         Guid landingAttemptId,
+        string expectedPullRequestState,
+        string failureCode,
         string reason,
         CancellationToken ct)
     {
@@ -336,11 +362,16 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         if (snapshot.Error is not null)
             return new VerificationResult(null, "GitHub reported a queue failure, but the exact PR could not be re-confirmed. " + snapshot.Error);
         var view = snapshot.View!;
-        if (view.State != "OPEN"
+        var isUnmergedClosedPullRequest = string.Equals(expectedPullRequestState, "CLOSED", StringComparison.Ordinal)
+            && view.MergedAt is null
+            && view.MergeCommitSha is null;
+        if (!string.Equals(view.State, expectedPullRequestState, StringComparison.Ordinal)
+            || expectedPullRequestState is not ("OPEN" or "CLOSED")
+            || expectedPullRequestState == "CLOSED" && !isUnmergedClosedPullRequest
             || !string.Equals(view.BaseBranch, target.TargetBranch, StringComparison.Ordinal)
             || !string.Equals(view.HeadSha, target.SourceSha, StringComparison.OrdinalIgnoreCase)
             || !string.Equals(view.Url, pullRequest.Url, StringComparison.Ordinal))
-            return new VerificationResult(null, "GitHub queue failure could not be bound to the exact open PR/source/base identity.");
+            return new VerificationResult(null, "GitHub queue failure could not be bound to the exact unmerged PR/source/base identity.");
 
         var request = new DeviceRemoteLandingFailureRequest(
             projectId,
@@ -354,9 +385,18 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             target.TargetBranch,
             target.SourceSha,
             target.MergeRequestId,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            failureCode,
+            expectedPullRequestState);
         return new VerificationResult(null, request, reason);
     }
+
+    internal static string? FailureCodeForUnmergedPullRequestState(string? state) => state switch
+    {
+        "OPEN" => "GitHubAsyncMergeFailed",
+        "CLOSED" => "GitHubPullRequestClosedWithoutMerge",
+        _ => null
+    };
 
     internal static (MergeQueueEntryState? State, string? Error) ParseMergeQueueEntryResponse(string json)
     {
