@@ -160,47 +160,31 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     if (string.Equals(asyncState.Status, "enqueued", StringComparison.Ordinal)
                         && string.Equals(target.MergeRequestStatus, "pending", StringComparison.Ordinal))
                     {
-                        var firstEnqueuedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
-                            ghPath, repositoryRoot, repository, open[0].Number, ct);
-                        if (firstEnqueuedSnapshot.Error is not null)
-                            return new VerificationResult(null,
-                                "GitHub reported the exact async merge request enqueued, but its open PR identity could not be re-confirmed. " + firstEnqueuedSnapshot.Error);
-                        var firstEnqueuedView = firstEnqueuedSnapshot.View!;
-                        if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
-                                firstEnqueuedView, "OPEN", target.TargetBranch, target.SourceSha)
-                            || firstEnqueuedView.IsDraft
-                            || !string.Equals(firstEnqueuedView.Url, open[0].Url, StringComparison.Ordinal))
-                            return new VerificationResult(null,
-                                "GitHub enqueue status could not be bound to the exact open PR head and review base.");
+                        return await BuildEnqueuedStatusReportAsync(
+                            ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId, ct);
+                    }
+                }
 
-                        var confirmedEnqueuedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
-                            ghPath, repositoryRoot, repository, open[0].Number, ct);
-                        if (confirmedEnqueuedSnapshot.Error is not null
-                            || !AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
-                                firstEnqueuedView, confirmedEnqueuedSnapshot.View!)
-                            || !string.Equals(confirmedEnqueuedSnapshot.View!.Url, open[0].Url, StringComparison.Ordinal))
-                            return new VerificationResult(null,
-                                "The GitHub PR changed while its enqueue status was being verified. Retry on the next AutoSync cycle.");
-
-                        var statusRequest = new DeviceRemoteLandingStatusRequest(
-                            projectId,
-                            target.TaskId,
-                            landingAttemptId,
-                            target.ReviewRunId,
-                            repository,
-                            open[0].Number,
-                            confirmedEnqueuedSnapshot.View!.Url,
-                            target.SourceBranch,
-                            target.TargetBranch,
-                            target.SourceSha,
-                            target.MergeRequestId,
-                            "enqueued",
-                            "OPEN",
-                            DateTime.UtcNow);
-                        return new VerificationResult(
-                            null, null,
-                            $"GitHub PR #{open[0].Number} moved from async pending to merge-queue enqueued; persisting this state for expiry-safe polling.",
-                            statusRequest);
+                // If the short-lived async request record has expired while the
+                // workstation was offline, the live GraphQL queue entry is still valid
+                // evidence that the same PR reached enqueued. Recover that transition before
+                // the UUID can no longer be used to distinguish queue removal from expiry.
+                if (asyncState is { Status: null }
+                    && string.Equals(target.MergeRequestStatus, "pending", StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(target.MergeRequestId))
+                {
+                    var expiredRequestQueue = await ReadMergeQueueEntryAsync(
+                        ghPath, repositoryRoot, repository, open[0].Number, ct);
+                    if (expiredRequestQueue.Error is not null)
+                        return new VerificationResult(null,
+                            "The GitHub async request record is unavailable and the current queue state could not be read. " + expiredRequestQueue.Error);
+                    if (!string.Equals(expiredRequestQueue.PullRequestState, "OPEN", StringComparison.Ordinal))
+                        return new VerificationResult(null,
+                            "The GitHub PR state changed while recovering its expired async request. Retry on the next AutoSync cycle.");
+                    if (expiredRequestQueue.EntryState is not null)
+                    {
+                        return await BuildEnqueuedStatusReportAsync(
+                            ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId, ct);
                     }
                 }
 
@@ -390,6 +374,64 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             postMergeCheckExitCode,
             postMergeCheckOutputHash);
         return new VerificationResult(request, $"GitHub PR #{pullRequest.Number} merge verified for task {target.TaskId:D}.");
+    }
+
+    private static async Task<VerificationResult> BuildEnqueuedStatusReportAsync(
+        string ghPath,
+        string workingDirectory,
+        Guid projectId,
+        string repository,
+        AgentTaskGitOperations.PullRequestInfo pullRequest,
+        DeviceRemoteLandingTargetDto target,
+        Guid landingAttemptId,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(target.MergeRequestId, out var requestId) || requestId == Guid.Empty
+            || !string.Equals(target.MergeRequestStatus, "pending", StringComparison.Ordinal))
+            return new VerificationResult(null,
+                "GitHub enqueue was observed, but the persisted pending request identity is incomplete.");
+
+        var firstSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+            ghPath, workingDirectory, repository, pullRequest.Number, ct);
+        if (firstSnapshot.Error is not null)
+            return new VerificationResult(null,
+                "GitHub reported the async merge enqueued, but its open PR identity could not be re-confirmed. " + firstSnapshot.Error);
+        var firstView = firstSnapshot.View!;
+        if (!AgentTaskGitHubPullRequestOperations.MatchesPublishedPullRequest(
+                firstView, "OPEN", target.TargetBranch, target.SourceSha)
+            || firstView.IsDraft
+            || !string.Equals(firstView.Url, pullRequest.Url, StringComparison.Ordinal))
+            return new VerificationResult(null,
+                "GitHub enqueue status could not be bound to the exact open PR head and review base.");
+
+        var confirmedSnapshot = await AgentTaskGitHubPullRequestOperations.ReadSnapshotAsync(
+            ghPath, workingDirectory, repository, pullRequest.Number, ct);
+        if (confirmedSnapshot.Error is not null
+            || !AgentTaskGitHubPullRequestOperations.MatchesStatusSnapshot(
+                firstView, confirmedSnapshot.View!)
+            || !string.Equals(confirmedSnapshot.View!.Url, pullRequest.Url, StringComparison.Ordinal))
+            return new VerificationResult(null,
+                "The GitHub PR changed while its enqueue status was being verified. Retry on the next AutoSync cycle.");
+
+        var statusRequest = new DeviceRemoteLandingStatusRequest(
+            projectId,
+            target.TaskId,
+            landingAttemptId,
+            target.ReviewRunId,
+            repository,
+            pullRequest.Number,
+            confirmedSnapshot.View!.Url,
+            target.SourceBranch,
+            target.TargetBranch,
+            target.SourceSha,
+            requestId.ToString("D"),
+            "enqueued",
+            "OPEN",
+            DateTime.UtcNow);
+        return new VerificationResult(
+            null, null,
+            $"GitHub PR #{pullRequest.Number} was confirmed enqueued; persisting this state for expiry-safe polling.",
+            statusRequest);
     }
 
     private sealed record AsyncMergeState(string? Status, string? MergeCommitSha, string? StatusMessage);
