@@ -759,3 +759,16 @@ CI [#45841796175](https://github.com/vitalyKl/ProjectBeacon/actions/runs/4584179
 Исправления source/test находятся в feat/release-management: 78b8edd8a2cf889ad15b7388e8de7aec495750d7 и 605e0cfddd7f5af9241f0ffba35de06e27178e6f. Журнал с финальным разбором дополнен в commit 77b9cccc185254ec35ee0f28aaf4dc0e9891f32b.
 
 Текущий implementation HEAD после обновления журнала: 77b9cccc185254ec35ee0f28aaf4dc0e9891f32b. Требуется новая полная Linux/Windows/macOS матрица exact-head; старый CI не подтверждает исправления.
+
+
+## Дополнение — stale expectation async merge marker (26 ноября 2026)
+
+Полный CI [#45844150177](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45844150177), run 1659, завершился одной и той же ошибкой Application test на Linux, Windows и macOS.
+
+Тест `DeviceRemoteLandingReconciliationHandlerTests.RecordsOnlyTheExactVerifiedGitHubQueueFailureAndKeepsTaskOpen` вызывал совместимый overload `MarkGitHubMergeQueued(requestId)`. Текущая реализация намеренно переводит его в явное состояние `enqueued` и сохраняет `GitHubMergeEnqueued:{requestId}`. Единственная ошибка была в устаревшем ожидании `GitHubMergeQueued:{requestId}`.
+
+Исправлено только тестовое ожидание в implementation branch `feat/release-management`, commit `e7f848ffd604c0ecbe9da6371e07e5299bf7d76c`. Production-код не менялся. Все остальные Application tests, остальные тестовые модули и форматирование прошли на всех ОС; Linux использовал PostgreSQL lane.
+
+**Проверка:** run #45844150177 остаётся красным и не подтверждает test fix. Нужен новый полный Linux/Windows/macOS CI на точной вершине после тестового исправления и записи журнала.
+
+Остаток не меняется: требуется live acceptance GitHub merge queue в disposable repository; требуется административная проверка защиты тегов `v*` и required reviewers для `production`. Production tag/deploy не выполнять до снятия этих блокеров.
