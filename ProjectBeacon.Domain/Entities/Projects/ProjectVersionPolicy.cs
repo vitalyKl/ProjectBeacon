@@ -228,9 +228,9 @@ public static class ProjectVersionPolicyCatalog
                     }
                     break;
                 case "Json":
-                    if (!source.Selector.StartsWith("/", StringComparison.Ordinal))
+                    if (!IsValidJsonPointer(source.Selector))
                     {
-                        error = $"JSON selector for '{source.Path}' must be a JSON Pointer beginning with '/'.";
+                        error = $"JSON selector for '{source.Path}' must be a valid RFC 6901 JSON Pointer with only '~0' and '~1' escape sequences.";
                         return false;
                     }
                     break;
@@ -557,6 +557,28 @@ public static class ProjectVersionPolicyCatalog
         return segments.All(segment => segment.Length > 0 && segment is not ("." or ".."));
     }
 
+    private static bool IsValidJsonPointer(string selector)
+    {
+        if (!selector.StartsWith("/", StringComparison.Ordinal))
+            return false;
+        return selector.Split('/').Skip(1).All(part => TryUnescapeJsonPointerPart(part, out _));
+    }
+
+    private static bool TryUnescapeJsonPointerPart(string rawPart, out string decodedPart)
+    {
+        decodedPart = string.Empty;
+        for (var index = 0; index < rawPart.Length; index++)
+        {
+            if (rawPart[index] != '~')
+                continue;
+            if (index + 1 >= rawPart.Length || rawPart[index + 1] is not ('0' or '1'))
+                return false;
+            index++;
+        }
+        decodedPart = rawPart.Replace("~1", "/", StringComparison.Ordinal)
+            .Replace("~0", "~", StringComparison.Ordinal);
+        return true;
+    }
     private static string? ExtractXml(string selector, string content)
     {
         using var stringReader = new StringReader(content);
@@ -576,7 +598,8 @@ public static class ProjectVersionPolicyCatalog
         var current = document.RootElement;
         foreach (var part in selector.Split('/').Skip(1))
         {
-            var key = part.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal);
+            if (!TryUnescapeJsonPointerPart(part, out var key))
+                return null;
             if (current.ValueKind == JsonValueKind.Object)
             {
                 if (!current.TryGetProperty(key, out current))
@@ -584,6 +607,9 @@ public static class ProjectVersionPolicyCatalog
                 continue;
             }
             if (current.ValueKind == JsonValueKind.Array
+                && key.Length > 0
+                && (key.Length == 1 || key[0] != '0')
+                && key.All(character => character is >= '0' and <= '9')
                 && int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
                 && index >= 0 && index < current.GetArrayLength())
             {
@@ -594,7 +620,6 @@ public static class ProjectVersionPolicyCatalog
         }
         return current.ValueKind == JsonValueKind.String ? current.GetString()?.Trim() : current.ToString();
     }
-
     private static string? ExtractToml(string selector, string content)
     {
         // Match Python tomllib's TOML 1.0 parser in the tag-triggered release gate.
