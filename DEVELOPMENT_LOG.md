@@ -1284,3 +1284,31 @@ AutoSync reconciled an exact merged PR and reported definitive asynchronous merg
 2. Continue disposable-repository merge-queue acceptance: pending/enqueued, queued to merged, queue entry removal, PR manually closed without merge, PR/base/head drift, lost/expired request ID and failed post-merge check.
 3. Classic tag protection `v*` and required reviewers for GitHub Environment `production` remain unverified; no production tag or deployment is permitted.
 4. Keep PR #230 open for review. Do not merge the development PR as part of release publication.
+
+
+## 2026-11-26 — Correct audit allowlist compatibility for queued PR failure reports
+
+**Failed CI:** [#45794974665](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45794974665), run 1656, exact head `0c56ffbc234ebf57a984b8a7ce80c53440d93eb1`  
+**Follow-up source fix:** `fb00cf6d37f9b93d0319054361014cd69db8177b`
+
+### CI finding
+
+- Linux completed the full job and reported three Application test failures:
+  - `RecordsOnlyTheExactVerifiedGitHubQueueFailureAndKeepsTaskOpen`
+  - `RecordsQueueRemovalWithoutAsyncRequestIdOnlyForExplicitQueuedAttempt`
+  - `RecordsClosedUnmergedPullRequestAsQueueFailureForTheExactQueuedAttempt`
+- macOS reported the same Application failure stage (API passed; Application failed; CLI continued successfully). Windows was still running CLI when the log was inspected; the source-level cause was already identical and deterministic.
+- All three failures had the same message: `Audit detail key 'pullRequestState' is not allowlisted.` The failure transition itself reached the audit event creation and was rejected by the existing audit schema guard.
+
+### Correction
+
+- Removed the unallowlisted `pullRequestState` field from the audit details in `ReportFailureAsync`.
+- Retained the allowlisted `policyCode` and `resultCode` fields. `GitHubPullRequestClosedWithoutMerge` remains distinguishable from `GitHubAsyncMergeFailed` through those existing fields; the request state is validated before audit and does not need to be copied into arbitrary audit JSON.
+- No weakening of audit allowlisting or change to the failure state transition was made.
+
+### Verification and next
+
+- The red run #45794974665 is for the previous `0c56ffbc` head and does not include the audit fix.
+- Source fix is committed in `fb00cf6d37f9b93d0319054361014cd69db8177b`; run a fresh full Linux/Windows/macOS CI on the exact head after this journal update.
+- If the next Application test run passes, verify remaining CLI/Domain/Infrastructure/Web/Worker modules and formatting across the matrix.
+- Disposable live merge-queue acceptance is still outstanding. Production tag protection `v*` and required reviewers for Environment `production` remain unverified; no production tag/deploy is permitted.
