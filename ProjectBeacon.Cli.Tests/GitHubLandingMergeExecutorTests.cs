@@ -91,6 +91,22 @@ public sealed class GitHubLandingMergeExecutorTests
             Assert.NotNull(result.Error);
     }
 
+    [Theory]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", true)]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", false)]
+    [InlineData(null, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", true)]
+    [InlineData(null, "not-a-tree-sha", false)]
+    [InlineData("invalid-candidate-sha", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", false)]
+    public void PostMergeTreeValidation_AllowsMergeQueueTreeDivergenceButKeepsStrictModeExact(
+        string? expectedCandidateTreeSha,
+        string? actualMergeTreeSha,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(expectedCandidateTreeSha, actualMergeTreeSha));
+    }
+
     [Fact]
     public void MergeApiArguments_RejectCallerSuppliedInvalidIdentity()
     {
