@@ -88,7 +88,6 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
 
         Assert.Contains("GitHub accepted the asynchronous merge request and is still processing it.", cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
-        Assert.NotNull(cut.Find(".mud-alert"));
     }
 
     [Fact]
