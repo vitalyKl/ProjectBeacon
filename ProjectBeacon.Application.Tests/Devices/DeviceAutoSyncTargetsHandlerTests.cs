@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
+using System.Security.Cryptography;
+using System.Text;
 using Application.Common;
 using Application.Devices;
 using Application.Projects;
@@ -15,6 +17,10 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
 {
+    private const string ReviewCheckCommand = "dotnet test --no-build";
+    private static string ReviewCheckCommandHash => Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(ReviewCheckCommand))).ToLowerInvariant();
+
     private readonly SqliteConnection _connection;
     private readonly BeaconDbContext _db;
 
@@ -117,7 +123,6 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
         string sourceSha;
         Guid queuedTaskId;
         string queuedSourceSha;
-        string queuedMergeRequestId;
         string queuedCandidateTree;
         const string localRoot = "/workspace/beacon-managed-landing";
 
@@ -132,7 +137,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             var project = Project.Create("AutoSync disabled", null, org.Id);
             project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
                 0, [], 200, 20_000, "Off", autoSyncEnabled: false));
-            project.Update(reviewCheckCommand: "dotnet test --no-build");
+            project.Update(reviewCheckCommand: ReviewCheckCommand);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -160,7 +165,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
 
             var review = ReviewRun.Start(
                 projectId, taskId, ReviewerType.Agent, targetRunId: Guid.NewGuid());
-            review.SetCheckCommandHash(new string('a', 64));
+            review.SetCheckCommandHash(ReviewCheckCommandHash);
             sourceSha = new string('1', 40);
             review.CompleteCheck(
                 "Review check passed.", "review-artifact",
@@ -173,7 +178,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             var candidateTree = new string('4', 40);
             var landingAttempt = LandingAttempt.Start(
                 projectId, taskId, reviewRunId, user.Id, deviceId,
-                "main", sourceSha, new string('2', 40), new string('a', 64),
+                "main", sourceSha, new string('2', 40), ReviewCheckCommandHash,
                 "Beacon verified the exact GitHub merge.");
             landingAttempt.RecordPreview(
                 "main", new string('3', 40), candidateTree, new string('5', 64), 0, null);
@@ -195,7 +200,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             queuedTaskId = queuedTask.Id;
             var queuedReview = ReviewRun.Start(
                 projectId, queuedTaskId, ReviewerType.Agent, targetRunId: Guid.NewGuid());
-            queuedReview.SetCheckCommandHash(new string('b', 64));
+            queuedReview.SetCheckCommandHash(ReviewCheckCommandHash);
             queuedSourceSha = new string('b', 40);
             queuedReview.CompleteCheck(
                 "Review check passed.", "queued-review-artifact",
@@ -207,13 +212,12 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             queuedCandidateTree = new string('8', 40);
             var queuedAttempt = LandingAttempt.Start(
                 projectId, queuedTaskId, queuedReview.Id, user.Id, deviceId,
-                "main", queuedSourceSha, new string('c', 40), new string('b', 64),
+                "main", queuedSourceSha, new string('c', 40), ReviewCheckCommandHash,
                 "Beacon requested an async GitHub merge.");
             queuedAttempt.RecordPreview(
                 "main", new string('9', 40), queuedCandidateTree, new string('a', 64), 0, null);
             queuedAttempt.MarkExecutePending();
-            queuedMergeRequestId = Guid.NewGuid().ToString("D");
-            queuedAttempt.MarkGitHubMergeQueued(queuedMergeRequestId);
+            queuedAttempt.MarkGitHubMergeQueued(null);
             _db.LandingAttempts.Add(queuedAttempt);
 
             // An external/manual merge without a Beacon LandingAttempt is not eligible
@@ -272,9 +276,20 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
 
             var queued = Assert.Single(landings.Where(item => item.TaskId == queuedTaskId));
             Assert.Equal(queuedSourceSha, queued.SourceSha);
-            Assert.Equal(queuedMergeRequestId, queued.MergeRequestId);
+            Assert.Null(queued.MergeRequestId);
             Assert.Equal(queuedCandidateTree, queued.CandidateTreeSha);
             Assert.Equal("dotnet test --no-build", queued.PostMergeCheckCommand);
+
+            // A project command edit must not silently replace the command pinned by Review.
+            var project = await _db.Projects.SingleAsync(
+                item => item.Id == projectId, TestContext.Current.CancellationToken);
+            project.Update(reviewCheckCommand: "dotnet test");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var changedCommandResult = await handler.HandleAsync(deviceId, TestContext.Current.CancellationToken);
+            Assert.True(changedCommandResult.Success, changedCommandResult.Error);
+            var queuedAfterEdit = Assert.Single(changedCommandResult.Value!.Single().RemoteLandings!
+                .Where(item => item.TaskId == queuedTaskId));
+            Assert.Null(queuedAfterEdit.PostMergeCheckCommand);
         }
     }
 
