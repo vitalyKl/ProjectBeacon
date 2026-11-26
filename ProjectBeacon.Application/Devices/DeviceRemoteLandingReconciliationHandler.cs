@@ -25,7 +25,12 @@ public sealed record DeviceRemoteLandingReconciliationRequest(
     string MergeCommitSha,
     string RemoteBaseSha,
     DateTime MergedAtUtc,
-    DateTime VerifiedAtUtc);
+    DateTime VerifiedAtUtc,
+    Guid? LandingAttemptId = null,
+    string? MergeRequestId = null,
+    string? CandidateTreeSha = null,
+    int? PostMergeCheckExitCode = null,
+    string? PostMergeCheckOutputHash = null);
 
 public sealed record DeviceRemoteLandingReconciliationResult(
     Guid ProofId,
@@ -147,26 +152,63 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                 "The latest pipeline review verdict must still be Approve.", ErrorKind.Conflict);
 
-        // If Beacon created a landing attempt, the GitLand Execute command must have
-        // completed with verified post-merge evidence before AutoSync may close the task.
-        // A merged PR alone must not turn an ExecutePending/LandedUnverified attempt into
-        // a successful task completion. External/manual PR merges have no LandingAttempt and
-        // may use this reconciliation path only when project AutoSync is enabled. When AutoSync
-        // is disabled, only a Beacon-managed, verified Landed attempt is eligible below.
-        var latestLandingAttempt = await db.LandingAttempts.IgnoreQueryFilters().AsNoTracking()
+        // External/manual merges may be reconciled only when project AutoSync is enabled.
+        // Beacon-managed async merges remain ExecutePending while GitHub processes a direct
+        // merge or merge-queue entry. They become Landed only after the pinned workstation
+        // proves the exact merge commit/tree and reruns the immutable project check.
+        var latestLandingAttempt = await db.LandingAttempts.IgnoreQueryFilters()
             .Where(attempt => attempt.ProjectId == request.ProjectId && attempt.TaskId == request.TaskId)
             .OrderByDescending(attempt => attempt.CreatedAt)
             .ThenByDescending(attempt => attempt.Id)
             .FirstOrDefaultAsync(ct);
-        if (latestLandingAttempt is not null
-            && (latestLandingAttempt.Status != LandingAttemptStatus.Landed
-                || latestLandingAttempt.ReviewRunId != request.ReviewRunId
-                || !string.Equals(latestLandingAttempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(latestLandingAttempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal)
-                || !string.Equals(latestLandingAttempt.MergeCommitSha, request.MergeCommitSha, StringComparison.OrdinalIgnoreCase)))
-            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
-                "The Beacon landing attempt has not reached a verified Landed state for this exact GitHub merge. Resolve the landing attempt before closing the task.",
-                ErrorKind.Conflict);
+        if (latestLandingAttempt is not null)
+        {
+            var proofMatches = latestLandingAttempt.ReviewRunId == request.ReviewRunId
+                && latestLandingAttempt.DeviceId == deviceId
+                && !string.Equals(latestLandingAttempt.SourceSha, request.SourceSha, StringComparison.OrdinalIgnoreCase) == false
+                && string.Equals(latestLandingAttempt.TargetBranch, request.TargetBranch, StringComparison.Ordinal);
+            if (!proofMatches)
+                return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                    "The remote merge does not match the latest Beacon landing attempt.", ErrorKind.Conflict);
+
+            if (latestLandingAttempt.Status == LandingAttemptStatus.Landed)
+            {
+                if (!string.Equals(latestLandingAttempt.MergeCommitSha, request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
+                    return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                        "The GitHub merge commit differs from the verified Beacon landing result.", ErrorKind.Conflict);
+            }
+            else if (latestLandingAttempt.TryReadGitHubMergeRequestId(out var expectedMergeRequestId))
+            {
+                if (request.LandingAttemptId != latestLandingAttempt.Id
+                    || !string.Equals(request.MergeRequestId, expectedMergeRequestId, StringComparison.Ordinal)
+                    || !string.Equals(request.CandidateTreeSha, latestLandingAttempt.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                    || request.PostMergeCheckExitCode != 0
+                    || !IsSha256(request.PostMergeCheckOutputHash)
+                    || !IsGitSha(request.CandidateTreeSha)
+                    || !IsGitSha(request.MergeCommitSha))
+                    return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                        "The queued GitHub merge lacks exact async-request, candidate-tree or post-merge-check evidence.",
+                        ErrorKind.Conflict);
+                try
+                {
+                    latestLandingAttempt.RecordLanded(
+                        request.MergeCommitSha, request.CandidateTreeSha!,
+                        request.PostMergeCheckExitCode.Value, request.PostMergeCheckOutputHash!);
+                }
+                catch (ArgumentException or InvalidOperationException)
+                {
+                    return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                        "The queued GitHub merge evidence could not advance the landing attempt to Landed.",
+                        ErrorKind.Conflict);
+                }
+            }
+            else
+            {
+                return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                    "The Beacon landing attempt has not reached a verified Landed state for this exact GitHub merge. Resolve the landing attempt before closing the task.",
+                    ErrorKind.Conflict);
+            }
+        }
 
         if (!gitPolicy.AutoSyncEnabled && latestLandingAttempt is null)
             return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
@@ -262,6 +304,12 @@ public sealed class ReconcileDeviceRemoteLandingHandler
 
         return Result.Ok(ToResult(proof, task.Status, task.PipelineStage ?? TaskPipelineStage.None, alreadyRecorded: false));
     }
+
+    private static bool IsGitSha(string? value) =>
+        value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     private static bool Matches(
         RemoteLandingProof proof,
