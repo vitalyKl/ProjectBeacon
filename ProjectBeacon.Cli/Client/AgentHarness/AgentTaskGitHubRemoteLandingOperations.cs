@@ -243,15 +243,18 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             if (!AgentTaskGitOperations.IsGitSha(target.CandidateTreeSha ?? string.Empty))
                 return new VerificationResult(null, "Remote landing skipped: Beacon landing is missing its reviewed candidate tree.");
 
+            var hasPersistedPostMergeProof = target.PersistedPostMergeCheckExitCode is not null
+                || !string.IsNullOrWhiteSpace(target.PersistedPostMergeCheckOutputHash);
+            var expectedTreeSha = hasPersistedPostMergeProof ? target.CandidateTreeSha : null;
             var mergeTree = await AgentTaskGitOperations.Git(
                 repositoryRoot, Array.Empty<string>(), ct,
                 "rev-parse", "--verify", finalView.MergeCommitSha + "^{tree}");
             if (!AgentTaskGitOperations.Succeeded(mergeTree)
-                || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(null, mergeTree.StdOut.Trim()))
-                return new VerificationResult(null, "Remote landing skipped: GitHub merge commit tree is unavailable or invalid.");
+                || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(expectedTreeSha, mergeTree.StdOut.Trim()))
+                return new VerificationResult(null, hasPersistedPostMergeProof
+                    ? "Remote landing skipped: direct merge tree differs from the immutable Preview candidate."
+                    : "Remote landing skipped: GitHub merge-group tree is unavailable or invalid.");
 
-            var hasPersistedPostMergeProof = target.PersistedPostMergeCheckExitCode is not null
-                || !string.IsNullOrWhiteSpace(target.PersistedPostMergeCheckOutputHash);
             if (hasPersistedPostMergeProof)
             {
                 // GitLand already ran the pinned check before recording Landed. Reuse
