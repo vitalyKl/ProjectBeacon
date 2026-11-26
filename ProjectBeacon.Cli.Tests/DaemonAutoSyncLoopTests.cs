@@ -114,6 +114,87 @@ public sealed class DaemonAutoSyncLoopTests
     }
 
     [Fact]
+    public async Task PersistsGitHubEnqueuedTransitionWithoutReconcilingOrClosingTask()
+    {
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var reviewRunId = Guid.NewGuid();
+        var landingAttemptId = Guid.NewGuid();
+        var requestId = Guid.NewGuid().ToString("D");
+        const string sourceBranch = "beacon/task/0123456789abcdef0123456789abcdef";
+        const string targetBranch = "main";
+        const string repository = "acme/project-beacon";
+        const string pullRequestUrl = "https://github.com/acme/project-beacon/pull/42";
+        var sourceSha = new string('a', 40);
+        var statusRequest = new DeviceRemoteLandingStatusRequest(
+            projectId, taskId, landingAttemptId, reviewRunId,
+            repository, 42, pullRequestUrl, sourceBranch, targetBranch,
+            sourceSha, requestId, "enqueued", "OPEN", DateTime.UtcNow);
+        var target = new DeviceAutoSyncTargetDto(
+            projectId,
+            "/workspace/remote-landing-only",
+            PolicyRevision: 3,
+            AutoSyncEnabled: false,
+            RemoteLandings:
+            [
+                new DeviceRemoteLandingTargetDto(
+                    taskId, reviewRunId, sourceBranch, targetBranch, sourceSha,
+                    landingAttemptId, requestId, new string('b', 40), "dotnet test --no-build",
+                    MergeRequestStatus: "pending")
+            ]);
+        var response = new DeviceRemoteLandingStatusResult(
+            landingAttemptId, projectId, taskId, "enqueued", AlreadyRecorded: false);
+
+        var api = new AutoSyncLandingApi(target, reconciliation: null, status: response);
+        using var http = new HttpClient(api) { BaseAddress = new Uri("http://localhost/") };
+        var state = new DaemonRuntimeState("http://localhost", null);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var timing = new DaemonTiming
+        {
+            DelayAsync = (_, _) =>
+            {
+                cancellation.Cancel();
+                return Task.CompletedTask;
+            }
+        };
+        var deps = new DaemonDependencies(
+            http,
+            null!,
+            () => new WorkstationSettings(),
+            _ => new UnavailableAgentRuntime("Unused AutoSync-off queue status test runtime"));
+        var loop = new DaemonAutoSyncLoop(
+            deps,
+            null!,
+            state,
+            timing,
+            (_, _, landing, _) =>
+            {
+                Assert.Equal(taskId, landing.TaskId);
+                return Task.FromResult(
+                    new AgentTaskGitHubRemoteLandingOperations.VerificationResult(
+                        null, null, "GitHub async merge was confirmed enqueued.", statusRequest));
+            });
+
+        await loop.RunAsync(cancellation.Token);
+
+        Assert.Equal(1, api.TargetRequests);
+        Assert.Equal(1, api.StatusRequests);
+        Assert.Equal(0, api.ReconciliationRequests);
+        Assert.Equal(0, api.FailureRequests);
+        Assert.NotNull(api.StatusBody);
+        using var posted = JsonDocument.Parse(api.StatusBody!);
+        Assert.Equal(landingAttemptId, posted.RootElement.GetProperty("landingAttemptId").GetGuid());
+        Assert.Equal(requestId, posted.RootElement.GetProperty("mergeRequestId").GetString());
+        Assert.Equal("enqueued", posted.RootElement.GetProperty("mergeRequestStatus").GetString());
+        Assert.Contains(
+            state.Snapshot.Log,
+            line => line.Contains("state was persisted", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            state.Snapshot.Log,
+            line => line.Contains("merge was reconciled", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ReportsDefinitiveGitHubQueueFailureWithoutCallingReconciliation()
     {
         var projectId = Guid.NewGuid();
@@ -197,17 +278,21 @@ public sealed class DaemonAutoSyncLoopTests
     private sealed class AutoSyncLandingApi(
         DeviceAutoSyncTargetDto target,
         DeviceRemoteLandingReconciliationResult? reconciliation,
-        DeviceRemoteLandingFailureResult? failure = null) : HttpMessageHandler
+        DeviceRemoteLandingFailureResult? failure = null,
+        DeviceRemoteLandingStatusResult? status = null) : HttpMessageHandler
     {
         private int _targetRequests;
         private int _reconciliationRequests;
         private int _failureRequests;
+        private int _statusRequests;
 
         public int TargetRequests => Volatile.Read(ref _targetRequests);
         public int ReconciliationRequests => Volatile.Read(ref _reconciliationRequests);
         public int FailureRequests => Volatile.Read(ref _failureRequests);
+        public int StatusRequests => Volatile.Read(ref _statusRequests);
         public string? ReconciliationBody { get; private set; }
         public string? FailureBody { get; private set; }
+        public string? StatusBody { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -232,6 +317,17 @@ public sealed class DaemonAutoSyncLoopTests
                 return new HttpResponseMessage(reconciliation is null ? HttpStatusCode.NotFound : HttpStatusCode.OK)
                 {
                     Content = JsonContent.Create(reconciliation)
+                };
+            }
+
+            if (request.Method == HttpMethod.Post
+                && path == "/v1/devices/me/remote-landings/status")
+            {
+                Interlocked.Increment(ref _statusRequests);
+                StatusBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+                return new HttpResponseMessage(status is null ? HttpStatusCode.NotFound : HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(status)
                 };
             }
 
