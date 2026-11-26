@@ -1566,3 +1566,42 @@ This avoids coupling the test to a MudBlazor CSS class or DOM-query extension. N
 1. Trigger and inspect full cross-platform CI on the exact current branch head.
 2. Do not add another bUnit DOM helper assertion unless its availability is verified against the pinned package.
 3. Keep PR #230 open and unmerged until exact-head CI and disposable-repository merge-queue acceptance are complete.
+
+
+## 2026-11-27 — Close .NET/Python version-source parity gaps
+
+**Implementation branch:** `feat/release-management`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)  
+**Source/test head before this journal entry:** `a1a3361ae96332345f9bd3c0f0c04722ff1fd428`
+
+### Findings
+
+A final parity pass over Version Policy exposed two remaining cases where the API could accept a source configuration that the tag-triggered Python release gate would interpret differently or reject:
+
+1. **Regex dialect drift:** the .NET policy validator used a short list of rejected escapes and group prefixes. It could therefore accept .NET-only escapes such as `\0`, `\a`, `\x`, and `\p`, while the release workflow deliberately rejects them. The Python validator already used an explicit portable grammar.
+2. **TOML scalar drift:** the .NET Tomlyn reader accepts only strings and integral numeric values, while the Python `tomllib` reader also accepted floats. A TOML float could therefore pass the API projection but fail (or produce different textual normalization) in the release workflow.
+
+### Changes
+
+- Replaced the ad-hoc .NET Regex denylist with a deterministic scanner aligned to the Python release-gate grammar:
+  - exactly one capture group (named `(?<version>...)` or ordinary group 1);
+  - non-capturing groups and positive/negative look-ahead only;
+  - portable escapes only (`\d`, `\D`, `\s`, `\S`, `\t`, `\r`, `\n`, `\f`, `\v`, `\A`, `\z` and escaped regex punctuation);
+  - optional named `\k<version>` backreference only after its named capture;
+  - rejects look-behind, inline options, word-boundary/word-class escapes, Unicode categories, numeric backreferences, nested/subtractive character classes and all unsupported escapes.
+- Python TOML projection now accepts the same scalar types as the .NET projection: strings and integers only. Floats, booleans, arrays, tables and date/time values are rejected before version normalization.
+- Added Domain tests and Python release-gate tests for accepted/rejected Regex grammar and TOML scalar values.
+- Updated Project Version source help in all five locales (en/ru/de/ja/zh) so users see the portable Regex grammar and TOML scalar rule while configuring a project.
+
+### Validation status
+
+- The last completed fully green CI [#45864599646](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45864599646) was run on head `149548ceab55ccfdd49eccec8381c3f0fce3fc65`. It predates the TOML/Regex parity commits and does **not** validate this work.
+- Current source/test head before this journal update is `a1a3361ae96332345f9bd3c0f0c04722ff1fd428`; no CI run is currently associated with that SHA.
+- No local .NET build is claimed; the .NET SDK is unavailable in this execution environment. Exact-head Linux/Windows/macOS CI is required.
+
+### Remaining blockers
+
+1. Run full cross-platform CI on the post-journal head and fix any compile, test, localization/resource or formatting failures.
+2. Finish live GitHub merge-queue acceptance in a disposable repository, including request expiry, recovery via live GraphQL queue entry, queue removal, closed-unmerged PR, direct/queued merge completion and PR/head/base drift.
+3. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector. No production tag or deployment is permitted until an administrator checks GitHub Settings.
+4. Keep PR #230 open and unmerged until the current CI and live merge-queue acceptance are complete. SaaS Control Plane and billing remain out of scope.
