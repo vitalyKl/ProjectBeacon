@@ -349,7 +349,7 @@ public static class ProjectVersionPolicyCatalog
         for (var index = 0; index < pattern.Length;)
         {
             var character = pattern[index];
-            if (character == '\\')
+            if ((int)character == 92)
             {
                 index++;
                 if (index >= pattern.Length)
@@ -364,13 +364,22 @@ public static class ProjectVersionPolicyCatalog
                     const string marker = "k<version>";
                     if (!hasNamedVersionGroup)
                     {
-                        error = @"\k<version> must follow its named (?<version>...) capture group.";
+                        error = "A version backreference must follow its named capture group.";
                         return false;
                     }
-                    if (inCharacterClass || index + marker.Length > pattern.Length
-                        || !string.Equals(pattern.Substring(index, marker.Length), marker, StringComparison.Ordinal))
+                    if (inCharacterClass)
                     {
-                        error = @"Only the .NET named backreference \k<version> is supported, and only outside a character class.";
+                        error = "Named backreferences inside a character class are not supported.";
+                        return false;
+                    }
+                    if (index + marker.Length > pattern.Length)
+                    {
+                        error = "Only the version named backreference is supported.";
+                        return false;
+                    }
+                    if (!string.Equals(pattern.Substring(index, marker.Length), marker, StringComparison.Ordinal))
+                    {
+                        error = "Only the version named backreference is supported.";
                         return false;
                     }
                     hasNamedVersionBackreference = true;
@@ -378,15 +387,19 @@ public static class ProjectVersionPolicyCatalog
                     continue;
                 }
 
-                var portableEscape = escaped is 'd' or 'D' or 's' or 'S' or 't' or 'r' or 'n' or 'f' or 'v'
-                    or '\\' or ']' or '-' or '^';
+                var portableEscape = escaped is 'd' or 'D' or 's' or 'S' or 't' or 'r' or 'n' or 'f' or 'v' or ']' or '-' or '^' ;
+                if ((int)escaped == 92)
+                    portableEscape = true;
                 if (!inCharacterClass)
                 {
-                    portableEscape |= escaped == 'A' || escaped == 'z' || escaped == '.'
-                        || escaped == '                }
+                    if (escaped is 'A' or 'z' or '.' or '$' or '?' or '*' or '+' or '(' or ')' or '[' or '{' or '}')
+                        portableEscape = true;
+                    if ((int)escaped == 124)
+                        portableEscape = true;
+                }
                 if (!portableEscape)
                 {
-                    error = @"Use only portable escapes (\d, \D, \s, \S, \t, \r, \n, \f, \v, \A, \z, escaped regex punctuation, or \k<version>).";
+                    error = "The Regex selector contains an escape unsupported by the release workflow.";
                     return false;
                 }
                 index++;
@@ -400,7 +413,8 @@ public static class ProjectVersionPolicyCatalog
                     error = "Nested and subtractive character classes are not supported.";
                     return false;
                 }
-                if (character == ']') inCharacterClass = false;
+                if (character == ']')
+                    inCharacterClass = false;
                 index++;
                 continue;
             }
@@ -425,18 +439,27 @@ public static class ProjectVersionPolicyCatalog
                 index += namedGroup.Length;
                 continue;
             }
-            if (pattern.AsSpan(index).StartsWith("(?:", StringComparison.Ordinal)
-                || pattern.AsSpan(index).StartsWith("(?=", StringComparison.Ordinal)
-                || pattern.AsSpan(index).StartsWith("(?!", StringComparison.Ordinal))
+            if (pattern.AsSpan(index).StartsWith("(?:", StringComparison.Ordinal))
+            {
+                index += 3;
+                continue;
+            }
+            if (pattern.AsSpan(index).StartsWith("(?=", StringComparison.Ordinal))
+            {
+                index += 3;
+                continue;
+            }
+            if (pattern.AsSpan(index).StartsWith("(?!", StringComparison.Ordinal))
             {
                 index += 3;
                 continue;
             }
             if (pattern.AsSpan(index).StartsWith("(?", StringComparison.Ordinal))
             {
-                error = "Only named version captures, non-capturing groups and look-ahead groups are supported.";
+                error = "Only version captures, non-capturing groups and look-ahead groups are supported.";
                 return false;
             }
+
             captureGroups++;
             index++;
         }
@@ -448,12 +471,12 @@ public static class ProjectVersionPolicyCatalog
         }
         if (captureGroups != 1)
         {
-            error = "A portable version selector must contain exactly one capturing group.";
+            error = "A portable version selector must contain exactly one capture group.";
             return false;
         }
         if (hasNamedVersionBackreference && !hasNamedVersionGroup)
         {
-            error = @"\k<version> requires a named (?<version>...) capture group.";
+            error = "A version backreference requires a named version capture group.";
             return false;
         }
 
