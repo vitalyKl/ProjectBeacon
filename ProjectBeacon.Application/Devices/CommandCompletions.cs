@@ -766,7 +766,7 @@ internal sealed class GitLandCompletion : ICommandCompletion
                             && mergeRequestStatus is "pending" or "enqueued";
                         if (identityMatches)
                         {
-                            attempt.MarkGitHubMergeQueued(mergeRequestId);
+                            attempt.MarkGitHubMergeQueued(mergeRequestId, mergeRequestStatus);
                             resultCode = "GitHubMergeQueued";
                             action = "pipeline.landing.execute_queued";
                         }
