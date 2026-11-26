@@ -86,6 +86,52 @@ public sealed class ProjectVersionPolicyCatalogTests
     }
 
     [Theory]
+    [InlineData(@"^version=(?<version>[0-9.]+)$", true)]
+    [InlineData(@"(?=version=)version=(?<version>\d+)", true)]
+    [InlineData(@"version=(?<version>\d+)\k<version>", true)]
+    [InlineData(@"version=(?<version>\w+)", false)]
+    [InlineData(@"version=(?<version>\0)", false)]
+    [InlineData(@"version=(?<version>\a)", false)]
+    [InlineData(@"version=(?<version>\x30+)", false)]
+    [InlineData(@"version=(?<version>\p{L}+)", false)]
+    [InlineData(@"version=(?<version>\d+)\1", false)]
+    [InlineData(@"version=(?<version>\d+)\k<other>", false)]
+    [InlineData(@"version=\d+(?<version>\d+)\k<version>", false)]
+    [InlineData(@"(?i)version=(?<version>\d+)", false)]
+    [InlineData(@"version=(?<version>[a-z-[aeiou]]+)", false)]
+    [InlineData(@"version=(?<version>[0-9]+)(?<other>[0-9]+)", false)]
+    public void Validate_UsesTheSamePortableRegexGrammarAsTheReleaseGate(string selector, bool expected)
+    {
+        var policy = new ProjectVersionPolicy(
+            "NumericComponents", 1, null, "v{version}", false,
+            [new ProjectVersionSourcePolicy("manifest.txt", "Regex", selector)]);
+
+        Assert.Equal(expected, ProjectVersionPolicyCatalog.Validate(policy, out _));
+    }
+
+    [Fact]
+    public void ExtractTomlVersion_AcceptsOnlyStringAndIntegerScalars()
+    {
+        var policy = new ProjectVersionPolicy("NumericComponents", 1, null, "v{version}", false, []);
+        var source = new ProjectVersionSourcePolicy("manifest.toml", "Toml", "version");
+
+        Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, "version = \"7\"", out var textVersion, out var textError), textError);
+        Assert.Equal("7", textVersion);
+
+        Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, "version = 7", out var integerVersion, out var integerError), integerError);
+        Assert.Equal("7", integerVersion);
+
+        Assert.False(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, "version = 1.25", out _, out _));
+        Assert.False(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, "version = true", out _, out _));
+        Assert.False(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, "version = [7]", out _, out _));
+    }
+
+    [Theory]
     [InlineData("../outside.json")]
     [InlineData("/etc/passwd")]
     [InlineData("C:/secret.txt")]
