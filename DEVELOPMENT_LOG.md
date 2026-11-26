@@ -1048,3 +1048,29 @@ After the failure-reporting entry above, the branch received UI regression cover
 2. After run 1651 finishes, trigger one fresh full Linux/Windows/macOS CI on the current head after this journal update. Verify the Windows cold-start test fix and cancellation-safe workflow expressions together.
 3. Confirm that a normal build/test failure still allows all later test modules and TRX reporting, while a superseded run skips test/report/guard steps.
 4. No PR merge, production tag or deployment was performed.
+
+
+## 2026-11-26 — Cross-platform CI passed after Windows CLI timeout fix
+
+**CI:** [#45775571535](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45775571535), run 1651  
+**Exact source head:** `43b611406c9370e9dd022b4b61c4cffed2672127`  
+**Result:** Linux, Windows and macOS jobs all completed successfully; no failed steps.
+
+### Platform verification
+
+- Linux: Build and EF model check passed; all seven test modules passed; TRX report and guards passed; 2,663 total test results, 0 failed, 1 allowed platform-conditional skip; `dotnet format --verify-no-changes` passed.
+- Windows: Build and EF model check passed; all seven test modules passed, including CLI (668 total, 0 errors, 0 failed, 0 skipped); `dotnet format --verify-no-changes` passed. This directly validates the previous three Windows CLI timeout failures.
+- macOS: Build and EF model check passed; all seven test modules passed; `dotnet format --verify-no-changes` passed.
+- Windows/macOS test lanes set `BEACON_TEST_SKIP_POSTGRES=1`; PostgreSQL integration coverage remains the Linux lane's responsibility. Platform-conditional skips remain reported, not counted as executed passes.
+
+### Scope and limitation
+
+- This run validates the source/tests at `43b61140`, including the isolated `dotnet` first-run environment and longer, bounded approval/resume test waits.
+- It does **not** validate the later workflow-only changes `14a8b606` (`ci.yml`) and `21690113` (`release.yml`), nor the journal update on the new branch head.
+- Current branch head before this journal append: `71439aae751c7ccb4804269b79458bcfeb096815`.
+
+### Next
+
+1. Trigger one full CI matrix on the current post-journal head. Confirm the new `!cancelled()` conditions parse and the same tests remain green.
+2. Once the current head is green, continue end-to-end acceptance of GitHub merge queue: enqueued→merged, definitive failed with exact UUID, missing/expired UUID, PR identity drift and ReviewCheckCommand drift.
+3. Keep classic branch/tag protection and Production Environment required reviewers as administrative blockers until verified in GitHub Settings. No production tag/deploy or PR merge was performed.
