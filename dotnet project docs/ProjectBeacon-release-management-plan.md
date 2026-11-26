@@ -420,3 +420,33 @@ After the server and target-discovery regression tests, the workstation loop now
 - Application, AutoSync loop и UI regression tests покрывают этот поток.
 
 Implementation head на момент этого обновления плана: 43747d09cd31bd3adcc1fb9ed7ee7b26965f0e0e; журнал в feat/release-management обновлён после этого source commit и запуска CI на окончательной вершине ещё нет. Run #45763146032 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) относится к более раннему head 8ff19877 и не считается проверкой текущих изменений. После journal update необходимо получить новый точный HEAD и запустить Linux/Windows/macOS matrix.
+
+
+## Дополнение — обработка окончательного отказа merge queue (26 ноября 2026)
+
+К async GitHub landing добавлен отдельный Device-authenticated failure-report endpoint. Он не запускает merge и не изменяет Git refs: станция сообщает только о статусе failed, полученном от GitHub для конкретного async merge request, после повторной проверки, что PR остаётся открытым и имеет тот же base/head/URL.
+
+Сервер принимает report только от активной закреплённой станции и только при совпадении:
+- последней LandingAttempt и её ID;
+- task/project/device pin;
+- точного async request UUID;
+- ReviewRun, source SHA, target branch и последнего Approve;
+- текущего и reviewed hash ReviewCheckCommand;
+- отсутствия активной/ожидающей pipeline session.
+
+После подтверждения только attempt переводится в Failed с кодом GitHubAsyncMergeFailed и audit event. Задача остаётся InProgress/Approved, remote proof не создаётся, пользователь может исправить причину и запустить новый Preview. Старые attempt и чужой UUID отвергаются. UI показывает локализованную понятную причину (en/ru/de/ja/zh). AutoSync использует отдельный POST endpoint и не вызывает reconciliation успеха.
+
+Добавлены Application, AutoSync loop и BUnit tests на отказ UUID, успешную регистрацию, сохранение задачи открытой и передачу failure-report без вызова merge reconciliation.
+
+### CI
+
+CI #45761895374 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45761895374) выполнял семь тестовых модулей успешно до format step; Linux/macOS упали на три xUnit2031 в AutoSync target discovery tests, Windows был отменён fail-fast. Три Assert.Single выражения заменены на predicate overload.
+
+CI #45763146032 (https://github.com/vitalyKl/ProjectBeacon/actions/runs/45763146032) запущен на раннем head 8ff19877, до Device endpoint/client failure-report path и новых UI/Application/loop tests. Его результат не покрывает окончательную реализацию. Implementation head перед этим обновлением: faf9f8e9ab96f17cc8e220d289d1c2089379c881. Обязателен свежий full matrix на точном финальном HEAD.
+
+### Следующий шаг
+
+1. Проверить CI #45763146032 на соответствие именно его commit.
+2. Запустить полный CI на финальной вершине implementation branch.
+3. Провести end-to-end acceptance с реальной GitHub merge queue, включая окончательный отказ и retry через новый Preview.
+4. Не создавать production tag/deploy до ручной проверки tag/branch protection и production Environment reviewers администратором.
