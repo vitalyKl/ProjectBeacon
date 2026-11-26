@@ -309,20 +309,22 @@ internal static class GitLandExecutor
         if (merge.ErrorCode is not null || merge.Result is null)
             return BusinessFailure(merge.ErrorCode ?? "GitHubMergeFailed");
 
-        // The GitHub merge commit is accepted only when its immutable tree is exactly
-        // the tree reviewed by Beacon and the post-merge check still passes.
+        // GitHub may merge through a queue after the base or earlier queued PRs advance.
+        // The final merge tree can therefore differ from the local Preview candidate.
+        // The exact PR head is pinned by GitHub's merge API; verify a real commit tree
+        // and run the pinned post-merge check on the actual merged commit.
         var mergeTree = await Git(
             workspace.RepositoryRoot, filters, CancellationToken.None,
             "rev-parse", "--verify", merge.Result.MergeCommitSha + "^{tree}");
         if (!Succeeded(mergeTree)
-            || !string.Equals(mergeTree.StdOut.Trim(), request.TargetTreeSha, StringComparison.OrdinalIgnoreCase))
+            || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(null, mergeTree.StdOut.Trim()))
         {
             return LandedUnverified(
-                request, merge.Result.MergeCommitSha, null, null, "GitHubMergeTreeMismatch");
+                request, merge.Result.MergeCommitSha, null, null, "GitHubMergeTreeUnavailable");
         }
 
         var postMerge = await RunPostMergeCheckAsync(
-            workspace, request, merge.Result.MergeCommitSha, request.TargetTreeSha!,
+            workspace, request, merge.Result.MergeCommitSha, expectedTreeSha: null,
             filters, CancellationToken.None);
         if (postMerge.ErrorCode is not null || postMerge.ExitCode != 0
             || !IsSha256(postMerge.OutputHash))
@@ -1031,7 +1033,7 @@ internal static class GitLandExecutor
         AgentTaskWorktree workspace,
         Request request,
         string mergeCommitSha,
-        string expectedTreeSha,
+        string? expectedTreeSha,
         string[] filters,
         CancellationToken ct)
     {
@@ -1062,7 +1064,7 @@ internal static class GitLandExecutor
             var immutable = Succeeded(head)
                 && string.Equals(head.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase)
                 && Succeeded(tree)
-                && string.Equals(tree.StdOut.Trim(), expectedTreeSha, StringComparison.OrdinalIgnoreCase)
+                && GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(expectedTreeSha, tree.StdOut.Trim())
                 && diff.ExitCode == 0 && !diff.TimedOut
                 && Succeeded(untracked) && string.IsNullOrWhiteSpace(untracked.StdOut);
             if (!immutable)
