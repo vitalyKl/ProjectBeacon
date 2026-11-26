@@ -465,6 +465,97 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordsQueueRemovalWithoutAsyncRequestIdOnlyForExplicitQueuedAttempt()
+    {
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
+        using (TenantScope.EnterUnscoped())
+        {
+            var attempt = LandingAttempt.Start(
+                setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
+                "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
+                "GitHub accepted the PR into its queue without returning a request UUID.");
+            attempt.RecordPreview(
+                "main", setup.RemoteBaseSha, new string('5', 40), new string('6', 64), 0, null);
+            attempt.MarkExecutePending();
+            attempt.MarkGitHubMergeQueued(null);
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var request = new DeviceRemoteLandingFailureRequest(
+                setup.ProjectId,
+                setup.TaskId,
+                attempt.Id,
+                setup.ReviewRunId,
+                "acme/project-beacon",
+                42,
+                "https://github.com/acme/project-beacon/pull/42",
+                $"beacon/task/{setup.TaskId:N}",
+                "main",
+                setup.SourceSha,
+                MergeRequestId: null,
+                DateTime.UtcNow);
+
+            var result = await handler.ReportFailureAsync(
+                setup.DeviceId, request, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            Assert.Equal("GitHubAsyncMergeFailed", result.Value!.FailureCode);
+            await using var verify = Factory().CreateDbContext();
+            var persisted = await verify.LandingAttempts.AsNoTracking()
+                .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(LandingAttemptStatus.Failed, persisted.Status);
+            Assert.Equal("GitHubAsyncMergeFailed", persisted.EscalationCode);
+        }
+    }
+
+    [Fact]
+    public async Task RejectsQueueRemovalReportForGenericUnknownGitLandCompletion()
+    {
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
+        using (TenantScope.EnterUnscoped())
+        {
+            var attempt = LandingAttempt.Start(
+                setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
+                "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
+                "The local GitLand completion is unknown, not a confirmed merge-queue request.");
+            attempt.RecordPreview(
+                "main", setup.RemoteBaseSha, new string('5', 40), new string('6', 64), 0, null);
+            attempt.MarkExecutePending();
+            attempt.MarkCommandCompletionUnknown();
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var request = new DeviceRemoteLandingFailureRequest(
+                setup.ProjectId,
+                setup.TaskId,
+                attempt.Id,
+                setup.ReviewRunId,
+                "acme/project-beacon",
+                42,
+                "https://github.com/acme/project-beacon/pull/42",
+                $"beacon/task/{setup.TaskId:N}",
+                "main",
+                setup.SourceSha,
+                MergeRequestId: null,
+                DateTime.UtcNow);
+
+            var result = await handler.ReportFailureAsync(
+                setup.DeviceId, request, TestContext.Current.CancellationToken);
+
+            Assert.False(result.Success);
+            Assert.Equal(ErrorKind.Conflict, result.Kind);
+            await using var verify = Factory().CreateDbContext();
+            var persisted = await verify.LandingAttempts.AsNoTracking()
+                .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(LandingAttemptStatus.ExecutePending, persisted.Status);
+            Assert.Equal("CommandCompletionUnknown", persisted.FailureCode);
+            Assert.Null(persisted.EscalationCode);
+        }
+    }
+
+    [Fact]
     public async Task DoesNotCloseTaskWhilePipelineSessionIsActive()
     {
         var setup = await CreateApprovedTaskAsync(autoSyncEnabled: true, activeSession: true);
