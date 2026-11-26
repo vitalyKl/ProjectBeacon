@@ -1,5 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
+using System.Security.Cryptography;
+using System.Text;
 using Application.Common;
 using Application.Devices;
 using Application.Projects;
@@ -33,6 +35,10 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     }
 
     private BeaconDbFactory Factory() => HandlerSqlite.Factory(_connection);
+
+    private const string ReviewCheckCommand = "dotnet test --no-build";
+    private static string ReviewCheckCommandHash => Convert.ToHexString(
+        SHA256.HashData(Encoding.UTF8.GetBytes(ReviewCheckCommand))).ToLowerInvariant();
 
     [Fact]
     public async Task ReconcilesExactMergedPullRequestAndClosesPinnedApprovedTask()
@@ -229,7 +235,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var postMergeHash = new string('8', 64);
             var attempt = LandingAttempt.Start(
                 setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
-                "main", setup.SourceSha, new string('2', 40), new string('a', 64),
+                "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
                 "Beacon-managed async merge waiting for GitHub queue.");
             attempt.RecordPreview(
                 "main", setup.RemoteBaseSha, candidateTree, new string('6', 64), 0, null);
@@ -247,6 +253,19 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
                 PostMergeCheckExitCode = 0,
                 PostMergeCheckOutputHash = postMergeHash
             };
+            var project = await _db.Projects.SingleAsync(
+                item => item.Id == setup.ProjectId, TestContext.Current.CancellationToken);
+            project.Update(reviewCheckCommand: "dotnet test");
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var changedCommand = await handler.HandleAsync(
+                setup.DeviceId, baseRequest, TestContext.Current.CancellationToken);
+            Assert.False(changedCommand.Success);
+            Assert.Equal(ErrorKind.Conflict, changedCommand.Kind);
+            Assert.Contains("ReviewCheckCommand changed", changedCommand.Error ?? string.Empty, StringComparison.Ordinal);
+
+            project.Update(reviewCheckCommand: ReviewCheckCommand);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
             var wrongRequest = await handler.HandleAsync(
                 setup.DeviceId,
                 baseRequest with { MergeRequestId = Guid.NewGuid().ToString("D") },
@@ -354,7 +373,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var project = Project.Create("GitHub remote", null, org.Id);
             project.SetGitPolicyJson(ProjectGitPolicyCatalog.Serialize(
                 0, [], 200, 20_000, "Off", autoSyncEnabled: autoSyncEnabled));
-            project.Update(reviewCheckCommand: "dotnet test --no-build");
+            project.Update(reviewCheckCommand: ReviewCheckCommand);
             _db.Projects.Add(project);
             _db.ProjectMembers.Add(ProjectMember.Create(project.Id, user.Id, MemberRole.Owner));
             await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -380,7 +399,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             var reviewRunId = Guid.NewGuid();
             var review = ReviewRun.Start(
                 project.Id, task.Id, ReviewerType.Agent, targetRunId: reviewRunId);
-            review.SetCheckCommandHash(new string('a', 64));
+            review.SetCheckCommandHash(ReviewCheckCommandHash);
             var sourceSha = new string('1', 40);
             var treeSha = new string('2', 40);
             review.CompleteCheck(
