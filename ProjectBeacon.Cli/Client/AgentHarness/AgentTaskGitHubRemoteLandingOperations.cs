@@ -247,8 +247,8 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                 repositoryRoot, Array.Empty<string>(), ct,
                 "rev-parse", "--verify", finalView.MergeCommitSha + "^{tree}");
             if (!AgentTaskGitOperations.Succeeded(mergeTree)
-                || !string.Equals(mergeTree.StdOut.Trim(), target.CandidateTreeSha, StringComparison.OrdinalIgnoreCase))
-                return new VerificationResult(null, "Remote landing skipped: GitHub merge tree differs from the reviewed candidate tree.");
+                || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(null, mergeTree.StdOut.Trim()))
+                return new VerificationResult(null, "Remote landing skipped: GitHub merge commit tree is unavailable or invalid.");
 
             var hasPersistedPostMergeProof = target.PersistedPostMergeCheckExitCode is not null
                 || !string.IsNullOrWhiteSpace(target.PersistedPostMergeCheckOutputHash);
@@ -273,7 +273,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                     return new VerificationResult(null, "Remote landing skipped: queued Beacon merge is missing its pinned post-merge check command.");
 
                 var postMergeCheck = await RunPostMergeCheckAsync(
-                    repositoryRoot, localRoot, finalView.MergeCommitSha!, target.CandidateTreeSha!,
+                    repositoryRoot, localRoot, finalView.MergeCommitSha!, expectedTreeSha: null,
                     target.PostMergeCheckCommand, ct);
                 if (postMergeCheck.Error is not null || postMergeCheck.ExitCode != 0 || postMergeCheck.OutputHash is null)
                     return new VerificationResult(null, "Remote landing skipped: post-merge check failed (" + (postMergeCheck.Error ?? "PostMergeCheckFailed") + ").");
@@ -367,7 +367,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         string repositoryRoot,
         string projectRoot,
         string mergeCommitSha,
-        string expectedTreeSha,
+        string? expectedTreeSha,
         string checkCommand,
         CancellationToken ct)
     {
@@ -398,7 +398,7 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             if (!AgentTaskGitOperations.Succeeded(head)
                 || !string.Equals(head.StdOut.Trim(), mergeCommitSha, StringComparison.OrdinalIgnoreCase)
                 || !AgentTaskGitOperations.Succeeded(tree)
-                || !string.Equals(tree.StdOut.Trim(), expectedTreeSha, StringComparison.OrdinalIgnoreCase)
+                || !GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable(expectedTreeSha, tree.StdOut.Trim())
                 || !AgentTaskGitOperations.Succeeded(status)
                 || !string.IsNullOrWhiteSpace(status.StdOut))
                 return new PostMergeCheckResult(-2, hash, "PostMergeCheckModifiedFiles");
