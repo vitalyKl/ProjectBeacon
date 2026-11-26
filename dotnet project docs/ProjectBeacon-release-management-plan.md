@@ -591,3 +591,35 @@ Implementation in `feat/release-management`:
 Source/test head before the journal-only update: `1c9cfdd43477c46375cecf9a809a386f06d9a48a`; journal commit: `bd4378bb09d883df6d64f80542e198df775b5aef`.
 
 **Verification:** the new source/tests have not yet been covered by CI. Full Linux/Windows/macOS CI on the latest branch head is required. No live GitHub merge-queue acceptance, production tag or deployment is claimed.
+
+
+## Дополнение — GitHub merge queue и merge-group tree (26 ноября 2026)
+
+### Найденное расхождение
+
+GitHub merge queue формирует временную merge-group ветку из актуальной base и PR, стоящих перед текущим PR в очереди. Поэтому итоговый merge commit может иметь другое дерево, чем локальный Preview candidate Beacon, даже когда GitHub слил ровно тот PR head, который проходил Review. Простое сравнение `mergeCommit^{tree}` с Preview tree ошибочно отвергало бы корректное слияние из очереди.
+
+### Изменение в реализации
+
+В `feat/release-management` добавлен общий валидатор `GitHubLandingMergeExecutor.IsPostMergeTreeAcceptable`:
+
+- локальный GitLand передаёт ожидаемое candidate tree и продолжает требовать точного совпадения;
+- GitHub-authoritative merge path проверяет валидность фактического merge tree, но не требует равенства локальному Preview tree;
+- точность GitHub-пути обеспечивается pinned source SHA при merge API, проверками PR/base/review/checks до merge, подтверждением что exact merge commit появился в fetched remote target branch, повторной проверкой PR identity/state и запуском неизменённого ReviewCheckCommand на фактическом GitHub merge commit;
+- AutoSync передаёт серверу exact merge commit и post-merge evidence; сервер сравнивает их с LandingAttempt и только после этого закрывает задачу.
+
+Добавлены тесты на строгий режим, валидное отличие дерева в merge queue и некорректные SHA. Изменения в текущей вершине `9fce7b94c699ac8313bc9f149347035c32404ddd`; журнал обновлён отдельным commit `c0c1b7b93a1223e5188beded69fd8325b277054c`.
+
+### Проверка и ограничения
+
+Предыдущий полный CI [#45786178874](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45786178874) был зелёным на head `bd4378bb`, но он не включает merge-queue tree изменения. Требуется отдельный CI на актуальной вершине, все результаты до него остаются непроверенными.
+
+Live merge queue не тестировалась. End-to-end тестировать на disposable GitHub repository с настроенными required checks для события `merge_group`; если CI не публикует проверки merge group, очередь не сможет подтвердить candidate. Не считать queue workflow принятым только по unit tests.
+
+### Следующие шаги
+
+1. Запустить full Linux/Windows/macOS CI на актуальном implementation head после обновления журнала.
+2. Проверить прямой merge и merge queue: queued → merged, включение earlier queued PR, base advanced, failed queue entry, lost response/expired request ID, изменение PR head/state и неуспешный pinned post-merge check.
+3. Убедиться, что локальный GitLand продолжает требовать точного candidate tree.
+4. Сохранить административный блокер: classic tag protection `v*` и required reviewers для GitHub Environment `production` не подтверждены. Не создавать production tag и не запускать deploy.
+5. Оставить PR #230 открытым для review; слияние development PR не входит в это поручение.
