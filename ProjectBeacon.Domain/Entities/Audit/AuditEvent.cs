@@ -21,7 +21,8 @@ public sealed class AuditEvent : Entity
         "candidateCheckOutputHash", "postMergeCheckOutputHash",
         "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId",
         "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId",
-        "deployedSha", "hotfixRequestId"
+        "deployedSha", "hotfixRequestId", "repository", "pullRequestNumber",
+        "pullRequestUrl", "mergeRequestId"
     };
 
     private static readonly Regex DetailCodePattern =
@@ -29,6 +30,14 @@ public sealed class AuditEvent : Entity
 
     private static readonly Regex BranchNamePattern =
         new("^[A-Za-z0-9._/-]{1,200}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex GitHubRepositoryPattern =
+        new("^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex GitHubPullRequestUrlPattern =
+        new("^https://github\\.com/[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]{0,8}$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public DateTime At { get; private set; }
     public AuditActorKind ActorKind { get; private set; }
@@ -137,9 +146,13 @@ public sealed class AuditEvent : Entity
                     var code = value.GetString();
                     var pattern = property.Name is "sourceBranch" or "targetBranch"
                         ? BranchNamePattern
-                        : property.Name == "targetVersion"
-                            ? new Regex("^[A-Za-z0-9._+:/-]{1,100}$", RegexOptions.CultureInvariant | RegexOptions.Compiled)
-                            : DetailCodePattern;
+                        : property.Name == "repository"
+                            ? GitHubRepositoryPattern
+                            : property.Name == "pullRequestUrl"
+                                ? GitHubPullRequestUrlPattern
+                                : property.Name == "targetVersion"
+                                    ? new Regex("^[A-Za-z0-9._+:/-]{1,100}$", RegexOptions.CultureInvariant | RegexOptions.Compiled)
+                                    : DetailCodePattern;
                     if (code is null || !pattern.IsMatch(code))
                         throw new ArgumentException($"Audit detail '{property.Name}' must be a short code, not free-form text.", nameof(detailsJson));
                 }
