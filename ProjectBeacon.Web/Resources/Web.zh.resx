@@ -3402,7 +3402,7 @@ orthstar</value>
 <data name="ProjectOfficialVersion" xml:space="preserve"><value>项目正式版本（以 Beacon 为权威来源）</value></data>
 <data name="ProjectVersionInitialVersion" xml:space="preserve"><value>初始正式版本</value></data>
 <data name="ProjectVersionSources" xml:space="preserve"><value>版本文件投影</value></data>
-<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>每行一个来源：相对路径|Xml、Json、Toml 或 Regex|选择器。XML 仅支持元素路径：绝对路径 (/Project/PropertyGroup/Version) 或后代路径 (//Version)；不支持谓词、属性、函数、通配符和命名空间。JSON 使用 JSON Pointer；TOML 使用点分隔键路径；Regex 使用带有名为 'version' 的组或第 1 个捕获组的 .NET 模式。准备 Candidate 前至少需要一个来源；如果目前只计划 Release，可以稍后配置。文件必须位于项目 workspace 内。</value></data>
+<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>每行一个来源：相对路径|Xml、Json、Toml 或 Regex|选择器。XML 仅支持绝对元素路径和后代路径，例如 /Project/PropertyGroup/Version 或 //Version。JSON 使用 JSON Pointer；TOML 使用点分隔键路径，结果必须是字符串或整数。Regex 仅支持 .NET/Python 的通用子集：必须且只能有一个捕获组（(?&lt;version&gt;...) 或第 1 组），并且只允许非捕获组和前瞻。支持的转义包括 \d、\D、\s、\S、\t、\r、\n、\f、\v、\A 和 \z；命名反向引用 \k&lt;version&gt; 必须位于命名捕获组之后。不支持后顾、内联选项、\w/\W/\b/\B、Unicode 类别、数字反向引用以及嵌套/相减字符类。准备 Candidate 前至少需要一个来源；如果目前只计划 Release，可以稍后配置。文件必须位于项目 workspace 内。</value></data>
 <data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>只有项目 Owner 和 Admin 可以修改版本策略。</value></data>
 <data name="ProjectVersionSave" xml:space="preserve"><value>保存版本策略</value></data>
 <data name="ProjectVersionSaved" xml:space="preserve"><value>版本策略已保存</value></data>
