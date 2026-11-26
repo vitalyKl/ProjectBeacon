@@ -494,7 +494,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
                 "main",
                 setup.SourceSha,
                 MergeRequestId: null,
-                DateTime.UtcNow);
+                VerifiedAtUtc: DateTime.UtcNow);
 
             var result = await handler.ReportFailureAsync(
                 setup.DeviceId, request, TestContext.Current.CancellationToken);
@@ -539,7 +539,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
                 "main",
                 setup.SourceSha,
                 MergeRequestId: null,
-                DateTime.UtcNow);
+                VerifiedAtUtc: DateTime.UtcNow);
 
             var result = await handler.ReportFailureAsync(
                 setup.DeviceId, request, TestContext.Current.CancellationToken);
