@@ -421,9 +421,18 @@ public sealed class ReconcileDeviceRemoteLandingHandler
 
             if (latestLandingAttempt.Status == LandingAttemptStatus.Landed)
             {
-                if (!string.Equals(latestLandingAttempt.MergeCommitSha, request.MergeCommitSha, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(latestLandingAttempt.MergeCommitSha, request.MergeCommitSha, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(latestLandingAttempt.CandidateTreeSha, request.CandidateTreeSha, StringComparison.OrdinalIgnoreCase)
+                    || latestLandingAttempt.PostMergeCheckExitCode != 0
+                    || request.PostMergeCheckExitCode != latestLandingAttempt.PostMergeCheckExitCode
+                    || !string.Equals(
+                        latestLandingAttempt.PostMergeCheckOutputHash,
+                        request.PostMergeCheckOutputHash,
+                        StringComparison.OrdinalIgnoreCase)
+                    || !IsSha256(latestLandingAttempt.PostMergeCheckOutputHash))
                     return Result.Failure<DeviceRemoteLandingReconciliationResult>(
-                        "The GitHub merge commit differs from the verified Beacon landing result.", ErrorKind.Conflict);
+                        "The GitHub merge candidate tree or post-merge evidence differs from the verified Beacon landing result.",
+                        ErrorKind.Conflict);
             }
             else if (latestLandingAttempt.TryReadGitHubMergeRequestId(out var expectedMergeRequestId))
             {
