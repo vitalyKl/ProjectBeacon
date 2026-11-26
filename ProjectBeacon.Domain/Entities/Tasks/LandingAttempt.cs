@@ -329,6 +329,32 @@ public sealed class LandingAttempt : Entity, IProjectScoped
     }
 
     /// <summary>
+    /// Monotonically records GitHub's observed pending-to-enqueued transition for the
+    /// same async request. It is idempotent and never replaces the request UUID.
+    /// </summary>
+    public bool RecordGitHubMergeEnqueued(string mergeRequestId)
+    {
+        EnsureStatus(LandingAttemptStatus.ExecutePending);
+        if (!Guid.TryParse(mergeRequestId, out var parsed) || parsed == Guid.Empty)
+            throw new ArgumentException("GitHub asynchronous merge request ID must be a GUID.", nameof(mergeRequestId));
+
+        var normalizedRequestId = parsed.ToString("D");
+        if (!TryReadGitHubMergeRequestId(out var existingRequestId)
+            || !string.Equals(existingRequestId, normalizedRequestId, StringComparison.Ordinal))
+            throw new InvalidOperationException("The observed GitHub enqueue status does not match the persisted async merge request.");
+
+        var currentStatus = GitHubMergeRequestStatus;
+        if (string.Equals(currentStatus, "enqueued", StringComparison.Ordinal))
+            return false;
+        if (!string.Equals(currentStatus, "pending", StringComparison.Ordinal))
+            throw new InvalidOperationException("Only a pending GitHub async merge can transition to enqueued.");
+
+        FailureCode = "GitHubMergeEnqueued:" + normalizedRequestId;
+        Touch();
+        return true;
+    }
+
+    /// <summary>
     /// The exact status known for a Beacon-issued GitHub async merge. Legacy UUID
     /// markers remain unknown because older clients did not persist pending vs enqueued.
     /// </summary>
