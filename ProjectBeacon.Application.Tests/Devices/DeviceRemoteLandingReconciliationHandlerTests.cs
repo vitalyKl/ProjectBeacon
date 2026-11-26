@@ -429,6 +429,20 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
             Assert.False(wrongRequest.Success);
             Assert.Equal(ErrorKind.Conflict, wrongRequest.Kind);
 
+            var closedPullRequest = await handler.ReportAsyncMergeStatusAsync(
+                setup.DeviceId,
+                request with { PullRequestState = "CLOSED" },
+                TestContext.Current.CancellationToken);
+            Assert.False(closedPullRequest.Success);
+            Assert.Equal(ErrorKind.Validation, closedPullRequest.Kind);
+
+            var pendingRegression = await handler.ReportAsyncMergeStatusAsync(
+                setup.DeviceId,
+                request with { MergeRequestStatus = "pending" },
+                TestContext.Current.CancellationToken);
+            Assert.False(pendingRegression.Success);
+            Assert.Equal(ErrorKind.Validation, pendingRegression.Kind);
+
             var result = await handler.ReportAsyncMergeStatusAsync(
                 setup.DeviceId, request, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.Error);
