@@ -175,7 +175,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
 
             var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
             var result = await handler.HandleAsync(
-                setup.DeviceId, Request(setup), TestContext.Current.CancellationToken);
+                setup.DeviceId, Request(setup) with { LandingAttemptId = attempt.Id }, TestContext.Current.CancellationToken);
 
             Assert.False(result.Success);
             Assert.Equal(ErrorKind.Conflict, result.Kind);
@@ -211,7 +211,7 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
 
             var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
             var result = await handler.HandleAsync(
-                setup.DeviceId, Request(setup), TestContext.Current.CancellationToken);
+                setup.DeviceId, Request(setup) with { LandingAttemptId = attempt.Id }, TestContext.Current.CancellationToken);
 
             Assert.True(result.Success, result.Error);
             Assert.Equal("Done", result.Value!.TaskStatus);
@@ -273,6 +273,13 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
 
             Assert.False(wrongRequest.Success);
             Assert.Equal(ErrorKind.Conflict, wrongRequest.Kind);
+
+            var wrongAttempt = await handler.HandleAsync(
+                setup.DeviceId,
+                baseRequest with { LandingAttemptId = Guid.NewGuid() },
+                TestContext.Current.CancellationToken);
+            Assert.False(wrongAttempt.Success);
+            Assert.Equal(ErrorKind.Conflict, wrongAttempt.Kind);
 
             var result = await handler.HandleAsync(
                 setup.DeviceId, baseRequest, TestContext.Current.CancellationToken);
