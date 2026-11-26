@@ -1678,3 +1678,39 @@ After the prior correction removed the malformed character literal, the next cro
 2. Finish live async merge-queue acceptance in a disposable GitHub repository, including request expiry, live GraphQL queue recovery, queue removal, closed-unmerged PR, queued/direct merge completion, PR/head/base drift and post-merge-check failure.
 3. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector; no production tag or deployment is permitted before administrator confirmation.
 4. Keep PR #230 open and unmerged until exact-head CI and live merge-queue acceptance are complete.
+
+
+## 2026-11-27 — Exact-head cross-platform CI is green
+
+**Validated source head:** `e87f4e6fc962b82102957b6d48c4ea7eac45f475`  
+**CI:** [#45899056564](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45899056564)  
+**Result:** all Linux, Windows and macOS jobs completed successfully.
+
+### Exact verification
+
+- **Linux** — all 24 steps succeeded:
+  - Python `Test release manifest tag policy` passed.
+  - Restore, Build and EF `has-pending-model-changes` passed (diagnostic migration step skipped because no model drift was found).
+  - API, Application, CLI, Domain, Infrastructure, Web and Worker test modules passed.
+  - TRX result-count/allowed-skip guards passed.
+  - `dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051` passed.
+- **Windows** — all 17 steps succeeded:
+  - Restore, Build, EF model-drift check, all seven .NET test modules and `dotnet format` passed.
+- **macOS** — all 16 steps succeeded:
+  - Restore, Build, EF model-drift check, all seven .NET test modules and `dotnet format` passed.
+- Windows/macOS intentionally run with `BEACON_TEST_SKIP_POSTGRES=1`; the PostgreSQL persistence lane is exercised by the Linux service-container job. These skips are not counted as database integration success on Windows/macOS.
+- No CI failures, no pending model changes, no TRX guard failures and no formatting differences remain on this exact source head.
+
+### What this confirms
+
+- The malformed C# character literal and duplicated source tail have been removed; the full solution builds on all three operating systems.
+- The new Domain tests for the portable Regex grammar and TOML scalar parity pass.
+- The Python release-gate tests for Regex/TOML parity and the bounded regex worker pass.
+- The localized Project Version resource changes compile across the platform matrix.
+
+### Remaining blockers / next work
+
+1. Live async GitHub merge-queue acceptance is still required in a disposable repository: pending→enqueued, 24-hour async UUID expiry/recovery from live GraphQL queue entry, queue removal, direct and queued merge completion, closed-unmerged PR, PR/head/base drift, and post-merge ReviewCheck failure. Unit tests and this CI do not replace live acceptance.
+2. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector. An administrator must confirm these in GitHub Settings before any production tag/deployment.
+3. Continue user-project acceptance of Release Management (project settings, role/RLS enforcement, failure UI, localization, candidate/publish/recovery states).
+4. PR #230 remains open and unmerged until live merge-queue acceptance and publication protection checks are complete. No production tag/deployment was created. SaaS Control Plane and billing remain out of scope.
