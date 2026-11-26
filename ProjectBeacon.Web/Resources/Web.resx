@@ -3473,6 +3473,9 @@ No Beacon-hosted coding agent.</value>
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>The merge may already be on the target branch, but post-merge verification failed or could not be confirmed. Inspect the target before requesting a revert.</value>
   </data>
+  <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
+    <value>GitHub accepted the merge request. It is waiting for the merge queue or for GitHub to finish the merge. The task will stay open until Beacon verifies the merged commit and post-merge check.</value>
+  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>The landing attempt reported a reason the UI does not recognize. Check the workstation log and share the diagnostic ID below with support.</value>
   </data>
