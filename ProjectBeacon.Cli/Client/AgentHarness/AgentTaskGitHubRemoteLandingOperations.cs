@@ -203,10 +203,9 @@ internal static class AgentTaskGitHubRemoteLandingOperations
 
         int? postMergeCheckExitCode = null;
         string? postMergeCheckOutputHash = null;
-        if (target.MergeRequestId is not null)
+        if (target.LandingAttemptId is not null)
         {
-            if (target.LandingAttemptId is null
-                || !AgentTaskGitOperations.IsGitSha(target.CandidateTreeSha ?? string.Empty)
+            if (!AgentTaskGitOperations.IsGitSha(target.CandidateTreeSha ?? string.Empty)
                 || string.IsNullOrWhiteSpace(target.PostMergeCheckCommand))
                 return new VerificationResult(null, "Remote landing skipped: queued Beacon merge is missing its candidate tree or pinned post-merge check command.");
 
