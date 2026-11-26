@@ -211,13 +211,26 @@ internal static class GitHubLandingMergeExecutor
             ghPath, context.WorktreeRoot, ct,
             BuildMergeApiArguments(repository, pullRequest.Number, expectedSourceSha));
         var asyncMerge = ParseAsyncMergeResponse(merge.StdOut);
+        if (asyncMerge.Error is not null && !string.IsNullOrWhiteSpace(merge.StdErr))
+        {
+            // gh api may return the structured 409 response body on stderr. Preserve its
+            // existing request UUID so an idempotent retry can join the in-flight merge.
+            var errorResponse = ParseAsyncMergeResponse(merge.StdErr);
+            if (errorResponse.Error is null)
+                asyncMerge = errorResponse;
+        }
         if (asyncMerge.Error is null && asyncMerge.Status is "pending" or "enqueued")
         {
-            if (!Guid.TryParse(asyncMerge.MergeRequestId, out var mergeRequestId)
-                || mergeRequestId == Guid.Empty)
+            if (asyncMerge.Status == "pending"
+                && (!Guid.TryParse(asyncMerge.MergeRequestId, out var pendingMergeRequestId)
+                    || pendingMergeRequestId == Guid.Empty))
                 return Unknown("GitHubMergeRequestIdentityMissing");
+            var normalizedRequestId = Guid.TryParse(asyncMerge.MergeRequestId, out var mergeRequestId)
+                && mergeRequestId != Guid.Empty
+                    ? mergeRequestId.ToString("D")
+                    : null;
             return new MergeExecution(
-                null, null, false, mergeRequestId.ToString("D"), asyncMerge.Status);
+                null, null, false, normalizedRequestId, asyncMerge.Status);
         }
         if (asyncMerge.Error is null && asyncMerge.Status == "failed")
             return Failed("GitHubAsyncMergeRejected");
@@ -317,7 +330,10 @@ internal static class GitHubLandingMergeExecutor
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
+            var payload = ExtractJsonObject(json);
+            if (payload is null)
+                return new AsyncMergeResponse(null, null, null, "GitHub asynchronous merge response did not contain JSON.");
+            using var document = JsonDocument.Parse(payload);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("status", out var statusValue)
@@ -340,6 +356,17 @@ internal static class GitHubLandingMergeExecutor
         {
             return new AsyncMergeResponse(null, null, null, "GitHub returned malformed asynchronous merge JSON.");
         }
+    }
+
+    private static string? ExtractJsonObject(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+            return null;
+        var start = output.IndexOf('{');
+        var end = output.LastIndexOf('}');
+        return start >= 0 && end > start
+            ? output[start..(end + 1)]
+            : null;
     }
 
     private static string? ReadJsonString(JsonElement element, string property)
