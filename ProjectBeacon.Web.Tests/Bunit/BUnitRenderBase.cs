@@ -134,8 +134,14 @@ public abstract class BUnitRenderBase : IDisposable
 
     public void Dispose()
     {
-        _sqliteConnection.Dispose();
+        // Dispose the renderer first so component timers/poll loops and scoped
+        // DbContexts stop while the shared in-memory SQLite connection is still open.
+        // Disposing the connection first races outstanding SQLite command cleanup on
+        // Windows (SqliteConnection.Close can observe a prepared-statement collection
+        // being modified by a poll that is concurrently being torn down).
         _bunit.Dispose();
+        _dbContext.Dispose();
+        _sqliteConnection.Dispose();
     }
 
     private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
