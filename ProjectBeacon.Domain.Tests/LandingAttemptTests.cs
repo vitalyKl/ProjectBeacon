@@ -266,7 +266,7 @@ public sealed class LandingAttemptTests
 
         var enqueued = Start();
         enqueued.RecordPreview(
-            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
         enqueued.MarkExecutePending();
         enqueued.MarkGitHubMergeQueued(requestId, "enqueued");
 
@@ -284,7 +284,7 @@ public sealed class LandingAttemptTests
     {
         var attempt = Start();
         attempt.RecordPreview(
-            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
         attempt.MarkExecutePending();
         attempt.MarkGitHubMergeQueued(null, "enqueued");
 
@@ -301,7 +301,7 @@ public sealed class LandingAttemptTests
     {
         var attempt = Start();
         attempt.RecordPreview(
-            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
         attempt.MarkExecutePending();
 
         Assert.Throws<ArgumentException>(() => attempt.MarkGitHubMergeQueued(null, "pending"));
@@ -313,7 +313,7 @@ public sealed class LandingAttemptTests
     {
         var attempt = Start();
         attempt.RecordPreview(
-            "main", new string('c', 40), new string('d', 40), new string('e', 40), 0, null);
+            "main", new string('c', 40), new string('d', 40), new string('e', 64), 0, null);
         attempt.MarkExecutePending();
         attempt.MarkGitHubMergeQueued(null);
 
