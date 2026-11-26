@@ -181,6 +181,11 @@ public sealed class ReconcileDeviceRemoteLandingHandler
             }
             else if (latestLandingAttempt.TryReadGitHubMergeRequestId(out var expectedMergeRequestId))
             {
+                if (!string.Equals(latestLandingAttempt.ReviewCommandHash, reviewRun.CheckCommandHash, StringComparison.OrdinalIgnoreCase))
+                    return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                        "The queued landing attempt no longer matches the successful Review command proof.",
+                        ErrorKind.Conflict);
+
                 var pinnedCheckCommand = project.ReviewCheckCommand?.Trim();
                 var currentCheckHash = string.IsNullOrWhiteSpace(pinnedCheckCommand)
                     ? null
