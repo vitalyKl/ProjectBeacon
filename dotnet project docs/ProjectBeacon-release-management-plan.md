@@ -697,3 +697,34 @@ AutoSync ранее ожидал PR в состояниях `OPEN` или `MERGE
 Source correction: `fb00cf6d37f9b93d0319054361014cd69db8177b`; journal commit: `e2cc19ed38937fe3cc86d38f10f23b9cc6f7fb28`. Полный exact-head CI на следующей вершине обязателен; предыдущий красный run не включает исправление. До зелёного CI этот участок не считается принятым.
 
 Live merge-queue acceptance и административная проверка classic tag protection `v*` / Production Environment reviewers остаются обязательными блокерами. Production tag/deploy не выполнять.
+
+
+## Дополнение — различать async merge pending и enqueued после истечения UUID (26 ноября 2026)
+
+### Найденная ошибка
+
+Beacon сохранял UUID GitHub async merge request, но не сохранял исходное состояние ответа `pending` или `enqueued`. GitHub хранит async request record ограниченное время (24 часа). Поэтому отсутствие доступного UUID позже само по себе не доказывает, что PR был удалён из merge queue или merge завершился отказом.
+
+### Изменения в `feat/release-management`, PR #230
+
+- `LandingAttempt` теперь хранит отдельные маркеры `GitHubMergePending:{uuid}`, `GitHubMergeEnqueued:{uuid}` и `GitHubMergeEnqueued` для случая без UUID.
+- `GitLandCompletion` сохраняет точный `mergeRequestStatus`; pending без UUID отвергается.
+- API target discovery передаёт `MergeRequestStatus` pinned workstation.
+- Повторный Execute блокируется для любого явно принятого GitHub async request, не только для enqueued.
+- Отсутствие queue entry считается доказательством queue removal только если GitHub явно подтвердил `enqueued`. Если persisted state был `pending`, а UUID уже недоступен, AutoSync сохраняет неопределённое состояние и продолжает polling, не создавая ложную ошибку.
+- При доступном UUID текущее состояние async endpoint может перевести ранее pending запрос в enqueued; только после этого проверяется merge queue entry.
+- Старые маркеры без UUID совместимы и читаются как enqueued. Legacy UUID marker используется для read-only polling, но неизвестный subtype не превращается в доказательство удаления из queue.
+
+Изменения записаны без миграции БД: используется имеющееся поле `LandingAttempt.FailureCode`, DTO расширен необязательным полем.
+
+### Тесты и проверка
+
+Добавлены Domain tests для pending/enqueued/legacy transitions, Application tests для передачи статуса в AutoSync и сохранения completion, CLI tests на expired pending UUID и queue removal classification, а также Application test на отсутствие повторной Execute dispatch.
+
+Последний полностью зелёный baseline — CI [#45796862947](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45796862947), exact head `e2cc19ed38937fe3cc86d38f10f23b9cc6f7fb28`. Он не включает новый срез. Точный новый implementation head после source/test и журнала должен пройти полный Linux/Windows/macOS CI до принятия изменений.
+
+### Остаток
+
+- Live acceptance в disposable GitHub repository: pending дольше 24 часов, pending→enqueued, expired enqueued UUID при живой queue entry, queue removal, закрытый без merge PR, eventual merge и PR/base/head drift.
+- Classic tag protection `v*` и required reviewers Production Environment всё ещё не подтверждены администратором. Production tag/deploy запрещены до проверки.
+- PR #230 остаётся открытым; не сливать его как часть релизной публикации.
