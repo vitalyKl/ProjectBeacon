@@ -1251,3 +1251,36 @@ After GitHub returned `pending` or `enqueued`, a later manual Execute request co
 - CI #45789363602 (run 1655) was started on `c0c1b7b9` and is not validation for the current branch head.
 - The final queue-only tree narrowing, target comment, queue retry guard and new tests all require a fresh full Linux/Windows/macOS CI on the exact current head.
 - No live merge-queue test, production tag/deployment, or PR merge has been performed.
+
+
+## 2026-11-26 — Close queued landing attempts when the exact GitHub PR is closed unmerged
+
+**Source/test head:** `561fbd82b28b94cfda5afdd9723490ce70bf68cb`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)
+
+### Finding
+
+AutoSync reconciled an exact merged PR and reported definitive asynchronous merge failures while a PR remained open. However, if a user or maintainer closed the queued PR without merging it, GitHub's PR list contained neither an `OPEN` nor a `MERGED` match. The verifier returned no action, leaving the Beacon `LandingAttempt` in `ExecutePending` indefinitely.
+
+### Changes
+
+- AutoSync now detects a `CLOSED` PR for the exact task branch and target base only when the server-provided landing target proves that GitHub had explicitly acknowledged the async/queue request (`GitHubMergeQueued` marker or merge-request UUID).
+- The pinned workstation re-reads the exact PR and verifies its state is `CLOSED`, not merged (both `mergedAt` and `mergeCommitSha` must be absent), and that its URL, base branch and head SHA still match the immutable task/review identity.
+- A closed-unmerged PR is reported using the existing device-authenticated failure endpoint with the explicit code `GitHubPullRequestClosedWithoutMerge`. Existing open-PR async failures and queue-entry removals continue to use `GitHubAsyncMergeFailed`.
+- The server accepts only the two whitelisted code/state pairs: `GitHubAsyncMergeFailed + OPEN` and `GitHubPullRequestClosedWithoutMerge + CLOSED`. The report is still bound to the latest queued `LandingAttempt`, its pinned workstation, exact `ReviewRun`, task source SHA/base and approved verdict.
+- The failure transition keeps the task `InProgress/Approved`, writes audit evidence, creates no `RemoteLandingProof`, and leaves the task eligible for a fresh Preview after the failure has been reviewed.
+- Added CLI tests for the state-to-failure mapping and rejection of `MERGED`/unknown states; added an Application/SQLite test for the exact closed-unmerged report, state mismatch rejection, retained task state, no merge proof and audit actor.
+- Centralized the supported failure-code classification and made the final named cancellation-token arguments explicit.
+
+### Verification
+
+- Source/test commits: `53c7291574a69b1b2bf31c4e474bdb96ee782605`, `3fe2441d6a5d8fb13f9fdc66f1b95e86404a8d9a`, `9049e428698f2943dfee866b192aaf0356a90243`, `7dca44aad95a4777d6c0099521b61c71957e23e4`, `561fbd82b28b94cfda5afdd9723490ce70bf68cb`.
+- The tests are committed, but no local .NET SDK is available here. A new exact-head Linux/Windows/macOS CI is required; no green status is claimed for this slice yet.
+- No live GitHub merge-queue exercise was performed. Validate closed-unmerged and queue-removal cases in a disposable repository before full acceptance.
+
+### Remaining blockers and next
+
+1. Run the full CI on the exact implementation head after this journal commit, and fix any compile/test/format failures.
+2. Continue disposable-repository merge-queue acceptance: pending/enqueued, queued to merged, queue entry removal, PR manually closed without merge, PR/base/head drift, lost/expired request ID and failed post-merge check.
+3. Classic tag protection `v*` and required reviewers for GitHub Environment `production` remain unverified; no production tag or deployment is permitted.
+4. Keep PR #230 open for review. Do not merge the development PR as part of release publication.
