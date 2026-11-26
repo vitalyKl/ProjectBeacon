@@ -345,6 +345,84 @@ public sealed class DeviceRemoteLandingReconciliationHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordsOnlyTheExactVerifiedGitHubQueueFailureAndKeepsTaskOpen()
+    {
+        var setup = await CreateApprovedTaskAsync(autoSyncEnabled: false);
+        var requestId = Guid.NewGuid().ToString("D");
+        var landingAttempt = LandingAttempt.Start(
+            setup.ProjectId, setup.TaskId, setup.ReviewRunId, setup.UserId, setup.DeviceId,
+            "main", setup.SourceSha, new string('2', 40), ReviewCheckCommandHash,
+            "Wait for GitHub's required merge queue.");
+        landingAttempt.RecordPreview(
+            "main", setup.RemoteBaseSha, new string('5', 40), new string('6', 64), 0, null);
+        landingAttempt.MarkExecutePending();
+        landingAttempt.MarkGitHubMergeQueued(requestId);
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LandingAttempts.Add(landingAttempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+            var handler = new ReconcileDeviceRemoteLandingHandler(Factory());
+            var request = new DeviceRemoteLandingFailureRequest(
+                setup.ProjectId,
+                setup.TaskId,
+                landingAttempt.Id,
+                setup.ReviewRunId,
+                "acme/project-beacon",
+                42,
+                "https://github.com/acme/project-beacon/pull/42",
+                $"beacon/task/{setup.TaskId:N}",
+                "main",
+                setup.SourceSha,
+                requestId,
+                DateTime.UtcNow);
+
+            var wrongRequest = await handler.ReportFailureAsync(
+                setup.DeviceId,
+                request with { MergeRequestId = Guid.NewGuid().ToString("D") },
+                TestContext.Current.CancellationToken);
+            Assert.False(wrongRequest.Success);
+            Assert.Equal(ErrorKind.Conflict, wrongRequest.Kind);
+
+            await using (var verifyBefore = Factory().CreateDbContext())
+            {
+                var unchanged = await verifyBefore.LandingAttempts.AsNoTracking()
+                    .SingleAsync(item => item.Id == landingAttempt.Id, TestContext.Current.CancellationToken);
+                Assert.Equal(LandingAttemptStatus.ExecutePending, unchanged.Status);
+                Assert.Equal("GitHubMergeQueued:" + requestId, unchanged.FailureCode);
+            }
+
+            var result = await handler.ReportFailureAsync(
+                setup.DeviceId, request, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            Assert.Equal("GitHubAsyncMergeFailed", result.Value!.FailureCode);
+            Assert.Equal(LandingAttemptStatus.Failed.ToString(), result.Value.AttemptStatus);
+
+            await using var verify = Factory().CreateDbContext();
+            var failed = await verify.LandingAttempts.AsNoTracking()
+                .SingleAsync(item => item.Id == landingAttempt.Id, TestContext.Current.CancellationToken);
+            Assert.Equal(LandingAttemptStatus.Failed, failed.Status);
+            Assert.Equal("GitHubAsyncMergeFailed", failed.FailureCode);
+            Assert.Equal("GitHubAsyncMergeFailed", failed.EscalationCode);
+            Assert.Null(failed.MergeCommitSha);
+
+            var task = await verify.Tasks.AsNoTracking()
+                .SingleAsync(item => item.Id == setup.TaskId, TestContext.Current.CancellationToken);
+            Assert.Equal(TaskItemStatus.InProgress, task.Status);
+            Assert.Equal(TaskPipelineStage.Approved, task.PipelineStage);
+            Assert.Empty(await verify.RemoteLandingProofs.AsNoTracking()
+                .Where(proof => proof.TaskId == setup.TaskId)
+                .ToListAsync(TestContext.Current.CancellationToken));
+
+            var audit = await verify.AuditEvents.AsNoTracking()
+                .SingleAsync(item => item.Action == "task.remote_landing.merge_failed", TestContext.Current.CancellationToken);
+            Assert.Equal(AuditActorKind.Device, audit.ActorKind);
+            Assert.Equal(setup.DeviceId, audit.ActorDeviceId);
+        }
+    }
+
+    [Fact]
     public async Task DoesNotCloseTaskWhilePipelineSessionIsActive()
     {
         var setup = await CreateApprovedTaskAsync(autoSyncEnabled: true, activeSession: true);
