@@ -455,7 +455,7 @@ internal static class ReleasePublishExecutor
         var header = tagObject[..separator].Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         var messageLines = tagObject[(separator + 2)..].Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         static bool HasSingleExactLine(IEnumerable<string> lines, string expected) =>
-            lines.Count(line => string.Equals(line.TrimEnd(), expected, StringComparison.Ordinal)) == 1;
+            lines.Count(line => string.Equals(line, expected, StringComparison.Ordinal)) == 1;
 
         return HasSingleExactLine(header, "object " + candidateSha)
             && HasSingleExactLine(header, "type commit")
