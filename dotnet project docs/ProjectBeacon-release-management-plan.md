@@ -193,3 +193,10 @@
 - A valid empty prior-run list is permitted only after the workflow definition has been proven active. Missing, disabled, malformed or unreadable workflow state aborts before tag creation.
 - Failures known to occur before the tag-push attempt return a payload-bound completion result with tagPushed=false. Exceptions once tag creation is entered remain conservative because the remote push acknowledgement may be ambiguous.
 - The server merges this result with any previously stored tag-pushed flag, so a failed retry cannot clear evidence from an earlier attempt.
+
+
+## Решение по авторитету remote landing — 27 ноября 2026
+
+Открытый вопрос 9.4 исходного плана закрыт реализацией и проверкой в ветке `feat/release-management`: при наличии GitHub PR remote merge выполняется через GitHub как авторитетную систему, а workstation выступает исполнителем только после server-side authorization и повторной проверки Candidate/Review evidence. GitHub async merge вызывается с точным PR head SHA и `merge_action=default`; Beacon не запрашивает обход branch/repository rules. Ответы `pending` и `enqueued` не означают завершённое слияние. AutoSync подтверждает фактический `MERGED`, merge commit, ancestry/tree и post-merge check, после чего сервер записывает remote landing proof. Локальный GitLand не конкурирует с GitHub за авторитет remote merge.
+
+Это решение не отменяет внешнюю проверку branch/ruleset/tag protection и Environment `production`: эти настройки не удалось прочитать подключённой интеграцией и они остаются обязательным условием первого production publish.
