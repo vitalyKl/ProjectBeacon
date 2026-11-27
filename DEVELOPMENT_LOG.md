@@ -2523,3 +2523,42 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 - Verified all five files contain `ReleasePreparationFailedSummary`, `ReleasePublicationFailedSummary` and `ReleaseDiagnosticDetails`.
 - The branch is now ahead of main and behind by zero commits. No application code or SaaS Control Plane/billing work was changed by this merge.
 - The previous in-flight CI #45982946580 targeted pre-merge SHA `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548` and cannot validate the merged head. Exact-head CI is required after this entry.
+
+
+## 2026-11-27 — Restore Release Management localization and fix publication audit metadata
+
+**Failure investigated:** CI [#45983775039](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45983775039) on SHA `104bde53dbbef9825c1905b11a54126d1e37abff` failed on all three platforms:
+- Application: `PublishAndCompletion_RehydrateCandidateSnapshotAcrossFreshDbContexts` failed because `PublishReleaseHandler` emitted audit details with `candidateId`, which was not allowlisted.
+- Web: three GitHub merge state tests and the Version Impact render test failed because resource keys had been dropped during the earlier five-culture merge.
+
+### Audit metadata
+
+- Added narrowly validated audit keys for `candidateId`, `candidateSha`, `tagName`, `workstationId` and integer `publicationRevision`.
+- GUIDs must parse in canonical D format; Candidate SHA must be 40/64 hex characters; tagName must pass the same safe Git tag validator as VersionPolicy. Unknown/free-form audit keys remain rejected.
+- Removed the optional deployment endpoint hostname from the audit payload rather than adding an unnecessary free-form host field.
+- Added two Domain audit regression facts: accepted immutable publication metadata and rejection of malformed IDs/SHA/tag/revision values.
+- Implementation/test commits: `8176d3e1b413b806cf5415417c65e500f862830e`, `87257716dce632c6767eb51e9c494b6105c42bbf`, `88792dac1d655ceacc5f11fb668856ca4f64a555`.
+
+### Localization merge regression
+
+- The previous journal entry said that only three Release error summary/detail keys needed reapplication. That statement was incomplete: comparison with the feature parent before merge `b34f72682913cf597cdfe2fc61c024d15d2dd5fa` found **105 additional Release Management keys** absent from each of the five current resource files.
+- The missing set included all Release/Version Policy/Roadmap labels, GitHub merge pending/enqueued/failed reasons, and Task Version Impact labels.
+- Restored the 105 resource entries from feature parent `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548` into current neutral, German, Japanese, Russian and Chinese resources, preserving values already updated on main.
+- Each of the five resource files now has exactly 1,345 keys; key-set comparison reports zero missing and zero orphan keys for every supported culture.
+- Updated the existing bUnit tests to compare rendered text against the corresponding `IStringLocalizer<Web>` value instead of fixed English phrases.
+- Resource commits: `0e26babc440c42155be87a68f98482f353701f36`, `cc4f341caff91114e203e0670682544f6b31f564`, `7b7d136c9d5077218bd8f13cf8823c4a9fd0f9c2`, `5b7e42fe599d7a24f32d830823596e0e37fd6eeb`, `1cbac1855804cc5af4ce0c66362350858ebfa624`.
+- Test commits: `e75dcfde85d2b7b81e31cceabea1aa02e86b0369`, `9770c15ea766ee9ca97f85be576e12ff9b4ce7e7`, `41dd8d8b7d4b845f35b8660389db85695a92b1a5`, `f2c6390f7cfaa11e32a955328a54335d6a898873`.
+
+### CI gate
+
+- Added two audit facts; raised the Linux TRX minimum from 2,769 to **2,771** in both `ci.yml` and `release.yml`.
+- The full TRX guard blocks are byte-for-byte identical.
+- Workflow commits: `c1c85ca85ce7a21c06809ee73771403aa3d25493`, `703cb245430eedd8204c5b6370913675d7475329`.
+- Resource key sets and test changes were statically verified through GitHub file contents. No local .NET execution was available in this session; exact-head CI is required to confirm compilation, test behavior, satellite resource assemblies and formatting.
+
+### Next
+
+1. Run full Linux/Windows/macOS CI on the post-journal head; verify the Application publish/completion integration test, all four Web tests, 2,771 Linux TRX floor and formatting.
+2. Fix any remaining failures before calling this branch ready.
+3. Live Merge Queue acceptance still needs an eligible org-owned disposable repository; queue method=merge, classic `v*` tag protection and `production` reviewers remain administrator verification items.
+4. No production tag, deployment or PR merge. SaaS Control Plane and billing remain out of scope.
