@@ -111,18 +111,42 @@ def safe_relative_path(raw: Any) -> Path:
     return resolved
 
 
+def unescape_json_pointer_part(raw_part: str) -> str:
+    decoded: list[str] = []
+    index = 0
+    while index < len(raw_part):
+        character = raw_part[index]
+        if character != "~":
+            decoded.append(character)
+            index += 1
+            continue
+        if index + 1 >= len(raw_part) or raw_part[index + 1] not in ("0", "1"):
+            fail(f"JSON Pointer component {raw_part!r} contains an invalid escape sequence")
+        decoded.append("~" if raw_part[index + 1] == "0" else "/")
+        index += 2
+    return "".join(decoded)
+
+
 def read_pointer(document: Any, pointer: str) -> Any:
-    if not isinstance(pointer, str) or not pointer.startswith("/"):
-        fail("JSON version selector must be a JSON Pointer beginning with '/'")
+    # RFC 6901 defines the empty string as the pointer to the entire document.
+    if not isinstance(pointer, str) or (pointer and not pointer.startswith("/")):
+        fail("JSON version selector must be an RFC 6901 JSON Pointer (empty string selects the document root)")
     current = document
-    for raw_part in pointer.split("/")[1:]:
-        part = raw_part.replace("~1", "/").replace("~0", "~")
+    if pointer == "":
+        return current
+
+    for raw_part in pointer[1:].split("/"):
+        part = unescape_json_pointer_part(raw_part)
         if isinstance(current, dict):
             if part not in current:
                 fail(f"JSON Pointer component {part!r} does not exist")
             current = current[part]
         elif isinstance(current, list):
-            if not part.isdigit() or (len(part) > 1 and part.startswith("0")):
+            # Array indexes are ASCII decimal, zero or a non-zero digit followed by
+            # ASCII digits. Python str.isdigit() is deliberately not used because it
+            # accepts Unicode numerals that .NET's RFC 6901 reader correctly rejects.
+            if not part or not all("0" <= character <= "9" for character in part) \
+                    or (len(part) > 1 and part.startswith("0")):
                 fail(f"JSON Pointer array index {part!r} is invalid")
             index = int(part)
             if index >= len(current):
