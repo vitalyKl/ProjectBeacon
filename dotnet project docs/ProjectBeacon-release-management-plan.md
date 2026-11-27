@@ -1356,3 +1356,12 @@ Implementation commits: `00e0bc0fbbcf4d0135ddbcd4e3afa16c24614bca`, `d2f1448ce62
 Implementation journal commit: `3fa2dc36a253ddbccde3dddaa545a3a826201cb1`.
 
 CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94ae67c66095164ab1`, but predates this scope correction. A new exact-head CI is required. No PR merge or production publication.
+
+
+## Дополнение — ограничение write-разрешений Release workflow (27 ноября 2026)
+
+- В implementation branch `feat/release-management` усилен `scripts/test_release_workflow_permissions.py`.
+- Теперь regression guard проверяет полную матрицу write-scope: `client` может иметь только `contents: write` для GitHub Release assets; `image` — только `packages: write` для публикации контейнера; `tests`, `scan` и `deploy` не должны получать никаких write-разрешений.
+- Это закрывает прежний пробел, когда тест запрещал `packages: write` для tests/deploy, но не обнаруживал бы случайное `contents: write` или `id-token: write`.
+- Commit теста: `4ee8625e999adac5dc0958482725ad9aaa3d8658`; journal implementation branch: `34111f1f2f05ba96e5abd5fe109bc012a3c6b445`.
+- Прежний CI [#45977749031](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45977749031) проходил до этого теста и не валидирует его. Нужен новый exact-head CI на post-journal SHA.
