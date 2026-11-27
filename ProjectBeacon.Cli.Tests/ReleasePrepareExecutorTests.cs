@@ -2,9 +2,50 @@ namespace ProjectBeacon.Cli.Tests;
 
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.AgentHarness;
+using ProjectBeacon.Domain.Entities.Projects;
+using System.Text.Json.Nodes;
 
 public sealed class ReleasePrepareExecutorTests
 {
+    [Fact]
+    public async Task ReleasePrepare_WritesIndependentPackageJsonVersionSource()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-npm-version-source-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "package.json");
+        try
+        {
+            await File.WriteAllTextAsync(path,
+                """
+                {
+                  "name": "beacon-release-policy-proof",
+                  "version": "2.4.1",
+                  "private": true
+                }
+                """);
+            var source = new ProjectVersionSourcePolicy("package.json", "Json", "/version");
+            var policy = new ProjectVersionPolicy(
+                "SemVer", 3, null, "release-{version}", false, [source]);
+
+            var result = await ReleasePrepareExecutor.WriteVersionSourceAsync(
+                path, source, policy, "2.4.2", TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            var json = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+            Assert.Equal("beacon-release-policy-proof", json["name"]!.GetValue<string>());
+            Assert.Equal("2.4.2", json["version"]!.GetValue<string>());
+            Assert.True(json["private"]!.GetValue<bool>());
+            Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+                policy, source, json.ToJsonString(), out var projected, out var error), error);
+            Assert.Equal("2.4.2", projected);
+            Assert.Equal("release-2.4.2", ProjectVersionPolicyCatalog.FormatTag(policy, projected));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Fact]
     public void ResolveManifestPath_CreatesDirectoryInsideReleaseWorktree()
     {
