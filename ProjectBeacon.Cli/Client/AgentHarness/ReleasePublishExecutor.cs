@@ -253,9 +253,9 @@ internal static class ReleasePublishExecutor
     private sealed record TagEvidence(bool Success, bool TagPushed, string? Error);
 
     /// <summary>
-    /// Only a successful, well-formed remote inspection that proves the tag is absent
-    /// or points elsewhere can establish that the Candidate was not published.
-    /// Any failed or malformed inspection is conservatively treated as possibly pushed.
+    /// Only a successful, well-formed remote inspection with a complete tag/peeled-ref
+    /// pair can establish that the Candidate was not published. Missing either ref is
+    /// inconclusive; failed or malformed inspection is conservatively treated as pushed.
     /// </summary>
     internal static bool MayHavePublishedTag(
         bool remoteInspectionSucceeded,
@@ -269,7 +269,7 @@ internal static class ReleasePublishExecutor
             return true;
         if (!tagReferencePresent && !peeledReferencePresent)
             return false;
-        if (!tagReferencePresent || !peeledReferencePresent)
+        if (!tagReferencePresent || !peeledReferencePresent || peeledTargetSha is null)
             return true;
         return string.Equals(peeledTargetSha, candidateSha, StringComparison.OrdinalIgnoreCase);
     }
