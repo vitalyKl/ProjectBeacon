@@ -1012,7 +1012,7 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 
 - VerifyLanding требует, чтобы точный подготовленный ReleasePrepare commit SHA оставался предком удалённой target branch. Release tag validator также ищет single-parent preparation commit и Beacon-Release trailer.
 - Проверка на временном Git repository подтвердила: merge commit сохраняет исходный ReleasePrepare SHA в ancestry; squash создаёт новый SHA и исходный коммит не является предком. Rebase также переписывает SHA.
-- Поэтому Release PR должен сливаться через merge-commit strategy. Для прямого async merge Beacon явно отправляет merge_method=merge при сохранении merge_action=default.
+- Поэтому Release PR должен сливаться через merge-commit strategy. Для Merge Queue администратор задаёт Merge method=merge. Без очереди repository default strategy или явный выбор Owner/Admin должен создавать merge commit; общий GitLand executor не меняет merge_method обычных task PR.
 - Если для ветки настроена GitHub Merge Queue, её отдельный административный параметр **Merge method** также должен быть установлен в **merge**. merge_method в API поддерживается для direct merges; merge queue использует метод, выбранный в настройках очереди.
 - VerifyLanding остаётся fail-closed при отсутствии исходного prepared SHA. В этом случае Candidate не создаётся, PublishRelease нельзя вызвать, production tag/deploy не запускается.
 - Repository metadata сообщает, что разрешены merge commits, squash и rebase. Сама настройка Merge Queue и защита ветки через текущую GitHub integration не читаются. Это не доказывает, что очередь использует неправильный метод; параметр остаётся непроверенным.
@@ -1154,7 +1154,7 @@ Implementation: `feat/release-management`, PR #230.
 
 1. Live Merge Queue не проверена: ProjectBeacon — публичный personal-account repository, текущий подключённый аккаунт не состоит в организации. Нужен отдельный writable org-owned disposable repository.
 2. Workflow CI содержит `merge_group: checks_requested`; это необходимая публикация required checks на synthetic merge-group refs, но фактическое поведение в live queue ещё не доказано.
-3. Merge Queue method в тестовой организации должен быть `merge`, иначе исходный ReleasePrepare SHA не сохранится в ancestry. Direct async merge запрашивает `merge_method=merge`.
+3. Merge Queue method в тестовой организации должен быть `merge`, иначе исходный ReleasePrepare SHA не сохранится в ancestry. Без очереди direct merge должен использовать merge-commit strategy через настройки репозитория или явный выбор Owner/Admin; общий GitLand не форсирует её для обычных PR.
 4. Администратор должен проверить classic tag protection `v*` и required reviewers Environment `production`.
 5. End-to-end acceptance: ReleasePrepare → merge → Candidate → Publish/tag → Release workflow → production version/SHA, включая отказ и retry.
 
