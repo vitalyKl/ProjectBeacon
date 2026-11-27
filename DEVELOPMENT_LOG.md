@@ -2875,3 +2875,10 @@ The next intermediate run on `2e04b6c` reached all platform test suites. Linux A
 - No new test fact was added; the Linux TRX floor remains 2,772 and CI/release guard blocks remain identical.
 - New exact-head Linux/Windows/macOS CI is required after this commit. The failed prior run is superseded only when all jobs on the latest head pass.
 - PR #230 stays open and unmerged. No production tag/deployment. SaaS Control Plane and billing remain out of scope.
+
+
+### Allowlist reconciliation follow-up
+
+- `DeleteProjectHandler` now explicitly checks Release history across the tenant filter before allowing project deletion. The query is restricted by the exact requested `ProjectId`.
+- Updated `docs/ignore-query-filters.allowlist` for `ProjectBeacon.Application/Projects/ProjectHandlers.cs` from 11 to 12, with a rationale covering the Release-history guard. This is the final count correction after the Candidate-scope changes.
+- The in-flight CI run #46001290569 validates the preceding SHA `75390c3`; its allowlist assertion is expected to reflect the preceding manifest count. Require a fresh run on the latest head for final acceptance.
