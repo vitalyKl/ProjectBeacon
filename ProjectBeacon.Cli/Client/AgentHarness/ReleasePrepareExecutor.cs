@@ -295,7 +295,7 @@ internal static class ReleasePrepareExecutor
             return Fail("Remote target branch SHA could not be verified.");
         var ancestor = await Git(repositoryRoot, ct, filters, "merge-base", "--is-ancestor", preparedCommit, candidateSha.Value!);
         if (!Succeeded(ancestor))
-            return Fail("ReleasePrepare commit is not contained in the remote target branch. Merge its PR and retry verification.");
+            return Fail("ReleasePrepare commit is not contained in the remote target branch. This release PR must land with a merge-commit strategy that preserves the original Beacon-Release commit; squash and rebase rewrite that commit and are not supported. Configure the GitHub merge queue to use the merge method, then retry verification.");
 
         var candidateTree = await GitValue(repositoryRoot, ct, filters, "rev-parse", "--verify", candidateSha.Value + "^{tree}");
         if (candidateTree.Error is not null || !AgentTaskWorktree.IsGitSha(candidateTree.Value!))
@@ -422,7 +422,8 @@ internal static class ReleasePrepareExecutor
                 + "Version policy revision: " + versionPolicyRevision + Environment.NewLine
                 + "Release revision: " + releaseRevision + Environment.NewLine + Environment.NewLine
                 + "This PR contains only configured version projection files and .beacon/release.json." + Environment.NewLine
-                + "Merging does not create a tag or deploy production. Beacon must verify the merged SHA before marking Candidate.";
+                + "Required merge method: create a merge commit. Do not squash or rebase this PR; ReleasePrepare must remain in target-branch ancestry." + Environment.NewLine
+                + "For a merge queue, configure its Merge method to merge. Merging does not create a tag or deploy production; Beacon verifies the merged SHA before marking Candidate.";
             var created = await AgentTaskGitOperations.RunGitHubCliAsync(
                 ghPath, worktree, ct, "pr", "create", "--repo", repository,
                 "--head", head, "--base", targetBranch, "--title", "Release " + version, "--body", body);
