@@ -2275,3 +2275,21 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Run the exact current head through Linux/Windows/macOS CI and confirm Linux TRX reports at least 2,768 results.
 2. Re-check all code paths that can set `tagPushed=false`; false must be backed by successful remote evidence.
 3. Continue live Merge Queue and publication protection acceptance when an eligible org-owned disposable repository and administrator access are available.
+
+
+### Follow-up — require complete annotated-tag ref evidence
+
+**Implementation commits:** `36ee76e2891b54377e6be5c42c808cf60ad52ce1`, `3c06b5700a41f3f3c4bbde843224504ef0ddf0fc`  
+**Test commits:** `a0b0ed13f74e29f48427db0bb7355205f07d403c`, `d285d2bf1722a94f0187e806d7723ec53554b4ae`
+
+- Git's annotated tag listing has two relevant refs: the tag object ref and the peeled commit ref. The tag object's SHA is not the Candidate commit SHA.
+- The previous classifier used the tag-object ref as a fallback "observed target SHA" when the peeled ref was missing. That could incorrectly prove absence for an annotated tag whose peeled ref was omitted from a partial response.
+- `MayHavePublishedTag` now receives explicit presence flags for both refs. Failed/malformed listing, only one ref present, or a peeled SHA equal to Candidate means the tag may have been published. Only a successful well-formed listing with both refs absent, or both refs present with a different peeled target, can establish that this Candidate tag is not published.
+- In the existing-tag path, when the peeled ref is absent, the already validated local annotated tag object may establish the target only if its object SHA exactly matches the advertised remote tag-object SHA.
+- In ambiguous-push recovery, an incomplete ref pair triggers a fetch to the unique verification ref; the fetched annotated object and target are checked before accepting publication evidence.
+- Final remote verification now uses the same two-ref classification and requires the tag ref plus a fetched annotated object whose object SHA matches the remote listing. It no longer compares an annotated tag-object SHA directly to a commit SHA.
+- Extended the same CLI regression fact to cover missing tag ref, missing peeled ref and missing peeled target data; no additional test fact, so the Linux TRX minimum remains 2,768.
+
+The changes above are newer than CI #45972484561, which targeted the earlier ambiguous-push head `f1986015703297ad9c6c6f71aecc5198660d9868`. A fresh exact-head CI run is required after this journal update. The prior fully-green implementation head `841dd90bbd1e5375558acb20d2b0515c828876d4` predates this publication fix and the least-privilege workflow change.
+
+No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
