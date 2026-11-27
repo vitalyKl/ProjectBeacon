@@ -1,6 +1,9 @@
 namespace ProjectBeacon.Application.Releases;
 
+using Application.Common;
+using Application.Devices;
 using Application.Persistence;
+using Domain.Entities.Tasks;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
