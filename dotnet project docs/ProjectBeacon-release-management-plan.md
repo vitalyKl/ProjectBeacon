@@ -1055,3 +1055,12 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 - e5ec37cda058b584c638a42cfe241acd6f8806fe — implementation journal.
 
 Последний проверенный green CI #45955852379 относится к более раннему implementation head e02e4d75. Новые изменения требуют отдельного exact-head CI. Production tag/deployment не выполнялся; live Merge Queue test, администраторская проверка tag protection v* и Environment production reviewers остаются блокерами. Для live queue acceptance нужен отдельный writable org-owned disposable repository.
+
+
+### Дополнение — fail-closed разбор ls-remote при публикации тега
+
+- После fetch удалённого annotated tag во временный refs/beacon/release-tag-verification/<release>/<nonce> Beacon сверяет SHA tag object с SHA ref, объявленным git ls-remote.
+- Проверка повторяется при конкурентном push recovery и в конце publication flow. В дополнение malformed/partial output от ls-remote теперь является отдельным fail-closed условием: частично разобранная карта refs больше не считается достаточным доказательством.
+- Локальный bare-remote exercise подтвердил, что fetch в такой временный ref возвращает annotated tag object и peeled commit, а удаление временного ref не перемещает обычный refs/tags ref.
+- Code commit: eb1033d9bc19f3dd091c74a43474b029d3a4e811; journal commit: 8b351b84c3ed4d2268cd17e9acab144c945a6f68.
+- Новый exact-head CI требуется; предыдущий run #45959467058 покрывает head e5ec37cda058b584c638a42cfe241acd6f8806fe, а не этот follow-up.
