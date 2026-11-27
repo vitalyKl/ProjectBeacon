@@ -2235,3 +2235,43 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Run exact-head Linux/Windows/macOS CI against the least-privilege workflow.
 2. Review final release-workflow job permissions and tag/deployment gates after CI.
 3. Complete org-owned Merge Queue live acceptance and administrator verification of `v*` protection / `production` reviewers when access is available.
+
+
+## 2026-11-27 — Treat ambiguous tag push outcomes as potentially published
+
+**Implementation commits**
+- `8f9fece3675fedee0bb9b94e13a2454eef843316` — make initial and retry remote tag inspection fail closed; add conservative publication classification for the ambiguous push path.
+- `d099ccedcc74c0c765f984196597e14b2408ce4c` — add a CLI regression fact for remote inspection success/failure, malformed listings, exact Candidate target, absence and conflicting target.
+- `efd835e1eed944b8b6f9c9b102a7b158b022c3df` — keep helper calls style-consistent.
+- `3ebaec14f7af24612a8f10bdf0f16b4bce9446fe` and `03fc6bbd933803a73452d8eab812ac5f6361ea07` — raise both Linux TRX floors from 2,767 to 2,768.
+
+### Issue
+
+After a tag push returned non-zero/timeout, a follow-up `ls-remote` failure or malformed response could be converted into a valid `tagPushed=false`. The server accepts an exact, typed false result as proof of `FailedBeforeTag`; that could allow Candidate cancellation even though the push may have succeeded and the remote could not be inspected.
+
+A related path returned false when the initial remote inspection failed, even though the same immutable tag might already exist from a previously interrupted publication attempt. An existing remote tag that could not be fetched was also reported as pre-tag.
+
+### Fix
+
+- Added `MayHavePublishedTag`: it returns true whenever remote inspection failed, the listing is malformed, or the observed target equals the Candidate SHA. It returns false only when a successful, well-formed listing proves that the Candidate tag is absent or points elsewhere.
+- Initial `ls-remote` failure and malformed listing now produce `tagPushed=true`; publication remains `FailedAfterTag` and can retry only with the original immutable Candidate payload.
+- If the remote tag exists but cannot be fetched and verified, it is conservatively classified as potentially published.
+- For an ambiguous push, a failed/malformed follow-up listing is now `tagPushed=true`. A successful well-formed listing that proves absence or a different target may safely return false. A listing that shows the Candidate SHA continues through annotated-tag object verification.
+- When an existing remote tag resolves to the Candidate SHA but its annotated object differs from the local expected object, the result is still treated as potentially published.
+- Added a regression fact covering failed inspection, malformed output, exact Candidate target, verified absence and a conflicting target.
+
+### Validation
+
+- Static review confirms all `tagPushed=false` paths in the ambiguous-push recovery now require a successful, well-formed remote listing that proves the Candidate target is absent/different.
+- CI and release.yml Linux TRX gates now both require 2,768 results; complete guard blocks are byte-identical.
+- Earlier exact-head CI #45962729055 passed on SHA `841dd90bbd1e5375558acb20d2b0515c828876d4`, but predates both workflow permission hardening and this new tag-push regression test.
+- CI #45971667573 targets head `59752b2379457389ffe2b722f5764830011915bf`; it includes the least-privilege permissions but predates the ambiguous tag push fix and still has test modules running.
+- A new exact-head CI run is required for the current post-journal head.
+
+No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Run the exact current head through Linux/Windows/macOS CI and confirm Linux TRX reports at least 2,768 results.
+2. Re-check all code paths that can set `tagPushed=false`; false must be backed by successful remote evidence.
+3. Continue live Merge Queue and publication protection acceptance when an eligible org-owned disposable repository and administrator access are available.
