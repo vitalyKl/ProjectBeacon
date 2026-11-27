@@ -3073,3 +3073,36 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 1. Repository owner verifies all GitHub-side protections and Environment production settings.
 2. Run an explicit live async merge / Merge Queue acceptance and first-publish observation in a disposable organization-owned repository.
 3. Keep the implementation PR unmerged until both external acceptance conditions pass.
+
+## 2026-11-27 — Final review of async merge expiry, RFC 6901, S6 fixture and exact PR-head CI
+
+### Exact-head validation
+
+- Exact PR head: 1532a507ba698bd82c81070828c03a99fc6e427a.
+- GitHub Actions run #46030846976 completed success on Linux, Windows and macOS.
+- All seven test modules passed on each platform: API, Application, CLI, Domain, Infrastructure, Web and Worker. Build, EF model check and formatting also passed on all platforms.
+- Linux additionally passed the release-workflow permissions test, release-manifest tag-policy test and TRX guard. No failing steps remain.
+
+### S4 pending async merge recovery
+
+- The accepted-at timestamp for a pending merge is carried to the AutoSync target from the landing attempt timestamp; ordinary polling does not rewrite it.
+- If GitHub still exposes the same async request as enqueued, AutoSync persists the pending-to-enqueued transition for the exact request UUID. If the UUID has expired, a live GraphQL queue entry can recover the same transition.
+- A pending request is marked failed only when GitHub explicitly returns HTTP 404, the original 24-hour acceptance window has elapsed, the exact PR is still OPEN and the live merge queue has no entry. Permission, rate-limit and network errors remain retryable and are not converted into merge failures.
+- AutoSync failure wording now says the GitHub merge request did not complete; it no longer claims the merge queue rejected a request that may never have reached the queue.
+
+### S6 independent project fixture — resolved
+
+- The earlier checkpoint that said S6 still needed a non-Directory.Build.props fixture is superseded by the later package.json work.
+- The independent npm fixture uses package.json, SemVer 2.4.1, JSON Pointer /version and tag pattern release-{version}. The MCP version_check and ReleasePrepare writer test exercise read and write flows without Directory.Build.props.
+- The fixture preserves unrelated JSON fields while bumping 2.4.1 to 2.4.2 and verifies extraction/tag projection against the same VersionPolicy.
+
+### Manifest JSON Pointer parity and Roadmap state
+
+- Python release-manifest validation now follows RFC 6901 root-pointer and ~0/~1 escaping rules, rejects invalid escapes and uses ASCII decimal array indexes to match the .NET implementation.
+- Roadmap now retains previous release data on refresh failure and shows a warning instead of presenting a failed release load as a successful empty state; page-level empty-state tests cover failed and successfully empty loads.
+
+### Remaining acceptance boundary
+
+- Code-level S0-S6 paths and regression coverage are present; exact-head cross-platform CI is green.
+- The remaining external acceptance is a real async merge / Merge Queue and first-publication observation in a writable organization-owned disposable repository, plus owner verification of tag/branch protection and Environment production reviewers, deployment refs and SSH secrets.
+- These external settings are unverified through the connected integration. No production tag or deployment was created; PR #230 remains open and unmerged.
