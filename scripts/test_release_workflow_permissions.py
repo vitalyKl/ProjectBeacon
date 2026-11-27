@@ -89,10 +89,9 @@ class ReleaseWorkflowPermissionTests(unittest.TestCase):
 
     def test_required_checks_subscribe_to_merge_group(self) -> None:
         self.assertRegex(
-            "\\n".join(self.ci_lines),
-            r"(?m)^  merge_group:\\s*\\n    types: \\[checks_requested\\]$",
+            "\n".join(self.ci_lines),
+            r"(?m)^  merge_group:\s*\n    types: \[checks_requested\]$",
         )
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
