@@ -125,6 +125,39 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsImmutableReleasePublicationMetadata()
+    {
+        var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            candidateId = Guid.NewGuid().ToString("D"),
+            tagName = "customer/releases/0.7.5.10",
+            candidateSha = new string('a', 40),
+            workstationId = Guid.NewGuid().ToString("D"),
+            publicationRevision = 2
+        });
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_RejectsMalformedImmutableReleasePublicationMetadata()
+    {
+        var invalidDetails = new[]
+        {
+            """{"candidateId":"not-a-guid"}""",
+            """{"workstationId":"not-a-guid"}""",
+            """{"candidateSha":"not-a-git-sha"}""",
+            """{"tagName":"release/../0.7.5.10"}""",
+            """{"publicationRevision":1.5}"""
+        };
+
+        foreach (var detailsJson in invalidDetails)
+            Assert.Throws<ArgumentException>(() => Create(detailsJson));
+    }
+
+    [Fact]
     public void Create_RejectsFreeFormReleaseAndReviewContent()
     {
         Assert.Throws<ArgumentException>(() =>
