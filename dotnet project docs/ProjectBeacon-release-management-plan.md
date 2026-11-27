@@ -1566,3 +1566,16 @@ Repository rulesets endpoint вернул пустой список; branch prot
 ### Production safety blocker остаётся
 
 Подтверждение наличия workflow и Actions read access на workstation не заменяет GitHub-side protection. До первого реального production publish владелец репозитория должен подтвердить protection для release tags, required reviewer и запрет self-review в Environment production, допустимые deployment refs и наличие четырёх SSH secrets именно в этом Environment. Подключённая GitHub-интеграция не смогла прочитать эти настройки; неизвестное состояние нельзя считать безопасно настроенным.
+## Итоговая проверка exact PR head после документальных исправлений — 27 ноября 2026
+
+- Implementation PR #230 head 895ca4dfa9128a4e5d37be55f225660dc1bf2135, GitHub Actions run #46024858852: success на Linux, Windows и macOS.
+- На всех трёх платформах прошли API, Application, CLI, Domain, Infrastructure, Web и Worker suites, build, EF model check и formatting. Linux дополнительно прошёл release workflow permissions, release manifest tag policy и TRX floor 2 773.
+- Предыдущий exact code head 0c1d749610fc48acbd8355bd2619dcc5c8430b42 также был зелёным в run #46022091769. Изменения от 0c1d749 до 895ca4d затрагивали только DEVELOPMENT_LOG.md и plan document; production code, workflows и tests не менялись.
+- После этого на implementation branch добавлен только journal commit 3bda54959ea132d7c3245d36e51f8b4f27e29b1b. Он требует нового CI trigger для проверки точного получившегося PR head; изменения кода не вносились.
+
+### Оставшиеся acceptance условия
+
+- GitHub-side tag protection, branch/ruleset protection и Environment production reviewers / запрет self-review / deployment refs / четыре production SSH secrets остаются неподтверждёнными через интеграцию. Это блокирует первый production publish.
+- Реальный GitHub Merge Queue и first-publish workflow observation нужно подтвердить в writable organization-owned disposable repository; не использовать для этого production tag или PR реализации.
+- Для S6 нужен end-to-end fixture отдельного проекта с независимым источником версии, например package.json, чтобы проверить отсутствие зависимости от Directory.Build.props.
+- PR #230 остаётся открытым, Ready for review и не слитым. No release tag / deployment created.
