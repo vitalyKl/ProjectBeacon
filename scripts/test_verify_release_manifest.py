@@ -16,11 +16,13 @@ from verify_release_manifest import (
     fail,
     is_safe_git_tag_name,
     read_pointer,
+    require_positive_json_integer,
     safe_manifest_path,
     read_regex_version,
     read_toml_version,
     read_xml_version,
     validate_portable_dotnet_regex,
+    validate_release_snapshot,
     validate_tag_pattern,
 )
 
@@ -85,6 +87,74 @@ class ManifestPathSafetyTests(unittest.TestCase):
                 safe_manifest_path(root)
 
             self.assertIn("regular .beacon/release.json file", stderr.getvalue())
+
+
+class ReleaseSnapshotIntegrityTests(unittest.TestCase):
+    project_id = "11111111-1111-4111-8111-111111111111"
+    release_id = "22222222-2222-4222-8222-222222222222"
+    version = "0.7.5.10"
+    target_branch = "release/0.7.5"
+
+    def snapshot(self, *, schema_version=1, release_revision=4, project_id=None):
+        return json.dumps({
+            "schemaVersion": schema_version,
+            "projectId": project_id or self.project_id,
+            "versionPolicyRevision": 3,
+            "versionPolicy": {
+                "scheme": "NumericComponents",
+                "componentCount": 4,
+                "calendarFormat": None,
+                "tagPattern": "v{version}",
+                "allowPrerelease": False,
+                "sources": [],
+            },
+            "release": {
+                "releaseId": self.release_id,
+                "targetVersion": self.version,
+                "targetBranch": self.target_branch,
+                "releaseRevision": release_revision,
+            },
+        })
+
+    def validate(self, snapshot_json):
+        validate_release_snapshot(
+            snapshot_json,
+            self.project_id,
+            self.release_id,
+            self.version,
+            self.target_branch,
+            3,
+            4,
+            {
+                "scheme": "NumericComponents",
+                "componentCount": 4,
+                "calendarFormat": None,
+                "tagPattern": "v{version}",
+                "allowPrerelease": False,
+            },
+        )
+
+    def test_accepts_snapshot_bound_to_exact_manifest_identity_and_revisions(self) -> None:
+        self.validate(self.snapshot())
+
+    def test_rejects_snapshot_with_different_release_revision(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.validate(self.snapshot(release_revision=5))
+
+    def test_rejects_boolean_snapshot_schema_version(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.validate(self.snapshot(schema_version=True))
+
+    def test_rejects_snapshot_from_another_project(self) -> None:
+        other_project = "33333333-3333-4333-8333-333333333333"
+        with self.assertRaises(SystemExit):
+            self.validate(self.snapshot(project_id=other_project))
+
+    def test_positive_revision_must_be_an_integer_json_number_not_a_boolean_or_float(self) -> None:
+        self.assertEqual(4, require_positive_json_integer(4, "revision"))
+        for invalid in (True, False, 1.0, "4", 0, -1):
+            with self.subTest(value=invalid), self.assertRaises(SystemExit):
+                require_positive_json_integer(invalid, "revision")
 
 
 class VersionSourceParityTests(unittest.TestCase):
