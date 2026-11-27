@@ -415,21 +415,31 @@ internal static class ReleasePublishExecutor
     {
         var temporaryReference = "refs/beacon/release-tag-verification/"
             + request.ReleaseId.ToString("N") + "/" + Guid.NewGuid().ToString("N");
-        var fetched = await AgentTaskGitOperations.RunRemoteGitAsync(
-            root, filters, ct, originUrl,
-            "fetch", "--no-tags", "--no-recurse-submodules", originUrl,
-            "refs/tags/" + request.TagName + ":" + temporaryReference);
-        if (!Succeeded(fetched))
-            return new TagRead(false, false, null, "Could not fetch the remote annotated release tag for identity verification: " + Clip(fetched.StdErr));
         try
         {
+            // Include fetch inside the try: cancellation can arrive after Git writes the
+            // local verification ref but before the process reports completion.
+            var fetched = await AgentTaskGitOperations.RunRemoteGitAsync(
+                root, filters, ct, originUrl,
+                "fetch", "--no-tags", "--no-recurse-submodules", originUrl,
+                "refs/tags/" + request.TagName + ":" + temporaryReference);
+            if (!Succeeded(fetched))
+                return new TagRead(false, false, null, "Could not fetch the remote annotated release tag for identity verification: " + Clip(fetched.StdErr));
             return await ReadTagEvidenceAsync(root, filters, request, ct, temporaryReference);
         }
         finally
         {
-            // This ref is local-only and unique per verification. Cleanup failure is safe:
-            // the next verification uses another random ref and never moves the remote tag.
-            _ = await Git(root, ct, filters, "update-ref", "-d", temporaryReference);
+            // The ref is local-only and unique. Cleanup must still run after request
+            // cancellation; a failed cleanup cannot mutate the remote tag.
+            try
+            {
+                _ = await Git(root, CancellationToken.None, filters, "update-ref", "-d", temporaryReference);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+                or InvalidOperationException or ArgumentException or NotSupportedException)
+            {
+                // A leaked, random verification ref is harmless and never reused.
+            }
         }
     }
 
@@ -452,8 +462,10 @@ internal static class ReleasePublishExecutor
         var separator = tagObject.IndexOf("\n\n", StringComparison.Ordinal);
         if (separator < 0)
             return false;
-        var header = tagObject[..separator].Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        var messageLines = tagObject[(separator + 2)..].Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        // Git tag objects use LF delimiters. Split only on LF so a stray CR remains
+        // part of the line and cannot be normalized away before exact identity comparison.
+        var header = tagObject[..separator].Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var messageLines = tagObject[(separator + 2)..].Split('\n', StringSplitOptions.RemoveEmptyEntries);
         static bool HasSingleExactLine(IEnumerable<string> lines, string expected) =>
             lines.Count(line => string.Equals(line, expected, StringComparison.Ordinal)) == 1;
 
