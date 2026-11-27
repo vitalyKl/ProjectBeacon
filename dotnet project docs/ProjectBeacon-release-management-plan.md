@@ -1501,3 +1501,14 @@ CI после этих изменений требует минимум 2 771 Li
 - Implementation commit: `8d343b437ea06096ecedae5bb29854223f3e05ee`; implementation journal update: `2ad852f6d083004a194466aa98af7c242204d508`.
 - Нужен новый full exact-head CI после journal commit; прежний #45987491865 — известный pre-fix failure/cancelled run, он не валидирует исправление.
 - External blockers остаются: live Merge Queue acceptance в writable org-owned disposable repository; administrator verification queue Merge method=merge, classic tag protection `v*` и required reviewers Environment `production`. PR #230 не сливать, production tag/deploy не запускать.
+
+
+## Дополнение — строго типизированные поля audit publication metadata (27 ноября 2026)
+
+- Полный cross-platform CI #45988134913 успешно проверил implementation head `2ad852f6d083004a194466aa98af7c242204d508`: Linux, Windows и macOS прошли Build, EF model validation, все семь test modules и formatting; Linux TRX — 2 771 результатов, 0 failures, ожидаемый platform skip и пройденные symlink gates.
+- После зелёного запуска закрыт оставшийся schema hardening крайний случай: раньше общий scalar validator позволял представить `workflowRunId` строкой и `tagPushed` строкой/числом.
+- Теперь `workflowRunId` принимается только как положительный Int64 JSON number; `tagPushed` — только как JSON boolean.
+- Добавлены negative assertions в существующий Domain audit metadata test; test fact count не изменился. CI и Release workflow TRX floor остаётся 2 771.
+- Implementation commits: `3180d3e248169aad31d630f2f6aa9cd3cf3694d2`; regression test commit: `7d3b1ee17c396bb8f3c22b770d0c44f58cc7be31`; implementation journal: `7dfa09fb751a361bcb5e3c74260d69698be55ee0`.
+- Строгая типизация появилась после run #45988134913 и требует нового exact-head CI на текущей ветке.
+- Live Merge Queue acceptance по-прежнему требует writable org-owned disposable repository. Администратору нужно подтвердить Merge method=merge, classic tag protection `v*` и required reviewers Environment `production`. PR #230 не сливать, production tag/deploy не создавать.
