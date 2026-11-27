@@ -79,6 +79,7 @@ public sealed class ReleasePublishExecutorTests
             releaseLine: "ProjectBeacon-Release: " + ReleaseId.ToString("D") + "\r")));
         Assert.False(Validate(tagObject: TagObject() + "\nProjectBeacon-Release: " + ReleaseId.ToString("D")));
     }
+
     [Fact]
     public void AmbiguousTagPush_OnlyReportsPreTagWhenCompleteRemoteEvidenceProvesCandidateTagAbsent()
     {
@@ -94,6 +95,8 @@ public sealed class ReleasePublishExecutorTests
             true, true, true, false, null, CandidateSha));
         Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
             true, true, false, true, CandidateSha, CandidateSha));
+        Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
+            true, true, true, true, null, CandidateSha));
 
         Assert.False(ReleasePublishExecutor.MayHavePublishedTag(
             true, true, false, false, null, CandidateSha));
