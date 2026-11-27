@@ -2166,3 +2166,39 @@ Implemented a fail-closed terminal outcome:
 - Confirmed by source inspection that the helpers are now inside the Publish completion class, and the application test references the internal method through the existing InternalsVisibleTo declaration.
 
 No additional test fact or TRX threshold change: CI/release.yml remain synchronized at 2,767. The current fix and this journal entry require a new exact-head CI run. Do not treat #45962310328 as a green run. No production tag, deployment, or PR merge.
+
+
+## 2026-11-27 — Exact-head CI passed for annotated-tag and publication evidence hardening
+
+**CI run:** [#45962729055](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45962729055)  
+**Validated SHA:** `841dd90bbd1e5375558acb20d2b0515c828876d4`  
+**Result:** Linux, Windows and macOS all succeeded.
+
+- All three jobs passed restore/build, EF pending-model-change validation, all seven test modules and formatting.
+- Linux TRX guard: **2,767 results**, seven modules, one expected platform-conditional skip, zero failures; both symlink security gates passed.
+- The run includes the exact tag-object identity changes, LF-only parsing that preserves CR bytes, cleanup of temporary verification refs even after fetch cancellation, server-side fail-closed Publish completion evidence, and the regression test for missing/malformed/mismatched `tagPushed`.
+- `.github/workflows/ci.yml` and `.github/workflows/release.yml` both require a minimum of 2,767 Linux results; the complete TRX guard blocks are byte-identical.
+- CI #45962729055 supersedes earlier incomplete/cancelled runs for these changes. The previous Build failure on head `1db2e3d2` was a compile-scope error in the publication evidence helpers; the helper-scope correction in `aa50996534283f5b099e91be657dd378cb8d9f29` is included and validated by this run.
+
+### Publication evidence review
+
+- `ReadRemoteTagEvidenceAsync` places remote fetch inside a `try/finally`; cleanup uses `CancellationToken.None` so cancellation cannot interrupt deletion of a partially-created local verification ref.
+- The unique temporary ref lives only under `refs/beacon/release-tag-verification`; it does not replace the local tag or mutate remote refs.
+- Remote annotated-tag evidence is checked by tag object SHA and exact header/message lines (each required identity line exactly once, byte-exact including CR/trailing whitespace), plus exact peeled Candidate SHA.
+- Server completion accepts `tagPushed=false` only when a complete Publish result matches the original project/Release/Candidate/version/tag/SHA payload and contains a typed boolean false. Missing, malformed or mismatched evidence is treated as a possibly-pushed tag and remains recoverable only through the original immutable Candidate payload.
+- Confirmed successful publication additionally requires exact Release/Candidate identity, immutable tag name/SHA, completed successful release workflow, and production version/gitSha equality.
+
+### Remaining acceptance blockers
+
+1. Live Merge Queue acceptance requires a writable org-owned disposable repository. ProjectBeacon is a public repository owned by a personal account; the connected account has no organization membership. `merge_group: checks_requested` is now present in CI, but a live queue event and required-check behavior remain unverified.
+2. In an eligible org-owned test repository, Merge Queue method must be configured to `merge` to preserve the exact ReleasePrepare commit SHA in target-branch ancestry. Direct async merges explicitly request `merge_method=merge`.
+3. A repository administrator must verify classic `v*` tag protection and required reviewers for the `production` Environment.
+4. Real-project end-to-end acceptance remains: ReleasePrepare → ancestry-preserving merge → immutable Candidate → Publish/tag → successful Release workflow → deployed version/SHA, plus failure/retry cases.
+
+No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Record the successful exact-head run in the separate release-plan document and PR #230.
+2. Re-trigger CI for the post-journal PR head (the workflow excludes `pull_request.synchronize`).
+3. Complete live queue/publication protection acceptance when an org-owned test repository and administrator access are available.
