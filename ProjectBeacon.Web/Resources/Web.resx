@@ -3684,4 +3684,13 @@ No Beacon-hosted coding agent.</value>
 <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>The list of tasks waiting for your input is temporarily unavailable. The chat remains usable; the page will retry automatically.</value>
   </data>
+  <data name="ReleasePreparationFailedSummary" xml:space="preserve">
+    <value>Release preparation did not complete. Review the diagnostic details below, correct the cause, then retry.</value>
+  </data>
+  <data name="ReleasePublicationFailedSummary" xml:space="preserve">
+    <value>Production publication did not complete. Review the diagnostic details below. If the immutable tag was pushed, retry will reuse the same Candidate and tag.</value>
+  </data>
+  <data name="ReleaseDiagnosticDetails" xml:space="preserve">
+    <value>Diagnostic details</value>
+  </data>
 </root>
