@@ -182,24 +182,19 @@ public class LaunchSessionHandler : ICommandHandler<LaunchSessionCommand, Result
             if (session is null)
                 return Result.Failure<PipelineSessionDto>("Session not found.");
 
+            // Take the same project lock as ReleasePrepare before checking Candidate membership.
+            // Otherwise Prepare could freeze the scope after a stale guard read but before launch.
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, session.ProjectId, ct))
+                return Result.Failure<PipelineSessionDto>("Project not found.", ErrorKind.NotFound);
+
             var task = await db.Tasks.AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == session.TaskId, ct);
+                .FirstOrDefaultAsync(t => t.Id == session.TaskId && t.ProjectId == session.ProjectId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
             var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
                 db, task.ProjectId, [task.MilestoneId], ct);
             if (releaseBlock is not null)
                 return Result.Failure<PipelineSessionDto>(releaseBlock, ErrorKind.Conflict);
-
-            // Serialize the final repository gate and pipeline command insert with GitSync enqueue.
-            // Both operations update the same project row inside their transaction, so a new
-            // synchronization cannot slip between this check and the launch becoming durable.
-            var projectLocked = await db.Projects.IgnoreQueryFilters()
-                .Where(project => project.Id == session.ProjectId)
-                .ExecuteUpdateAsync(update => update
-                    .SetProperty(project => project.Revision, project => project.Revision), ct);
-            if (projectLocked != 1)
-                return Result.Failure<PipelineSessionDto>("Project not found.", ErrorKind.NotFound);
 
             if (session.Role == PipelineRole.Actor)
             {
@@ -554,10 +549,17 @@ public sealed class RetryPipelineSessionHandler : ICommandHandler<RetryPipelineS
             if (previous.Status is not (SessionStatus.Failed or SessionStatus.Closed))
                 return Result.Failure<PipelineSessionDto>("Only failed or closed sessions can be retried.");
 
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, previous.ProjectId, ct))
+                return Result.Failure<PipelineSessionDto>("Project not found.", ErrorKind.NotFound);
+
             var task = await db.Tasks.AsNoTracking()
-                .FirstOrDefaultAsync(t => t.Id == previous.TaskId, ct);
+                .FirstOrDefaultAsync(t => t.Id == previous.TaskId && t.ProjectId == previous.ProjectId, ct);
             if (task is null)
                 return Result.Failure<PipelineSessionDto>("Task not found.");
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineSessionDto>(releaseBlock, ErrorKind.Conflict);
 
             var expectedStage = previous.Role switch
             {
