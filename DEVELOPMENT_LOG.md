@@ -1833,3 +1833,12 @@ Implemented a fail-closed terminal outcome:
 - A failed first load no longer renders the misleading `NoReleases` empty state; it shows the operation-specific warning instead.
 - A failed refresh retains previously loaded releases and displays a warning. A successful reload clears that warning.
 - No release publication, tag or deployment action was invoked.
+
+
+## 2026-11-27 — Roadmap empty-state regression test
+
+- The earlier release-list warning fix exposed a second branch in the page-level empty-state condition: with Release Management enabled, zero milestones and a failed initial release read could still bypass the release panel and hide the warning.
+- Centralized the Roadmap empty-state predicate and made it account for both roadmap-section and release-list failures.
+- Added Web test coverage for a failed initial release load, a successful empty release list, and another Roadmap load failure.
+- This is a UI-state fix only; release candidate, tag and deployment behavior is unchanged.
+- The previous CI run (#45949826652) is green on the exact pre-fix head `fbd5d7d84a9e4aef6a0c66664316b0a280eb6d0b`; this new commit requires another exact-head CI run.
