@@ -3,6 +3,8 @@ using Bunit;
 using Bunit.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
+using ProjectBeacon.Web;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Content;
 using ProjectBeacon.Domain.Entities.Agents;
@@ -60,11 +62,12 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
             builder => builder.Add(component => component.TaskId, task.Id));
+        var localizer = Bunit.Services.GetRequiredService<IStringLocalizer<Web>>();
 
         Assert.Contains("task-version-impact", cut.Markup);
-        Assert.Contains("Version impact", cut.Markup);
-        Assert.Contains("Minor", cut.Markup);
-        Assert.Contains("Confirmed", cut.Markup);
+        Assert.Contains(localizer["TaskVersionImpactTitle"].Value, cut.Markup);
+        Assert.Contains(localizer["TaskVersionImpactMinor"].Value, cut.Markup);
+        Assert.Contains(localizer["TaskVersionImpactConfirmed"].Value, cut.Markup);
         Assert.Contains("Adds an optional API capability without breaking existing clients.", cut.Markup);
         Assert.Contains("The change is backward-compatible and the impact is correctly classified.", cut.Markup);
     }
