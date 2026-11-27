@@ -2306,3 +2306,40 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 CI [#45973251379](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45973251379) targets source/test/workflow head `65471ad201f8cd387a2fc5794ff6bdad4b43b552` and is running. It includes the current code, tests and 2,768-result CI/release gates but predates this journal-only addition. Do not call it green until the run completes; a final exact-head run is still required after this journal update.
 
 No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Add automated least-privilege Release workflow contract test
+
+**Commits**
+- `342e5f3b3d6c9737fd3d970dcce945864fb1014a` — add Python unittest for Release workflow permission scopes and merge_group trigger.
+- `555cb8c4b92367197b7560f8170c4095f62da064` — first regex correction for the merge_group assertion.
+- `efd558a5b3a3123f3f7b7ab8cd0efc8b7e48905e` — correct the assertion to match actual newline characters and YAML indentation.
+- `097d1d6a154d111291603194792478919975c5e3` — run the permission contract test in the Linux CI job.
+- `3b0722d8103bfa6bf66385643c6a7192a16845a7` — rerun the same permission contract test in the tag-triggered Release workflow before tag validation.
+
+### Test contract
+
+New `scripts/test_release_workflow_permissions.py` checks:
+- Workflow-level permissions are exactly `contents: read`.
+- The only job with `packages: write` is `image`.
+- `client` has only `contents: write`; `image` has `contents: read, packages: write`; `scan` has `contents: read, packages: read`.
+- `tests` and `deploy` do not receive `packages: write`.
+- `ci.yml` declares `merge_group: types: [checks_requested]`.
+
+The test uses only Python's standard library and reads the checked-out workflow files; no additional dependencies or secrets are required. It runs once in the authoritative Linux CI job and again in release.yml, so the same permission contract is checked on normal CI and tag publication.
+
+### Validation state
+
+- Static inspection confirms global package write is absent, package write appears only in the image job, package read only in scan, and the CI workflow includes merge_group.
+- The existing TRX threshold remains 2,768; this Python test does not add a .NET test result, so no TRX floor change is needed. CI and release.yml TRX guard blocks remain identical.
+- The earlier exact-head CI #45962729055 validated source head `841dd90bbd1e5375558acb20d2b0515c828876d4`, before the permission contract test existed.
+- CI #45973571011 targets head `d9a0eb767e586a89a4577da112b0e2b0b7239a9f`; it predates the new test script and workflow steps. Its result cannot validate these additions.
+- A new exact-head Linux/Windows/macOS CI run is required on the current post-journal PR head. The release workflow's new permission test will additionally run before the first future tag-triggered build; no tag has been created.
+
+No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Trigger full exact-head CI and verify the Python permission contract test passes.
+2. Confirm all three platform jobs, all seven test modules, TRX (2,768 minimum), formatting and EF checks remain green.
+3. Preserve the external acceptance blockers: org-owned disposable repository for live Merge Queue, queue Merge method=merge, classic v* tag protection and production Environment required reviewers.
