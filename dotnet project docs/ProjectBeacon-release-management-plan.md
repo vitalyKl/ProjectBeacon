@@ -1261,3 +1261,49 @@ Implementation commits:
 TRX threshold остаётся 2 768: Python permission test не добавляет .NET test result. CI/release.yml TRX blocks должны оставаться одинаковыми.
 
 Тест и workflow steps новее последнего green CI #45962729055 и не проверены тем run. Run #45973571011 относится к более раннему SHA `d9a0eb767e586a89a4577da112b0e2b0b7239a9f`, не содержит permission test. Требуется новый exact-head Linux/Windows/macOS CI на post-journal PR head. Tag/deploy не запускать до завершения внешнего acceptance. SaaS Control Plane и billing вне scope.
+
+
+---
+
+## Дополнение — строгая проверка immutable tag и безопасное восстановление Publish (27 ноября 2026)
+
+Implementation находится в `feat/release-management`, PR #230.
+
+### Проверка remote annotated tag
+
+После анализа гонки при конкурентном push усилена проверка неизменяемого тега:
+
+- Сверяется не только peeled commit SHA, но и SHA самого annotated tag object, полученный из `git ls-remote`.
+- Remote tag fetch выполняется во временный ref под `refs/beacon/release-tag-verification/<release>/<nonce>`; обычный `refs/tags/*` локально не перемещается.
+- Из fetched tag object проверяются object type `tag`, точное имя тега, commit target, Release ID, Candidate ID, Candidate SHA и version.
+- Идентификационные строки сравниваются целиком и должны встречаться ровно по одному разу. Trailing whitespace, CR в строке и дубликаты не нормализуются и отклоняются.
+- Сверка remote object SHA с advertised SHA выявляет изменение тега между `ls-remote` и fetch.
+- Проверка применяется к уже существующему remote tag, восстановлению после неопределённого push и заключительной верификации.
+- Временный ref удаляется в `finally` с `CancellationToken.None`; сбой cleanup не должен изменить удалённый тег или маскировать результат проверки.
+
+Добавлены regression tests для валидного annotated tag, неправильного target/tag name/lightweight tag, missing/altered/duplicated identity lines, trailing whitespace и CR.
+
+### Ambiguous push и lifecycle
+
+- При ошибке или timeout push результат считается неопределённым, пока не выполнен успешный и корректно разобранный `ls-remote`.
+- Только полный успешный remote listing, однозначно подтверждающий отсутствие Candidate tag, позволяет вернуть `tagPushed=false`.
+- Если отсутствует одна из двух refs для annotated tag, listing malformed, remote недоступен или SHA не совпадают, результат консервативно сообщает, что тег мог быть опубликован.
+- Сервер принимает отрицательное `tagPushed=false` только из результата с точным совпадением queued Publish: Project, Release, Candidate, version, tag name и Candidate SHA. Отсутствующий/невалидный/mismatched result классифицируется как потенциально опубликованный.
+- После immutable tag разрешён retry только с исходным payload. Нельзя отменить Candidate, изменить tag/version/endpoint или начать новую публикацию с другими параметрами; retry повторно проверяет tag и наблюдает workflow/deployment.
+- Добавлены Domain regression tests для `FailedAfterTag` retry и Application tests для консервативного чтения publication completion evidence.
+- Linux TRX gate синхронизирован на 2 768 результатов в `ci.yml` и `release.yml`; полные TRX guard blocks должны оставаться идентичными.
+
+### Least-privilege Release workflow
+
+- Добавлен `scripts/test_release_workflow_permissions.py` на стандартной библиотеке Python.
+- Проверяется global `contents: read`; `contents: write` только для client asset release; `packages: write` только для image publisher; scan получает только `packages: read`.
+- Тест выполняется в обычном Linux CI и до release manifest validation на tag-triggered workflow.
+- Отдельная проверка подтверждает наличие `merge_group: checks_requested` в CI.
+
+### Проверка и остаток
+
+- Полный cross-platform CI на implementation SHA `85b83094c168e59d9e2359faa72ba1f34707eeab` завершился success: Linux/Windows/macOS, build, EF, все семь test modules, formatting; он предшествует permission workflow test и последующим fixes.
+- Актуальный точный запуск [#45974881947](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45974881947) проверяет SHA `500c2e872239c9807920fc94ae67c66095164ab1`, включает remote tag hardening, 2 768-result gate и Python workflow-permission contract. На момент записи все платформы прошли Build и EF; Linux и macOS прошли API/Application, Windows прошёл API; оставались следующие test modules.
+- Live Merge Queue acceptance остаётся невозможной в текущем личном публичном ProjectBeacon repo. Нужен writable org-owned disposable repo; в нём администратор должен включить очередь, выставить Merge method=merge и настроить required checks.
+- Владелец репозитория также должен проверить classic tag protection `v*` и required reviewers GitHub Environment `production`.
+- До завершения этих условий не создавать production tag, не запускать deploy и не вливать PR #230. SaaS Control Plane и billing не затрагивать.
