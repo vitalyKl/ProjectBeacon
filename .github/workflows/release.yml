@@ -108,7 +108,7 @@ jobs:
           BASE = "TestResults"
           EXPECTED_MODULES = 7
           # Minimum Linux test-result count for the full seven-module suite. Raise it as tests are added; keep it equal in ci.yml and release.yml.
-          MIN_TOTAL = 2771
+          MIN_TOTAL = 2772
           # The only tests allowed to be NotExecuted on Linux: platform-conditional
           # skips that cannot execute there. Anything else (e.g. a Postgres opt-out
           # leaking into this authoritative lane) fails the guard.
