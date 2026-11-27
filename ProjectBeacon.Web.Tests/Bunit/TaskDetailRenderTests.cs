@@ -4,7 +4,7 @@ using Bunit.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
-using ProjectBeacon.Web;
+using ProjectBeacon.Web.Resources;
 using ProjectBeacon.Application.Persistence;
 using ProjectBeacon.Domain.Entities.Content;
 using ProjectBeacon.Domain.Entities.Agents;
