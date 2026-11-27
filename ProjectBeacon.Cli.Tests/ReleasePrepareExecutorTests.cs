@@ -1,5 +1,6 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.AgentHarness;
 
 public sealed class ReleasePrepareExecutorTests
@@ -12,11 +13,12 @@ public sealed class ReleasePrepareExecutorTests
         Directory.CreateDirectory(worktree);
         try
         {
-            var result = ReleasePrepareExecutor.ResolveManifestPath(worktree);
+            var physicalWorktree = AgentTaskWorktree.ResolvePhysicalPath(worktree);
+            var result = ReleasePrepareExecutor.ResolveManifestPath(physicalWorktree);
 
             Assert.Null(result.Error);
-            Assert.Equal(Path.Combine(worktree, ".beacon", "release.json"), result.Path);
-            Assert.True(Directory.Exists(Path.Combine(worktree, ".beacon")));
+            Assert.Equal(Path.Combine(physicalWorktree, ".beacon", "release.json"), result.Path);
+            Assert.True(Directory.Exists(Path.Combine(physicalWorktree, ".beacon")));
             Assert.False(File.Exists(result.Path));
         }
         finally
@@ -38,13 +40,15 @@ public sealed class ReleasePrepareExecutorTests
         Directory.CreateDirectory(outside);
         try
         {
-            Directory.CreateSymbolicLink(Path.Combine(worktree, ".beacon"), outside);
+            var physicalWorktree = AgentTaskWorktree.ResolvePhysicalPath(worktree);
+            var physicalOutside = AgentTaskWorktree.ResolvePhysicalPath(outside);
+            Directory.CreateSymbolicLink(Path.Combine(physicalWorktree, ".beacon"), physicalOutside);
 
-            var result = ReleasePrepareExecutor.ResolveManifestPath(worktree);
+            var result = ReleasePrepareExecutor.ResolveManifestPath(physicalWorktree);
 
             Assert.Null(result.Path);
             Assert.Contains("symbolic link or junction", result.Error, StringComparison.OrdinalIgnoreCase);
-            Assert.False(File.Exists(Path.Combine(outside, "release.json")));
+            Assert.False(File.Exists(Path.Combine(physicalOutside, "release.json")));
         }
         finally
         {
@@ -65,10 +69,12 @@ public sealed class ReleasePrepareExecutorTests
         Directory.CreateDirectory(outside);
         try
         {
-            var outsideFile = Path.Combine(outside, "release.json");
-            File.CreateSymbolicLink(Path.Combine(worktree, ".beacon", "release.json"), outsideFile);
+            var physicalWorktree = AgentTaskWorktree.ResolvePhysicalPath(worktree);
+            var physicalOutside = AgentTaskWorktree.ResolvePhysicalPath(outside);
+            var outsideFile = Path.Combine(physicalOutside, "release.json");
+            File.CreateSymbolicLink(Path.Combine(physicalWorktree, ".beacon", "release.json"), outsideFile);
 
-            var result = ReleasePrepareExecutor.ResolveManifestPath(worktree);
+            var result = ReleasePrepareExecutor.ResolveManifestPath(physicalWorktree);
 
             Assert.Null(result.Path);
             Assert.Contains("symbolic link or junction", result.Error, StringComparison.OrdinalIgnoreCase);
