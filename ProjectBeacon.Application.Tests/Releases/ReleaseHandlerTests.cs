@@ -583,6 +583,22 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.Equal(candidateSha, published.DeployedCommitSha);
         Assert.Equal(version, published.DeployedVersion);
         Assert.Equal(12345, published.DeploymentWorkflowRunId);
+
+        var publishedAudit = await verifyDb.AuditEvents.SingleAsync(
+            item => item.Action == "project.release.published"
+                && item.TargetId == release.Id.ToString("D"),
+            TestContext.Current.CancellationToken);
+        using var auditDetails = System.Text.Json.JsonDocument.Parse(publishedAudit.DetailsJson!);
+        var auditRoot = auditDetails.RootElement;
+        Assert.Equal(candidateId.ToString("D"), auditRoot.GetProperty("candidateId").GetString());
+        Assert.True(auditRoot.GetProperty("tagPushed").GetBoolean());
+        Assert.Equal(version, auditRoot.GetProperty("targetVersion").GetString());
+        Assert.Equal(tagName, auditRoot.GetProperty("tagName").GetString());
+        Assert.Equal(candidateSha, auditRoot.GetProperty("candidateSha").GetString());
+        Assert.Equal(candidateSha, auditRoot.GetProperty("deployedSha").GetString());
+        Assert.Equal(12345L, auditRoot.GetProperty("workflowRunId").GetInt64());
+        Assert.False(auditRoot.TryGetProperty("workflowRunUrl", out _));
+        Assert.False(auditRoot.TryGetProperty("error", out _));
     }
 
 }
