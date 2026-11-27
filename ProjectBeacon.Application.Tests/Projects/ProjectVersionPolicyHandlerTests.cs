@@ -160,6 +160,71 @@ public sealed class ProjectVersionPolicyHandlerTests : IDisposable
             .Select(project => project.VersionPolicyJson)
             .SingleAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"releaseManagementEnabled\":true", stored, StringComparison.Ordinal);
+
+        // A fully published Release no longer has an active Prepare/Verify workflow.
+        // Its historical Candidate evidence must not lock future project policy changes.
+        await using (var stateDb = factory.CreateDbContext())
+        {
+            var project = await stateDb.Projects.SingleAsync(
+                item => item.Id == _projectId, TestContext.Current.CancellationToken);
+            project.InitializeOfficialVersion("0.7.5.8");
+
+            var release = Domain.Entities.Roadmap.Release.Create(
+                "Published release", null, _projectId, "0.7.5.8", "main", 1);
+            release.TransitionTo(Domain.Enums.ReleaseStatus.InProgress);
+            var deviceId = Guid.NewGuid();
+            var candidateId = Guid.NewGuid();
+            var prepareCommandId = Guid.NewGuid();
+            var verifyCommandId = Guid.NewGuid();
+            var publishCommandId = Guid.NewGuid();
+            release.BeginPreparation(deviceId, candidateId, prepareCommandId, """{"version":"0.7.5.8"}""");
+            release.RecordPrepareSuccess(prepareCommandId, """{"prepared":true}""");
+            release.BeginVerification(deviceId, verifyCommandId);
+            var candidateSha = new string('a', 40);
+            var candidate = Domain.Entities.Roadmap.ReleaseCandidateSnapshot.Create(
+                _projectId,
+                release.Id,
+                candidateId,
+                deviceId,
+                "0.7.5.8",
+                "v0.7.5.8",
+                "main",
+                new string('1', 40),
+                new string('2', 40),
+                candidateSha,
+                new string('3', 40),
+                project.VersionPolicyRevision,
+                release.Revision,
+                new string('b', 64),
+                """{"files":[],"checks":[]}""",
+                DateTime.UtcNow);
+            release.MarkCandidate(candidate);
+            release.BeginPublication(deviceId, publishCommandId, """{"candidate":"immutable"}""");
+            release.CompletePublication(
+                publishCommandId,
+                candidate.TagName,
+                12345,
+                "https://github.com/vitalyKl/ProjectBeacon/actions/runs/12345",
+                candidate.Version,
+                candidate.CandidateSha,
+                DateTime.UtcNow,
+                """{"tagPushed":true}""");
+            stateDb.Releases.Add(release);
+            stateDb.ReleaseCandidateSnapshots.Add(candidate);
+            await stateDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var completedPolicy = FourPartPolicy(releaseManagementEnabled: false) with
+        {
+            TagPattern = "release-{version}"
+        };
+        var afterPublished = await setter.HandleAsync(new SetProjectVersionPolicyCommand(
+            _projectId, completedPolicy, null, readBack.Value.Revision, OwnerActor()),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(afterPublished.Success, afterPublished.Error);
+        Assert.False(afterPublished.Value!.ReleaseManagementEnabled);
+        Assert.Equal("0.7.5.8", afterPublished.Value.OfficialVersion);
     }
 
     [Fact]
