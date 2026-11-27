@@ -1825,3 +1825,11 @@ Implemented a fail-closed terminal outcome:
 - The integration is recorded as a true two-parent merge commit; both parent SHAs remain visible in Git history.
 - The owner reports CI green. The merged integration head still requires a fresh exact-head CI result before it is treated as validated.
 - Live async GitHub merge-queue acceptance and administrator verification of classic `v*` tag protection and `production` Environment reviewers remain outstanding. PR #230 stays open and unmerged.
+
+
+## 2026-11-27 — Roadmap release-list failure state
+
+- Separated the release-list load error from milestone/task loading errors on the Roadmap page.
+- A failed first load no longer renders the misleading `NoReleases` empty state; it shows the operation-specific warning instead.
+- A failed refresh retains previously loaded releases and displays a warning. A successful reload clears that warning.
+- No release publication, tag or deployment action was invoked.

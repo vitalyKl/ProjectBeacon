@@ -116,11 +116,15 @@ else
                     <MudButton Variant="Variant.Text" Disabled="@_releaseBusy" OnClick="CancelEditRelease">@L["Cancel"]</MudButton>
                 </MudStack>
             }
-            @if (_releases.Count == 0)
+            @if (_releaseLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_releaseLoadErrorMessage</MudAlert>
+            }
+            @if (_releases.Count == 0 && _releaseLoadErrorMessage is null)
             {
                 <MudText Typo="Typo.body2" Class="mt-3">@L["NoReleases"]</MudText>
             }
-            else
+            else if (_releases.Count > 0)
             {
                 <MudGrid Class="mt-2">
                     @foreach (var release in _releases.OrderBy(item => item.Order))
@@ -493,6 +497,7 @@ else
     private bool _busy;
     private string? _projectLoadErrorMessage;
     private string? _loadErrorMessage;
+    private string? _releaseLoadErrorMessage;
     private bool _showCreateForm;
     private Guid? _editingId;
     private MilestoneDto? _open;
@@ -582,12 +587,18 @@ else
             var releases = await ListProjectReleases.HandleAsync(new ListProjectReleasesCommand(
                 new ListProjectReleasesRequest(_project.Id), _actor));
             if (releases.Success)
+            {
                 _releases = releases.Value!.ToList();
+                _releaseLoadErrorMessage = null;
+            }
             else
-                loadErrors.Add(Notifications.FormatFailure(releases, L["Roadmap"].Value, L["Load"].Value));
+                _releaseLoadErrorMessage = Notifications.FormatFailure(releases, L["Roadmap"].Value, L["Load"].Value);
         }
         else
+        {
             _releases = [];
+            _releaseLoadErrorMessage = null;
+        }
 
         _loadErrorMessage = loadErrors.Count == 0 ? null : string.Join(Environment.NewLine, loadErrors);
     }
