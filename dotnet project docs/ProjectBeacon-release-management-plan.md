@@ -1673,4 +1673,4 @@ PR #230 не сливать до выполнения внешних acceptance 
 - componentCount обязан быть JSON integer; NumericComponents ограничен 1–8, SemVer — ровно 3, в соответствии с ProjectVersionPolicyCatalog.
 - Добавлены три регрессионных теста на bool/float/string/отсутствующий componentCount, SemVer component-count drift и не-Boolean allowPrerelease.
 - Implementation: 6816b7d458d93ff0cf763c28d3962ec78f160c3e; tests: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077.
-- Exact-head CI остаётся обязательным; merge/production publish не выполнялись.
+- Exact-head CI остаётся обязательным; merge/production publish не выполнялись.NaN
