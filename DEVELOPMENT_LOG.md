@@ -2154,3 +2154,15 @@ Implemented a fail-closed terminal outcome:
 2. Complete live merge-queue acceptance in a writable org-owned disposable repository with Merge method=merge.
 3. Have an administrator verify tag protection and production Environment reviewers.
 4. Complete real-project Candidate/Publish/deployment and failure-recovery acceptance before considering PR #230 for merge.
+
+
+## 2026-11-27 — Fix publication evidence helper scope after CI compiler failure
+
+**CI diagnosis:** [#45962310328](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45962310328) targeted SHA `1db2e3d2a42e435b9ac0671d0d2742b431980559` and failed Build on Linux/macOS with two `CS0103` errors: `IsPublicationResultForPayload` and `ReadTagPushedEvidence` were not in scope for `ReleasePublishCompletion`. The test projects then failed because the solution build had not produced their assemblies; those were downstream failures, not test assertion failures.
+
+**Correction:** commit `aa50996534283f5b099e91be657dd378cb8d9f29`.
+- Moved `ReadTagPushedEvidence`, `IsPublicationResultForPayload` and its typed-boolean helper into `ReleasePublishCompletion`, where the caller and the regression test can access the internal entry point.
+- Removed the accidentally duplicated helpers from `ReleasePrepareCompletion` and restored its own direct `ReadBool` implementation.
+- Confirmed by source inspection that the helpers are now inside the Publish completion class, and the application test references the internal method through the existing InternalsVisibleTo declaration.
+
+No additional test fact or TRX threshold change: CI/release.yml remain synchronized at 2,767. The current fix and this journal entry require a new exact-head CI run. Do not treat #45962310328 as a green run. No production tag, deployment, or PR merge.
