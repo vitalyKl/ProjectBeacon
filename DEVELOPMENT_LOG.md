@@ -2824,3 +2824,31 @@ The cross-platform run completed with failures that were diagnosed from the job 
 ### Current branch head before this journal entry
 
 `3858704f34d79561e2d15e88a76b04c212dc8aa5`
+
+
+## 2026-11-27 — Preserve FinishWork stale-request CAS and align concurrency assertion
+
+### Further CI diagnostics
+
+The next intermediate run on `2e04b6c` reached all platform test suites. Linux API/Application failures were isolated to:
+
+- FinishWork concurrency: the project lock correctly serialized competing requests, but the first post-lock read replaced the original state/content revision baseline. A stale rival could then be treated as a fresh request and append a second result.
+- Reviewer-verdict concurrency: the handler's stable stage-conflict message included its final period, while the test's allowed-message literal omitted it.
+- The then-current helper still contained broad tenant-filter bypasses; those lookups have since been changed to normal filtered queries.
+
+### Corrections
+
+- FinishWork now refreshes only the tracked Task snapshot after acquiring the project lock. The compare-and-swap status, state revision and content revision captured before the lock remain unchanged. A rival commit therefore fails the existing CAS and rolls back all content/comment side effects.
+- Updated the concurrent ReviewVerdict test to match the exact stable error text, including terminal punctuation.
+- Task, Step and Milestone lookups in the shared Candidate mutation coordinator continue to use the normal global tenant filters.
+- Added further regression coverage for project-name mutation after Prepare and for deleting a non-Candidate task that is referenced as a dependency by a Candidate task.
+
+### Validation status
+
+- The `2e04b6c` run started before the final FinishWork CAS and ReviewVerdict assertion fixes, so it is not the final validation run.
+- The next run must validate the final post-journal SHA on Linux, Windows and macOS, with all seven test modules, the 2,772 TRX floor, EF model check and formatting.
+- PR #230 remains open, Ready for review, and unmerged. No production tag or deployment; SaaS Control Plane and billing remain out of scope.
+
+### Current branch head before this journal entry
+
+`ffa15f768eac40dae7b12276ca979a3a0948cb9e`
