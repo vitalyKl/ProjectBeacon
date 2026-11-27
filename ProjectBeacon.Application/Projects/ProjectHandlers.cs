@@ -2,6 +2,7 @@ namespace ProjectBeacon.Application.Projects;
 
 using Application.Authorization;
 using Application.Common;
+using Application.Releases;
 using Domain.Entities.Projects;
 using Domain.Enums;
 using Application.Persistence;
@@ -137,45 +138,55 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
 
     public async Task<Result<ProjectDto>> HandleAsync(UpdateProjectCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: command.Request.ProjectId, ct: ct);
-        if (!check.Success)
-            return Result.Forbidden<ProjectDto>();
+        return await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            command.Request.ProjectId,
+            [],
+            async (db, token) =>
+            {
+                var check = await _auth.CanAsync(
+                    db, command.Actor, ResourceType.Project, AuthAction.Administer,
+                    projectId: command.Request.ProjectId, ct: token);
+                if (!check.Success)
+                    return Result.Forbidden<ProjectDto>();
 
-        var project = await db.Projects.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(p => p.Id == command.Request.ProjectId, ct);
-        if (project is null)
-            return Result.Failure<ProjectDto>("Project not found.");
+                var project = await db.Projects.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(item => item.Id == command.Request.ProjectId, token);
+                if (project is null)
+                    return Result.Failure<ProjectDto>("Project not found.");
 
-        var name = command.Request.Name;
-        if (name is not null)
-        {
-            name = name.Trim();
-            if (name.Length == 0)
-                return Result.Failure<ProjectDto>("Project name is required.");
-        }
+                var name = command.Request.Name;
+                if (name is not null)
+                {
+                    name = name.Trim();
+                    if (name.Length == 0)
+                        return Result.Failure<ProjectDto>("Project name is required.");
+                }
 
-        var descriptionChanged = command.Request.Description is not null
-            && !string.Equals(project.Description, command.Request.Description, StringComparison.Ordinal);
-        if (descriptionChanged && command.Request.ExpectedRevision != project.Revision)
-            return Result.Failure<ProjectDto>(
-                "Project description changed since it was loaded. Refresh the project and retry.",
-                ErrorKind.Conflict);
+                var descriptionChanged = command.Request.Description is not null
+                    && !string.Equals(project.Description, command.Request.Description, StringComparison.Ordinal);
+                if (descriptionChanged && command.Request.ExpectedRevision != project.Revision)
+                    return Result.Failure<ProjectDto>(
+                        "Project description changed since it was loaded. Refresh the project and retry.",
+                        ErrorKind.Conflict);
 
-        project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
-        if (descriptionChanged)
-        {
-            var saved = await _contentWriter.SaveAsync(
-                db, project, "Human", command.Actor.UserId?.ToString(), ct);
-            if (!saved.Success)
-                return Result.Failure<ProjectDto>(saved.Error ?? "Project description conflict.", ErrorKind.Conflict);
-        }
-        else
-        {
-            await db.SaveChangesAsync(ct);
-        }
+                project.Update(name, command.Request.Description, command.Request.ReviewCheckCommand);
+                if (descriptionChanged)
+                {
+                    var saved = await _contentWriter.SaveAsync(
+                        db, project, "Human", command.Actor.UserId?.ToString(), token);
+                    if (!saved.Success)
+                        return Result.Failure<ProjectDto>(
+                            saved.Error ?? "Project description conflict.", ErrorKind.Conflict);
+                }
+                else
+                {
+                    await db.SaveChangesAsync(token);
+                }
 
-        return Result.Ok(MapToDto(project));
+                return Result.Ok(MapToDto(project));
+            },
+            ct);
     }
 
     private static ProjectDto MapToDto(Domain.Entities.Projects.Project project) =>
