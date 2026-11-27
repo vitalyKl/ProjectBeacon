@@ -73,6 +73,8 @@ public sealed class ReleasePublishExecutorTests
             versionLine: "ProjectBeacon-Version: 1.2.4")));
         Assert.False(Validate(tagObject: TagObject(
             releaseLine: "ProjectBeacon-Release: " + ReleaseId.ToString("D") + "-unexpected")));
+        Assert.False(Validate(tagObject: TagObject(
+            releaseLine: "ProjectBeacon-Release: " + ReleaseId.ToString("D") + " ")));
         Assert.False(Validate(tagObject: TagObject() + "\nProjectBeacon-Release: " + ReleaseId.ToString("D")));
     }
 }
