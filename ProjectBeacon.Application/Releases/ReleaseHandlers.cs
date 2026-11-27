@@ -262,63 +262,77 @@ public sealed class UpdateReleaseHandler
 
         if (name is { Length: < 1 or > 200 } || description?.Length > 5000
             || (branch is not null && !ProjectVersionPolicyCatalog.IsSafeBranchName(branch)))
-            return Result.Failure<ReleaseDto>("Release name, description, or target branch is invalid.", ErrorKind.Validation);
+            return Result.Failure<ReleaseDto>(
+                "Release name, description, or target branch is invalid.", ErrorKind.Validation);
 
-        await using var db = _dbFactory.CreateDbContext();
-        var permission = await ReleaseAuthorization.RequireAdminAsync(
-            db, _authorization, request.ProjectId, command.Actor, ct);
-        if (!permission.Success)
-            return Result.Forbidden<ReleaseDto>("Only a project or organization Owner/Admin can update a release.");
+        return await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            request.ProjectId,
+            [],
+            async (db, token) =>
+            {
+                var permission = await ReleaseAuthorization.RequireAdminAsync(
+                    db, _authorization, request.ProjectId, command.Actor, token);
+                if (!permission.Success)
+                    return Result.Forbidden<ReleaseDto>(
+                        "Only a project or organization Owner/Admin can update a release.");
 
-        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, ct);
-        if (!enabled.Success)
-            return Result.Failure<ReleaseDto>(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
+                var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, token);
+                if (!enabled.Success)
+                    return Result.Failure<ReleaseDto>(
+                        enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
 
-        var release = await db.Releases.FirstOrDefaultAsync(
-            item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, ct);
-        if (release is null)
-            return Result.Failure<ReleaseDto>("Release not found.", ErrorKind.NotFound);
-        if (request.ExpectedRevision < 1 || request.ExpectedRevision != release.Revision)
-            return Result.Failure<ReleaseDto>("Release changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
+                var release = await db.Releases.FirstOrDefaultAsync(
+                    item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, token);
+                if (release is null)
+                    return Result.Failure<ReleaseDto>("Release not found.", ErrorKind.NotFound);
+                if (request.ExpectedRevision < 1 || request.ExpectedRevision != release.Revision)
+                    return Result.Failure<ReleaseDto>(
+                        "Release changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
 
-        if (!string.IsNullOrWhiteSpace(version))
-        {
-            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
-                enabled.Value!, version, out var normalized, out var versionError))
-                return Result.Failure<ReleaseDto>(
-                    versionError ?? "Target version does not match the project version policy.", ErrorKind.Validation);
-            version = normalized;
-        }
-
-        var previousStatus = release.Status;
-        try
-        {
-            release.Update(name, description, version, branch, request.Order);
-            var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct);
-            _auditWriter.Stage(db, AuditEventFactory.ForActor(
-                command.Actor, "project.release.updated", "Release", release.Id.ToString("D"),
-                orgId, request.ProjectId,
-                detailsJson: JsonSerializer.Serialize(new
+                if (!string.IsNullOrWhiteSpace(version))
                 {
-                    previousState = previousStatus.ToString(),
-                    newState = "Release.FieldsUpdated",
-                    targetVersion = release.TargetVersion ?? "Unspecified",
-                    targetBranch = release.TargetBranch,
-                    count = release.Revision
-                })));
-            await db.SaveChangesAsync(ct);
-        }
-        catch (InvalidOperationException exception)
-        {
-            return Result.Failure<ReleaseDto>(exception.Message, ErrorKind.Conflict);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<ReleaseDto>("Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
-        }
+                    if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
+                        enabled.Value!, version, out var normalized, out var versionError))
+                        return Result.Failure<ReleaseDto>(
+                            versionError ?? "Target version does not match the project version policy.",
+                            ErrorKind.Validation);
+                    version = normalized;
+                }
 
-        return Result.Ok(ReleaseMapping.ToDto(
-            release, await db.Milestones.CountAsync(milestone => milestone.ReleaseId == release.Id, ct)));
+                var previousStatus = release.Status;
+                try
+                {
+                    release.Update(name, description, version, branch, request.Order);
+                    var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, token);
+                    _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                        command.Actor, "project.release.updated", "Release", release.Id.ToString("D"),
+                        orgId, request.ProjectId,
+                        detailsJson: JsonSerializer.Serialize(new
+                        {
+                            previousState = previousStatus.ToString(),
+                            newState = "Release.FieldsUpdated",
+                            targetVersion = release.TargetVersion ?? "Unspecified",
+                            targetBranch = release.TargetBranch,
+                            count = release.Revision
+                        })));
+                    await db.SaveChangesAsync(token);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return Result.Failure<ReleaseDto>(exception.Message, ErrorKind.Conflict);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure<ReleaseDto>(
+                        "Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
+                }
+
+                return Result.Ok(ReleaseMapping.ToDto(
+                    release, await db.Milestones.CountAsync(
+                        milestone => milestone.ReleaseId == release.Id, token)));
+            },
+            ct);
     }
 }
 
@@ -340,52 +354,69 @@ public sealed class SetReleaseStatusHandler
         SetReleaseStatusCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
-        if (!Enum.IsDefined(request.Status) || request.Status is ReleaseStatus.Candidate or ReleaseStatus.Published)
+        if (request.ProjectId == Guid.Empty || request.ReleaseId == Guid.Empty)
+            return Result.Failure<ReleaseDto>("Release and project ids are required.", ErrorKind.Validation);
+        if (!Enum.IsDefined(request.Status)
+            || request.Status is ReleaseStatus.Candidate or ReleaseStatus.Published)
             return Result.Failure<ReleaseDto>(
-                "Candidate and Published are reserved for the authorized ReleasePrepare/publication workflow.", ErrorKind.Validation);
+                "Candidate and Published are reserved for the authorized ReleasePrepare/publication workflow.",
+                ErrorKind.Validation);
 
-        await using var db = _dbFactory.CreateDbContext();
-        var permission = await ReleaseAuthorization.RequireAdminAsync(
-            db, _authorization, request.ProjectId, command.Actor, ct);
-        if (!permission.Success)
-            return Result.Forbidden<ReleaseDto>("Only a project or organization Owner/Admin can change release status.");
-        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, ct);
-        if (!enabled.Success)
-            return Result.Failure<ReleaseDto>(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
+        return await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            request.ProjectId,
+            [],
+            async (db, token) =>
+            {
+                var permission = await ReleaseAuthorization.RequireAdminAsync(
+                    db, _authorization, request.ProjectId, command.Actor, token);
+                if (!permission.Success)
+                    return Result.Forbidden<ReleaseDto>(
+                        "Only a project or organization Owner/Admin can change release status.");
 
-        var release = await db.Releases.FirstOrDefaultAsync(
-            item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, ct);
-        if (release is null)
-            return Result.Failure<ReleaseDto>("Release not found.", ErrorKind.NotFound);
-        if (request.ExpectedRevision < 1 || request.ExpectedRevision != release.Revision)
-            return Result.Failure<ReleaseDto>("Release changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
+                var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, token);
+                if (!enabled.Success)
+                    return Result.Failure<ReleaseDto>(
+                        enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
 
-        var previous = release.Status;
-        try
-        {
-            release.TransitionTo(request.Status);
-            var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct);
-            _auditWriter.Stage(db, AuditEventFactory.ForActor(
-                command.Actor, "project.release.status_changed", "Release", release.Id.ToString("D"),
-                orgId, request.ProjectId,
-                detailsJson: JsonSerializer.Serialize(new
+                var release = await db.Releases.FirstOrDefaultAsync(
+                    item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, token);
+                if (release is null)
+                    return Result.Failure<ReleaseDto>("Release not found.", ErrorKind.NotFound);
+                if (request.ExpectedRevision < 1 || request.ExpectedRevision != release.Revision)
+                    return Result.Failure<ReleaseDto>(
+                        "Release changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
+
+                var previous = release.Status;
+                try
                 {
-                    previousState = previous.ToString(),
-                    newState = release.Status.ToString()
-                })));
-            await db.SaveChangesAsync(ct);
-        }
-        catch (InvalidOperationException exception)
-        {
-            return Result.Failure<ReleaseDto>(exception.Message, ErrorKind.Conflict);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<ReleaseDto>("Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
-        }
+                    release.TransitionTo(request.Status);
+                    var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, token);
+                    _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                        command.Actor, "project.release.status_changed", "Release", release.Id.ToString("D"),
+                        orgId, request.ProjectId,
+                        detailsJson: JsonSerializer.Serialize(new
+                        {
+                            previousState = previous.ToString(),
+                            newState = release.Status.ToString()
+                        })));
+                    await db.SaveChangesAsync(token);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return Result.Failure<ReleaseDto>(exception.Message, ErrorKind.Conflict);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure<ReleaseDto>(
+                        "Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
+                }
 
-        return Result.Ok(ReleaseMapping.ToDto(
-            release, await db.Milestones.CountAsync(milestone => milestone.ReleaseId == release.Id, ct)));
+                return Result.Ok(ReleaseMapping.ToDto(
+                    release, await db.Milestones.CountAsync(
+                        milestone => milestone.ReleaseId == release.Id, token)));
+            },
+            ct);
     }
 }
 
@@ -406,54 +437,73 @@ public sealed class DeleteReleaseHandler
     public async Task<Result> HandleAsync(DeleteReleaseCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
-        await using var db = _dbFactory.CreateDbContext();
-        var permission = await ReleaseAuthorization.RequireAdminAsync(
-            db, _authorization, request.ProjectId, command.Actor, ct);
-        if (!permission.Success)
-            return Result.Forbidden("Only a project or organization Owner/Admin can delete a release.");
-        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, ct);
-        if (!enabled.Success)
-            return Result.Failure(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
-
-        var release = await db.Releases.FirstOrDefaultAsync(
-            item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, ct);
-        if (release is null)
-            return Result.Failure("Release not found.", ErrorKind.NotFound);
-        var cancelledFailedPreparation =
-            release.Status == ReleaseStatus.Cancelled
-            && release.PreparationStatus == ReleasePreparationStatus.Failed;
-        if (release.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
-            || (release.PreparationStatus != ReleasePreparationStatus.NotStarted && !cancelledFailedPreparation))
-            return Result.Failure("A Release with a prepared or in-flight Candidate cannot be deleted.", ErrorKind.Conflict);
-
-        var linked = await db.Milestones
-            .Where(milestone => milestone.ProjectId == request.ProjectId && milestone.ReleaseId == release.Id)
-            .ToListAsync(ct);
-        foreach (var milestone in linked)
-            milestone.AssignRelease(null);
-
-        var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct);
-        _auditWriter.Stage(db, AuditEventFactory.ForActor(
-            command.Actor, "project.release.deleted", "Release", release.Id.ToString("D"),
-            orgId, request.ProjectId,
-            detailsJson: JsonSerializer.Serialize(new
+        var result = await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            request.ProjectId,
+            [],
+            async (db, token) =>
             {
-                previousState = release.Status.ToString(),
-                newState = "Release.Deleted",
-                targetVersion = release.TargetVersion ?? "Unspecified",
-                targetBranch = release.TargetBranch,
-                count = linked.Count
-            })));
-        db.Releases.Remove(release);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure("Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
-        }
-        return Result.Ok();
+                var permission = await ReleaseAuthorization.RequireAdminAsync(
+                    db, _authorization, request.ProjectId, command.Actor, token);
+                if (!permission.Success)
+                    return Result.Forbidden<bool>(
+                        "Only a project or organization Owner/Admin can delete a release.");
+
+                var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, token);
+                if (!enabled.Success)
+                    return Result.Failure<bool>(
+                        enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
+
+                var release = await db.Releases.FirstOrDefaultAsync(
+                    item => item.Id == request.ReleaseId && item.ProjectId == request.ProjectId, token);
+                if (release is null)
+                    return Result.Failure<bool>("Release not found.", ErrorKind.NotFound);
+
+                var cancelledFailedPreparation =
+                    release.Status == ReleaseStatus.Cancelled
+                    && release.PreparationStatus == ReleasePreparationStatus.Failed;
+                if (release.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
+                    || (release.PreparationStatus != ReleasePreparationStatus.NotStarted
+                        && !cancelledFailedPreparation))
+                    return Result.Failure<bool>(
+                        "A Release with a prepared or in-flight Candidate cannot be deleted.",
+                        ErrorKind.Conflict);
+
+                var linked = await db.Milestones
+                    .Where(milestone => milestone.ProjectId == request.ProjectId
+                        && milestone.ReleaseId == release.Id)
+                    .ToListAsync(token);
+                foreach (var milestone in linked)
+                    milestone.AssignRelease(null);
+
+                var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, token);
+                _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    command.Actor, "project.release.deleted", "Release", release.Id.ToString("D"),
+                    orgId, request.ProjectId,
+                    detailsJson: JsonSerializer.Serialize(new
+                    {
+                        previousState = release.Status.ToString(),
+                        newState = "Release.Deleted",
+                        targetVersion = release.TargetVersion ?? "Unspecified",
+                        targetBranch = release.TargetBranch,
+                        count = linked.Count
+                    })));
+                db.Releases.Remove(release);
+                try
+                {
+                    await db.SaveChangesAsync(token);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure<bool>(
+                        "Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
+                }
+                return Result.Ok(true);
+            },
+            ct);
+        return result.Success
+            ? Result.Ok()
+            : Result.Failure(result.Error ?? "Release delete conflict.", result.Kind);
     }
 }
 
