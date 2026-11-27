@@ -25,6 +25,7 @@ from verify_release_manifest import (
     validate_portable_dotnet_regex,
     validate_release_snapshot,
     validate_tag_pattern,
+    validate_version,
 )
 
 
@@ -156,6 +157,31 @@ class ReleaseSnapshotIntegrityTests(unittest.TestCase):
         for invalid in (True, False, 1.0, "4", 0, -1):
             with self.subTest(value=invalid), self.assertRaises(SystemExit):
                 require_positive_json_integer(invalid, "revision")
+
+
+class ReleasePolicyTypeSafetyTests(unittest.TestCase):
+    def test_numeric_component_count_must_be_a_json_integer_not_a_boolean(self) -> None:
+        for invalid in (True, False, 4.0, "4", None):
+            with self.subTest(value=invalid), self.assertRaises(SystemExit):
+                validate_version(
+                    {"scheme": "NumericComponents", "componentCount": invalid, "allowPrerelease": False},
+                    "0.7.5.10",
+                )
+
+    def test_semver_policy_requires_exactly_three_components(self) -> None:
+        with self.assertRaises(SystemExit):
+            validate_version(
+                {"scheme": "SemVer", "componentCount": 4, "allowPrerelease": False},
+                "1.2.3",
+            )
+
+    def test_allow_prerelease_must_be_a_json_boolean_for_every_scheme(self) -> None:
+        for invalid in (1, 0, "false", None):
+            with self.subTest(value=invalid), self.assertRaises(SystemExit):
+                validate_version(
+                    {"scheme": "NumericComponents", "componentCount": 4, "allowPrerelease": invalid},
+                    "0.7.5.10",
+                )
 
 
 class VersionSourceParityTests(unittest.TestCase):
