@@ -1411,3 +1411,13 @@ CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94a
 - Verified that both thresholds are 2,769 and their complete TRX guard blocks are byte-for-byte identical.
 - Workflow commits: `57bca5d7b4a134b18b681280a203bfceef426066`, `2962247979515cee3d4379d16dc79eb98156e2e8`; implementation journal: `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548`.
 - The latest previous CI predates the rehydration fix and this gate update; a new exact-head run is required.
+
+
+## Дополнение — интеграция locale audit из main (27 ноября 2026)
+
+- Main продвинулся на один commit 7258d4e20a4cc5ad32f5a7b0994ae400365a4c5a с аудитом и завершением переводов ресурсов en/ru/de/ja/zh.
+- В implementation branch feat/release-management выполнен настоящий двухродительский merge commit b34f72682913cf597cdfe2fc61c024d15d2dd5fa: первый parent feature head 24efb8d55b2f2f29bda46196a27cfcfa9bfb1548, второй parent main 7258d4e20a4cc5ad32f5a7b0994ae400365a4c5a.
+- Merge ограничен пятью .resx ресурсами. Новые переводы main сохранены, три ключа ReleasePreparationFailedSummary / ReleasePublicationFailedSummary / ReleaseDiagnosticDetails восстановлены поверх версий main во всех пяти культурах.
+- После merge feature branch не отстаёт от main. В implementation journal результат записан в commit 104bde53dbbef9825c1905b11a54126d1e37abff.
+- Предыдущий CI #45982946580 проверял до-merge SHA 24efb8d, поэтому не валидирует текущую вершину. Требуется новый exact-head CI после обновления журнала.
+
