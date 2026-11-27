@@ -103,7 +103,7 @@
     <value>模板</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>保存使用模型的方式。模型列表仍属于此账户。</value>
+    <value>工作站配置：设置 AgentProvider 模式以及 Planner/Actor/Review 角色的默认模型绑定。当任务阶段没有单独配置模型时，会使用这些角色模型作为后备；下方任务类型中为阶段配置的模型优先。</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>新建模板</value>
@@ -223,7 +223,7 @@
     <value>任务类型</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>类型决定工作如何完成。决策模型负责规划和复查。工作模型处理短片段，例如一张截图。</value>
+    <value>任务工作流模板会复制到每个新任务。决策模型和工作模型分别为常规阶段和扇出阶段提供默认值；阶段级模型会覆盖这些默认值。阶段模型优先于工作站角色绑定。</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>新建类型</value>
@@ -241,13 +241,13 @@
     <value>决策模型</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>规划工作并阅读片段复查。</value>
+    <value>用于未拆分为并行子任务的阶段的默认模型。若阶段单独配置了模型，则以阶段配置为准。</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>工作模型</value>
   </data>
 <data name="WorkerModelHint" xml:space="preserve">
-    <value>阶段被拆成子任务时使用。留空则使用决策模型。</value>
+    <value>用于拆分为并行子任务的阶段的默认模型。若未设置，则使用决策模型；阶段级模型仍具有更高优先级。</value>
   </data>
 <data name="PhaseTitle" xml:space="preserve">
     <value>阶段</value>
@@ -388,7 +388,7 @@
     <value>العربية</value>
   </data>
 <data name="Lang_hi" xml:space="preserve">
-    <value>हिन्दī</value>
+    <value>हिन्दी</value>
   </data>
 <data name="Lang_th" xml:space="preserve">
     <value>ไทย</value>
@@ -1009,7 +1009,7 @@
     <value>流水线</value>
   </data>
 <data name="PipelineNotStarted" xml:space="preserve">
-    <value>流水线尚未开始。</value>
+    <value>此任务尚未启动。启动任务后将创建其 Planner 会话并开始执行。</value>
   </data>
 <data name="StagePlanning" xml:space="preserve">
     <value>规划</value>
@@ -1727,8 +1727,7 @@
     <value>工作站</value>
   </data>
 <data name="FolderExample" xml:space="preserve">
-    <value>C:\\work\
-orthstar</value>
+    <value>C:\work\northstar</value>
   </data>
 <data name="ChatNeedsFolder" xml:space="preserve">
     <value>聊天前请在仪表板上附加项目文件夹。</value>
@@ -2025,7 +2024,7 @@ orthstar</value>
     <value>极高</value>
   </data>
 <data name="ChatModelReady" xml:space="preserve">
-    <value>模型就絢： {0}</value>
+    <value>模型已就绪：{0}</value>
   </data>
 <data name="ChatModelSwitching" xml:space="preserve">
     <value>正在切换模型： {0}</value>
@@ -2181,7 +2180,7 @@ orthstar</value>
     <value>更新守护进程</value>
   </data>
   <data name="UpdateDaemonConfirm" xml:space="preserve">
-    <value>要更新此工作站上的 Beacon 客户端吗？</value>
+    <value>要安装工作站客户端版本 {0} 吗？守护进程将自动重启。</value>
   </data>
   <data name="UpdateDaemonNow" xml:space="preserve">
     <value>立即更新</value>
@@ -3380,5 +3379,185 @@ orthstar</value>
   </data>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>等待您处理的任务列表暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>外观</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>切换到浅色主题</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>切换到深色主题</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>创建项目、重命名当前打开的项目，或删除你有管理权限的项目。</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>删除项目</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>删除 {0}？其任务、上下文和成员也会被删除。</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>项目已保存。</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>项目已删除。</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>项目名称不能为空。</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="ServerCompileNoTree" xml:space="preserve">
+    <value>服务器端编译不包含工作树。代理简报会在工作站上补充。</value>
+  </data>
+  <data name="MilestoneCounts" xml:space="preserve">
+    <value>{0} 个未完成 · {1} 个已关闭</value>
+  </data>
+  <data name="ReportTaskCount" xml:space="preserve">
+    <value>{0} 个任务</value>
+  </data>
+  <data name="SubtaskReported" xml:space="preserve">
+    <value>已报告</value>
+  </data>
+  <data name="MoreTasks" xml:space="preserve">
+    <value>另有 {0} 项</value>
+  </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>智能分析</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>治理</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>审查</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>代理聊天</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>搜索或执行命令</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>命令面板</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>搜索页面</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>没有匹配的命令</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>工作站运行正常</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>工作站需要关注</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>工作站离线</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>没有工作站</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>{0} 台工作站 · {1} 台在线</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>当前项目概览</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>在看板上处理工作</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>未显示在看板上的任务</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>里程碑</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>项目知识</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>已记录的决策</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>看板快照</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>代理会话</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>代理设置</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>运行代理的设备</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>此项目</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>账户</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>模型连接</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>任务</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>创建项目</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>{0} 项需要关注</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>正在运行</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>当前没有进行中的工作。</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>需要关注</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>当前没有需要关注的事项。</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>系统负载</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>尚无工作站报告 CPU、内存或 GPU 负载。</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>工作站群运行状态</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>下一步</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>验证与执行是分开的。批准操作只会完成审查，不会完成工作记录。</value>
+  </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>当前项目</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>目标</value>
   </data>
 </root>

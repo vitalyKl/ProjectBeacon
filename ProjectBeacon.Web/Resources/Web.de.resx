@@ -103,7 +103,7 @@
     <value>Vorlagen</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Gespeicherte Arten, Ihre Modelle zu nutzen. Die Modellliste bleibt bei diesem Konto.</value>
+    <value>Workstation-Profil: Legt den AgentProvider-Modus und die Standardzuordnungen der Rollen Planner/Actor/Review fest. Diese Rollenmodelle dienen als Fallback, wenn für eine Aufgabenphase keine eigene Modellkonfiguration vorhanden ist; die unten konfigurierten Aufgabentypen haben für ihre Phasen Vorrang.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>Neue Vorlage</value>
@@ -223,7 +223,7 @@
     <value>Aufgabenarten</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>Eine Art beschreibt, wie die Arbeit erledigt wird. Das Entscheidungsmodell plant und prüft. Das Arbeitsmodell übernimmt kurze Abschnitte, etwa einen Screenshot.</value>
+    <value>Vorlagen für den Aufgabenablauf, die in jede neue Aufgabe kopiert werden. Entscheidungs- und Arbeitsmodelle liefern die Standardmodelle für reguläre Phasen und Fan-out-Phasen; ein phasenspezifisches Modell hat Vorrang. Phasenmodelle haben Vorrang vor den Rollenbindungen der Workstation.</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>Neue Art</value>
@@ -241,13 +241,13 @@
     <value>Entscheidungsmodell</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>Plant die Arbeit und liest die Prüfungen der Abschnitte.</value>
+    <value>Standardmodell für Phasen, die nicht in parallele Unteraufgaben aufgeteilt werden. Eine für die jeweilige Phase festgelegte Modellkonfiguration hat Vorrang.</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>Arbeitsmodell</value>
   </data>
 <data name="WorkerModelHint" xml:space="preserve">
-    <value>Wird genutzt, wenn eine Phase in Teilaufgaben zerlegt wird. Leer bedeutet das Entscheidungsmodell.</value>
+    <value>Standardmodell für Phasen, die in parallele Unteraufgaben aufgeteilt werden. Wenn kein Modell festgelegt ist, wird das Entscheidungsmodell verwendet; eine für die Phase festgelegte Modellkonfiguration hat weiterhin Vorrang.</value>
   </data>
 <data name="PhaseTitle" xml:space="preserve">
     <value>Phase</value>
@@ -388,7 +388,7 @@
     <value>العربية</value>
   </data>
 <data name="Lang_hi" xml:space="preserve">
-    <value>हिन्दī</value>
+    <value>हिन्दी</value>
   </data>
 <data name="Lang_th" xml:space="preserve">
     <value>ไทย</value>
@@ -1009,7 +1009,7 @@
     <value>Pipeline</value>
   </data>
 <data name="PipelineNotStarted" xml:space="preserve">
-    <value>Pipeline nicht gestartet.</value>
+    <value>Diese Aufgabe wurde noch nicht gestartet. Starten Sie die Aufgabe, um ihre Planner-Sitzung zu erstellen und die Ausführung zu beginnen.</value>
   </data>
 <data name="StagePlanning" xml:space="preserve">
     <value>Planung</value>
@@ -1727,8 +1727,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
     <value>Arbeitsplätze</value>
   </data>
 <data name="FolderExample" xml:space="preserve">
-    <value>C:\\work\
-orthstar</value>
+    <value>C:\work\northstar</value>
   </data>
 <data name="ChatNeedsFolder" xml:space="preserve">
     <value>Hängen Sie im Dashboard einen Projektordner an, bevor Sie chatten.</value>
@@ -1791,7 +1790,7 @@ orthstar</value>
     <value>Automatisch — Befehle in einer isolierten Arbeitskopie ausführen</value>
   </data>
   <data name="CommandPolicyHelp" xml:space="preserve">
-    <value>Gilt für native Agenten auf dieser Workstation. Projektmanifeste und CI-Workflows schlagen Befehle nur vor; bei der ersten Verwendung wirst du um Genehmigung gebeten. Gespeicherte Genehmigungen verfallen, wenn sich die geprüften Manifeste oder Workflows ändern. Der automatische Modus überspringt die Zustimmung und ist keine Sicherheits-Sandbox.</value>
+    <value>Gilt für native Agenten auf dieser Workstation. Projektmanifeste und CI-Workflows schlagen Befehle nur vor; bei der ersten Verwendung werden Sie um Genehmigung gebeten. Gespeicherte Genehmigungen verfallen, wenn sich die geprüften Manifeste oder Workflows ändern. Der automatische Modus überspringt die Zustimmung und ist keine Sicherheits-Sandbox.</value>
   </data>
   <data name="CommandPolicyOff" xml:space="preserve">
     <value>Aus — Befehlsausführung deaktivieren</value>
@@ -1980,7 +1979,7 @@ orthstar</value>
     <value>Umbenennen</value>
   </data>
 <data name="ChatArchive" xml:space="preserve">
-    <value>In den Archiv</value>
+    <value>Archivieren</value>
   </data>
 <data name="ChatBusy" xml:space="preserve">
     <value>Beschäftigt</value>
@@ -2094,7 +2093,7 @@ orthstar</value>
     <value>Nicht verfügbar</value>
   </data>
 <data name="AgentRuntimeUnknown" xml:space="preserve">
-    <value>Unbekannt (warte auf Workstation-Heartbeat)</value>
+    <value>Unbekannt (wartet auf den Workstation-Heartbeat)</value>
   </data>
 <data name="LandingEyebrow" xml:space="preserve"><value>LOKALE KI-ENTWICKLUNGSPLATTFORM</value></data>
 <data name="LandingHeroFootnote" xml:space="preserve"><value>Ihre Workstation führt den Agenten aus. Ihre Projekte bleiben Ihre.</value></data>
@@ -2155,7 +2154,7 @@ orthstar</value>
     <value>Update verfügbar</value>
   </data>
 <data name="DaemonUpdateDescription" xml:space="preserve">
-    <value>Prüfen und installieren Sie Updates für den Beacon-Client auf dieser Workstation.</value>
+    <value>Suchen und installieren Sie die neueste Version des ProjectBeacon-Workstation-Clients, ohne den Installationsordner manuell ersetzen zu müssen.</value>
   </data>
 <data name="DaemonUpdateRequiresOnline" xml:space="preserve">
     <value>Die Workstation muss online sein, um Updates zu prüfen oder zu installieren.</value>
@@ -2164,7 +2163,7 @@ orthstar</value>
     <value>Daemon-Updates</value>
   </data>
 <data name="DaemonUpdateScheduled" xml:space="preserve">
-    <value>Update geplant. Der Client wird neu gestartet.</value>
+    <value>Update überprüft und eingeplant. Der Workstation-Client wird neu gestartet.</value>
   </data>
 <data name="DaemonUpToDate" xml:space="preserve">
     <value>Der Client ist bereits aktuell.</value>
@@ -2173,7 +2172,7 @@ orthstar</value>
     <value>Client aktualisieren</value>
   </data>
 <data name="UpdateDaemonConfirm" xml:space="preserve">
-    <value>Den Beacon-Client auf dieser Workstation aktualisieren?</value>
+    <value>Workstation-Clientversion {0} installieren? Der Daemon wird automatisch neu gestartet.</value>
   </data>
 <data name="UpdateDaemonNow" xml:space="preserve">
     <value>Jetzt aktualisieren</value>
@@ -2197,7 +2196,7 @@ orthstar</value>
     <value>Diese Zeitzone wird von diesem Browser nicht unterstützt.</value>
   </data>
 <data name="ChatDelete" xml:space="preserve"><value>Chat löschen</value></data>
-<data name="ChatDeleteConfirm" xml:space="preserve"><value>Möchtest du den Chat „{0}“ löschen? Er wird aus deiner Chatliste entfernt.</value></data>
+<data name="ChatDeleteConfirm" xml:space="preserve"><value>Möchten Sie den Chat „{0}“ löschen? Er wird aus Ihrer Chatliste entfernt.</value></data>
   <data name="ChatContextTask" xml:space="preserve">
     <value>Aktuelle Aufgabe</value>
   </data>
@@ -2208,7 +2207,7 @@ orthstar</value>
     <value>Neuer Chat</value>
   </data>
   <data name="ChatSelectOrCreate" xml:space="preserve">
-    <value>Wähle eine Unterhaltung aus oder starte einen neuen Chat.</value>
+    <value>Wählen Sie eine Unterhaltung aus oder starten Sie einen neuen Chat.</value>
   </data>
   <data name="PipelineActivityCompleted" xml:space="preserve">
     <value>Schritt abgeschlossen</value>
@@ -2220,7 +2219,7 @@ orthstar</value>
     <value>Bereit zum Start</value>
   </data>
   <data name="PipelineActivityStarting" xml:space="preserve">
-    <value>Die Agentensitzung wurde gestartet. Warte auf die erste Aktivitätsmeldung …</value>
+    <value>Die Agentensitzung wurde gestartet. Es wird auf die erste Aktivitätsmeldung gewartet …</value>
   </data>
   <data name="PipelineActivityWorking" xml:space="preserve">
     <value>Agent arbeitet</value>
@@ -2238,13 +2237,13 @@ orthstar</value>
     <value>Ein Schritt wird beendet, wenn sich Transkript, Tools oder Formulare so lange nicht ändern. Das absolute Limit beträgt höchstens 60 Minuten.</value>
   </data>
 <data name="PipelineWaitingForUser" xml:space="preserve">
-    <value>Der Agent benötigt deine Eingabe, bevor er fortfahren kann.</value>
+    <value>Der Agent benötigt Ihre Eingabe, bevor er fortfahren kann.</value>
   </data>
   <data name="UnassignedSubtasks" xml:space="preserve">
     <value>Nicht zugewiesene Teilaufgaben</value>
   </data>
   <data name="WaitingForUser" xml:space="preserve">
-    <value>Wartet auf deine Antwort</value>
+    <value>Wartet auf Ihre Antwort</value>
   </data>
   <data name="McpHarnessLead" xml:space="preserve">
     <value>Diese Server werden pro Projekt gespeichert und vom Native Harness auf der Workstation gestartet. Lokale Befehle werden direkt ohne Shell ausgeführt; Remote-Server verwenden MCP Streamable HTTP. Externe Prozesse laufen mit den Rechten des aktuellen Betriebssystembenutzers.</value>
@@ -2301,7 +2300,7 @@ orthstar</value>
     <value>Deaktiviert</value>
   </data>
   <data name="McpNoProject" xml:space="preserve">
-    <value>Wähle zuerst ein Projekt aus, um MCP-Server zu konfigurieren.</value>
+    <value>Wählen Sie zuerst ein Projekt aus, um MCP-Server zu konfigurieren.</value>
   </data>
   <data name="McpServerNextSession" xml:space="preserve">
     <value>Der Native Harness startet aktivierte Server beim nächsten Chat- oder Task-Start.</value>
@@ -2593,7 +2592,7 @@ orthstar</value>
   <data name="GitSyncRequiresAdmin" xml:space="preserve"><value>Nur Projekt-Owner oder -Admins dürfen dieses Repository synchronisieren. Bitten Sie einen Administrator, GitSync auszuführen.</value></data>
   <data name="GitSyncCheck" xml:space="preserve"><value>Status prüfen</value></data>
   <data name="GitSyncNow" xml:space="preserve"><value>Synchronisieren</value></data>
-  <data name="GitSyncWorking" xml:space="preserve"><value>Warte auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
+  <data name="GitSyncWorking" xml:space="preserve"><value>Warten auf den Abschluss des Git-Vorgangs auf der Workstation…</value></data>
   <data name="GitSyncStillRunning" xml:space="preserve"><value>Der Git-Vorgang läuft noch. Diese Seite überwacht seinen Status automatisch weiter.</value></data>
   <data name="GitSyncNoCompatibleDevice" xml:space="preserve"><value>Diesem Projekt ist keine aktive Workstation mit GitSync-Unterstützung zugeordnet.</value></data>
   <data name="GitSyncBranch" xml:space="preserve"><value>Branch</value></data>
@@ -3372,5 +3371,185 @@ orthstar</value>
   </data>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>Darstellung</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>Dunkel</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>Hell</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>Zum hellen Design wechseln</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>Zum dunklen Design wechseln</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>Erstellen Sie ein Projekt, benennen Sie das geöffnete Projekt um oder entfernen Sie ein Projekt, das Sie verwalten.</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>Projekt löschen</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>„{0}“ löschen? Aufgaben, Kontext und Mitglieder werden entfernt.</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>Projekt gespeichert.</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>Projekt gelöscht.</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>Projektname ist erforderlich.</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>Öffnen</value>
+  </data>
+  <data name="ServerCompileNoTree" xml:space="preserve">
+    <value>Die Server-Kompilierung umfasst nicht das Arbeitsverzeichnis. Das Agenten-Briefing wird auf der Workstation vervollständigt.</value>
+  </data>
+  <data name="MilestoneCounts" xml:space="preserve">
+    <value>{0} offen · {1} geschlossen</value>
+  </data>
+  <data name="ReportTaskCount" xml:space="preserve">
+    <value>{0} Aufgaben</value>
+  </data>
+  <data name="SubtaskReported" xml:space="preserve">
+    <value>Gemeldet</value>
+  </data>
+  <data name="MoreTasks" xml:space="preserve">
+    <value>+{0} weitere</value>
+  </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>Betrieb</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>Intelligenz</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>Steuerung</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>Prüfungen</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>Agentenchat</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>Suchen oder einen Befehl ausführen</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>Befehlspalette</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>Seiten suchen</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>Keine passenden Befehle</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>Flotte einsatzbereit</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>Flotte erfordert Aufmerksamkeit</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>Flotte offline</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>Keine Workstations</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>{0} Workstations · {1} online</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>Aktuelles Projekt auf einen Blick</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>Auf dem Board arbeiten</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>Aufgaben, die nicht auf dem Board stehen</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>Meilensteine</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>Projektwissen</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>Erfasste Entscheidungen</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>Board-Momentaufnahmen</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>Agentensitzung</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>Agenteneinrichtung</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>Geräte, auf denen Agenten ausgeführt werden</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>Dieses Projekt</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>Konto</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>Modellverbindungen</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>Aufgabe</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>Projekt erstellen</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>{0} Elemente erfordern Aufmerksamkeit</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>Derzeit in Bearbeitung</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>Nichts ist in Bearbeitung.</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>Erfordert Aufmerksamkeit</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>Nichts erfordert Aufmerksamkeit.</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>Systemauslastung</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>Noch keine Workstation hat CPU-, Speicher- oder GPU-Auslastung gemeldet.</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>Flottenzustand</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>Nächster Schritt</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>Verifizierung und Ausführung sind getrennt. Durch die Freigabe wird die Prüfung abgeschlossen, nicht das Arbeitsprotokoll.</value>
+  </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>Aktuelles Projekt</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>Ziel</value>
   </data>
 </root>
