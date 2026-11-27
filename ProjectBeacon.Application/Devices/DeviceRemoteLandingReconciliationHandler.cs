@@ -6,6 +6,7 @@ using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
 using Application.Common;
+using Application.Releases;
 using Application.Persistence;
 using Application.Projects;
 using Domain.Common;
@@ -559,6 +560,15 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 "GitHub merge and workstation verification timestamps are invalid.", ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, request.ProjectId, ct))
+                return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                    "Project not found.", ErrorKind.NotFound);
+
         var device = await db.DaemonDevices.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(item => item.Id == deviceId, ct);
         if (device is null || device.IsRevoked
@@ -606,6 +616,11 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         if (task is null)
             return Result.Failure<DeviceRemoteLandingReconciliationResult>(
                 "Task not found.", ErrorKind.NotFound);
+        var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+            db, request.ProjectId, [task.MilestoneId], ct);
+        if (releaseBlock is not null)
+            return Result.Failure<DeviceRemoteLandingReconciliationResult>(
+                releaseBlock, ErrorKind.Conflict);
         if (task.PipelineDeviceId != deviceId)
             return Result.Forbidden<DeviceRemoteLandingReconciliationResult>(
                 "Only the workstation pinned to this task can report its remote landing.");
@@ -813,9 +828,12 @@ public sealed class ReconcileDeviceRemoteLandingHandler
                 ErrorKind.Conflict);
         }
 
+        await transaction.CommitAsync(ct);
         return Result.Ok(ToResult(proof, task.Status, task.PipelineStage ?? TaskPipelineStage.None, alreadyRecorded: false));
+            });
     }
 
+        });
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
 
