@@ -6,6 +6,7 @@ using Application.Common;
 using Application.Persistence;
 using Application.Projects;
 using Application.Releases;
+using Application.Tasks;
 using Domain.Common;
 using Domain.Entities.Devices;
 using Domain.Entities.Identity;
@@ -258,6 +259,26 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.Equal(ErrorKind.Conflict, detach.Kind);
         await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(release.Id, milestone.ReleaseId);
+
+        var updateTask = await new UpdateTaskHandler(Factory(), new ContentWriter())
+            .HandleAsync(
+                new UpdateTaskCommand(new UpdateTaskRequest(
+                    task.Id, "Changed after prepare", null, null, null, null, milestone.Id), OwnerActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(updateTask.Success);
+        Assert.Equal(ErrorKind.Conflict, updateTask.Kind);
+
+        var addStep = await new AddTaskStepHandler(Factory())
+            .HandleAsync(
+                new AddTaskStepCommand(new AddTaskStepRequest(task.Id, "Blocked checklist step")),
+                TestContext.Current.CancellationToken);
+        Assert.False(addStep.Success);
+        Assert.Equal(ErrorKind.Conflict, addStep.Kind);
+
+        await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Included task", task.Title);
+        Assert.Empty(await _db.TaskSteps.Where(step => step.TaskId == task.Id)
+            .ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
