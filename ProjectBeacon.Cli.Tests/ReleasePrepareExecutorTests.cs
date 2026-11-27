@@ -47,6 +47,35 @@ public sealed class ReleasePrepareExecutorTests
     }
 
     [Fact]
+    public async Task ReleasePrepare_WritesJsonDocumentRootVersionSource()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-json-root-version-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "version.json");
+        try
+        {
+            await File.WriteAllTextAsync(path, "\"2.4.1\"");
+            var source = new ProjectVersionSourcePolicy("version.json", "Json", "");
+            var policy = new ProjectVersionPolicy(
+                "SemVer", 3, null, "release-{version}", false, [source]);
+
+            var result = await ReleasePrepareExecutor.WriteVersionSourceAsync(
+                path, source, policy, "2.4.2", TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            var document = JsonNode.Parse(await File.ReadAllTextAsync(path));
+            Assert.Equal("2.4.2", document!.GetValue<string>());
+            Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+                policy, source, document.ToJsonString(), out var projected, out var error), error);
+            Assert.Equal("2.4.2", projected);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public void ResolveManifestPath_CreatesDirectoryInsideReleaseWorktree()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-release-manifest-" + Guid.NewGuid().ToString("N"));
