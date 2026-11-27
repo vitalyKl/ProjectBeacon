@@ -1944,6 +1944,7 @@ public sealed class NativeAgentRuntimeTests
             new StubLlamaSync(),
             () => WorkstationSettings.Load(settingsPath),
             providerFactory: (_, _, _) => provider);
+        var runtimeDisposed = false;
         try
         {
             await runtime.SendPromptAsync(
@@ -1967,11 +1968,18 @@ public sealed class NativeAgentRuntimeTests
             Assert.True(status?.Ended, status?.Error ?? "The lone-checkpoint turn did not finish before the timeout.");
             Assert.Equal("stop", status.Finish);
             Assert.Equal(0, provider.SummaryCalls);
+
+            // Ended is published in memory before the final durable transcript write completes.
+            // Dispose waits for the active turn task and its final persistence, so the file is
+            // not read while the Windows atomic replace is still in flight.
+            await runtime.DisposeAsync();
+            runtimeDisposed = true;
             Assert.Contains("PRIOR-CHECKPOINT-MARKER", await File.ReadAllTextAsync(transcriptPath), StringComparison.Ordinal);
         }
         finally
         {
-            await runtime.DisposeAsync();
+            if (!runtimeDisposed)
+                await runtime.DisposeAsync();
             Directory.Delete(temp, true);
         }
     }
