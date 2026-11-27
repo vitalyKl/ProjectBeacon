@@ -415,12 +415,19 @@ internal static class MilestoneMutationCoordinator
             }
             else
             {
-                var scope = await db.Milestones.AsNoTracking()
+                // Legacy unscoped routes identify a single milestone by opaque id.
+                // Resolve only its owning project, authorize that project immediately,
+                // then continue under the normal tenant filter and project lock.
+                var scope = await db.Milestones.IgnoreQueryFilters().AsNoTracking()
                     .Where(item => item.Id == milestoneId)
                     .Select(item => new { item.ProjectId })
                     .FirstOrDefaultAsync(ct);
                 if (scope is null)
                     return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+                if (actor is not { IsHuman: true, UserId: not null } humanActor
+                    || !await ProposalProjectAuthorization.CanWriteAsync(
+                        db, humanActor, scope.ProjectId, ct))
+                    return Result.Forbidden<T>("Project membership is required to mutate this milestone.");
 
                 scopedProjectId = scope.ProjectId;
                 if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scopedProjectId, ct))
