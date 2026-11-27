@@ -2727,3 +2727,35 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 2. Keep PR #230 open until external Merge Queue and publication protection acceptance is complete.
 3. Live queue tests require a writable org-owned disposable repository; admin must verify queue Merge method=merge, classic `v*` tag protection and `production` Environment reviewers.
 4. No production tag, deployment or PR merge. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Serialize Release milestone assignment with Candidate preparation
+
+### Race found during lifecycle review
+
+- `SetMilestoneReleaseHandler` checked whether the source and target Release accepted milestone changes, then changed `Milestone.ReleaseId` without taking the project mutation lock.
+- `PrepareReleaseHandler` builds the immutable Candidate scope while holding `ProjectRuntimeMutationGate.TryLockProjectAsync` in a transaction.
+- A concurrent Owner/Admin milestone reassignment could therefore pass the `PreparationStatus == NotStarted` check immediately before Prepare captured its scope, then commit while Prepare was snapshotting. The task/milestone association could differ from the Release's frozen Candidate membership.
+- This is a time-of-check/time-of-use race; ordinary revision checks on the Milestone do not serialize it with ReleasePrepare because the two operations mutate different rows.
+
+### Correction
+
+- `SetMilestoneReleaseHandler` now runs through the EF execution strategy and an explicit transaction.
+- It acquires the same project-row mutation lock as Prepare/Verify/Publish before reading the Milestone, source Release or target Release.
+- Authorization, feature-gate checks, source/target lifecycle validation, assignment, audit and persistence now all happen inside that transaction.
+- A missing project fails closed; stale Milestone revisions and concurrent updates return a conflict.
+- Added a regression assertion to the existing `PreparedReleaseFreezesItsMilestoneTaskScope` test: detaching a Milestone after preparation begins is rejected and the persisted Release association remains unchanged. This extends an existing test fact, so the Linux TRX floor remains 2,771 and the CI/release guard blocks remain synchronized.
+
+### Implementation and validation
+
+- Implementation: `cbec965caa81831c868af3faaf329072561e1373`.
+- Regression test: `7cbec7877c60a08d1dc81c4e42c05b4c5b149292`.
+- Current PR head at the time of this journal entry: `7cbec7877c60a08d1dc81c4e42c05b4c5b149292`.
+- Exact-head cross-platform CI is required after these changes. Earlier green CI #45988134913 validates only the previous SHA `2ad852f6d083004a194466aa98af7c242204d508`; it does not validate this correction or the strict audit JSON-type change.
+- No PR merge, production tag or deployment. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Confirm Linux, Windows and macOS CI on the current exact PR head; verify the seven-module suite, 2,771 Linux TRX floor, EF model check and formatting.
+2. Continue checking release lifecycle operations for mutations that need the same project lock, especially cancellation/deletion paths that can race Prepare.
+3. Keep PR #230 open until exact-head CI and external GitHub publication/merge-queue acceptance requirements are complete.
