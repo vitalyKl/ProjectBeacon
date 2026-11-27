@@ -2635,3 +2635,36 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 - CI #45983775039 is the pre-fix failure on `104bde53dbbef9825c1905b11a54126d1e37abff`; its audit failure was the first missing allowlisted key and did not exercise the later completion audit path.
 - Current code and tests are newer than that run. A new exact-head Linux/Windows/macOS CI is required.
 - No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+
+### Follow-up — structured audit evidence for publication completion
+
+- Completion handling previously attempted to emit free-form error text, workflow URL and completion metadata that did not comply with the append-only audit allowlist.
+- Replaced this with a dedicated `PublicationAuditDetails` builder containing only Candidate id, `tagPushed`, a short result code and an optional positive workflow run ID.
+- Successful publication audit records exact structured evidence: Candidate id, `tagPushed=true`, `targetVersion`, tag name, Candidate SHA, deployed SHA and workflow run ID. Workflow URL and arbitrary error text are deliberately excluded.
+- Extended AuditEvent validation:
+  - `candidateId`/`workstationId`: canonical GUID;
+  - `candidateSha`/`deployedSha`: 40- or 64-character hex Git SHA;
+  - `tagName`: same safe-tag validator used by VersionPolicy;
+  - `workflowRunId`: positive integer;
+  - `tagPushed`: scalar boolean.
+- Added negative coverage for invalid deployed SHA and zero workflow-run ID. The fresh-DbContext Publish/Completion integration test now reads the persisted `project.release.published` AuditEvent and asserts every expected field while asserting that workflow URL and free-form error are absent.
+- Implementation commits: `0c47493b8c7b1f77ab56d19d25fa263c9b1fa481`, `7f0f970f5c04ce42e334f6feabde57c5b3aadb34`.
+- Test commits: `32470c633fe1cc4a6d887e5890ba14311b1aae98`, `cb2c1d3fbb809b456720f933b1a59815937813f0`. These extend existing facts and do not add additional TRX facts; the synchronized Linux minimum remains 2,771.
+
+### Follow-up — resource marker type build correction
+
+- CI #45987044512 targeted intermediate SHA `ce4f2a4c6de79af9458342d50d68db3fb74b1efe` and the Linux/macOS Build reported `CS0118`: short name `Web` resolved to the namespace rather than the generated resource class.
+- The generated marker is internal `ProjectBeacon.Web.Resources.Web`; Web project has `InternalsVisibleTo` for `ProjectBeacon.Web.Tests`.
+- Both bUnit files now use the fully qualified marker `global::ProjectBeacon.Web.Resources.Web` in `IStringLocalizer<T>`.
+- Test commits: `142fcc19081caa6135b94556fd649bbe47086726`, `0d72f310cacb92619f4435652cc1f24caad6600a`.
+- The intermediate run predates those corrections. Current code and the latest audit-completion assertions require a new exact-head cross-platform CI. No green result is claimed for the current head.
+
+### Current state
+
+- All five resource files contain 1,345 keys with matching key sets; zero missing or orphaned keys.
+- CI and release workflow TRX minimums remain synchronized at 2,771; the complete guard blocks are identical.
+- Exact PR head before this log append: `cb2c1d3fbb809b456720f933b1a59815937813f0`.
+- PR #230 remains open, unmerged and mergeable; do not merge until exact-head CI and external acceptance requirements pass.
+- Live Merge Queue acceptance still requires an eligible org-owned disposable repository. Queue method=merge, classic `v*` tag protection and `production` Environment reviewers remain administrator verification items.
+- No production tag/deployment; SaaS Control Plane and billing remain out of scope.
