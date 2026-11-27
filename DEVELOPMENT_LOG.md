@@ -2202,3 +2202,36 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Record the successful exact-head run in the separate release-plan document and PR #230.
 2. Re-trigger CI for the post-journal PR head (the workflow excludes `pull_request.synchronize`).
 3. Complete live queue/publication protection acceptance when an org-owned test repository and administrator access are available.
+
+
+## 2026-11-27 — Least-privilege permissions for the Release workflow
+
+**Implementation commit:** `e1100e783b56100228a435b8b42ff753731dfb47`
+
+### Finding
+
+The Release workflow had workflow-level `packages: write`. That permission was therefore inherited by jobs that only run tests, inspect images or deploy. Only image publication needs to write packages; the scanner only needs to pull/read the package.
+
+### Change
+
+- Workflow-level permissions are now only `contents: read`.
+- `client` retains job-scoped `contents: write` because it creates/uploads GitHub Release assets.
+- `image` has job-scoped `contents: read` and `packages: write` for GHCR image publication.
+- `scan` has job-scoped `contents: read` and `packages: read` for image inspection and Trivy scanning.
+- `tests` and `deploy` inherit only workflow-level `contents: read`; neither receives package write access.
+- No deployment secrets, SSH access, tag or environment configuration was changed.
+
+### Validation
+
+- Static check of the resulting workflow confirms that the only `packages: write` declaration is inside the `image` job; the only `packages: read` declaration is inside `scan`; and global permissions no longer include package write.
+- The previous exact-head CI #45962729055 passed on application/workflow head `841dd90bbd1e5375558acb20d2b0515c828876d4` with 2,767 Linux TRX results. It predates this permission change.
+- CI #45971210327 targets journal head `cc89faa0d3d0c078bad27711fb4dfc5d11628f81`; it also predates this permission change and is still running at the time of this entry.
+- A new exact-head CI run is required on the post-journal head containing `e1100e783b56100228a435b8b42ff753731dfb47`.
+
+No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Run exact-head Linux/Windows/macOS CI against the least-privilege workflow.
+2. Review final release-workflow job permissions and tag/deployment gates after CI.
+3. Complete org-owned Merge Queue live acceptance and administrator verification of `v*` protection / `production` reviewers when access is available.
