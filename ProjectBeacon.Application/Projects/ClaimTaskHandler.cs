@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Common;
+using Application.Devices;
+using Application.Releases;
 using Application.Tasks;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -26,7 +28,12 @@ public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskIte
         var strategy = db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
         {
+            db.ChangeTracker.Clear();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+            // Serialize task claiming with ReleasePrepare before locking the task row.
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, projectId, ct))
+                return Result.Failure<TaskItemDto>("Project not found.", ErrorKind.NotFound);
 
             // Explicit project predicate: isolation must not rest on the global tenant filter alone.
             var task = await db.Tasks
@@ -39,6 +46,14 @@ public class ClaimTaskHandler : ICommandHandler<ClaimTaskCommand, Result<TaskIte
             {
                 await tx.RollbackAsync(ct);
                 return Result.Failure<TaskItemDto>("Task not found or already claimed.");
+            }
+
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, projectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+            {
+                await tx.RollbackAsync(ct);
+                return Result.Failure<TaskItemDto>(releaseBlock, ErrorKind.Conflict);
             }
 
             task.MoveToNextStatus();
