@@ -1512,3 +1512,20 @@ CI после этих изменений требует минимум 2 771 Li
 - Implementation commits: `3180d3e248169aad31d630f2f6aa9cd3cf3694d2`; regression test commit: `7d3b1ee17c396bb8f3c22b770d0c44f58cc7be31`; implementation journal: `7dfa09fb751a361bcb5e3c74260d69698be55ee0`.
 - Строгая типизация появилась после run #45988134913 и требует нового exact-head CI на текущей ветке.
 - Live Merge Queue acceptance по-прежнему требует writable org-owned disposable repository. Администратору нужно подтвердить Merge method=merge, classic tag protection `v*` и required reviewers Environment `production`. PR #230 не сливать, production tag/deploy не создавать.
+
+## Решение по remote landing и production safeguards — 27 ноября 2026
+
+Ветка реализации feat/release-management закрыла открытый вопрос об авторитете remote landing. При наличии GitHub PR remote merge выполняется через GitHub как авторитетную систему, а закреплённая workstation выступает исполнителем только после server-side authorization и повторной проверки Candidate/Review evidence. Запрос отправляется через GitHub async merge API с точным PR head SHA и merge_action=default; Beacon не запрашивает bypass_rules, admin merge или force update. Ответы pending/enqueued не считаются landed. AutoSync ждёт MERGED, проверяет merge commit, base ancestry/tree и post-merge check, после чего сервер фиксирует remote landing proof. Прямая локальная модификация remote target ref не конкурирует с GitHub.
+
+Проверка PR #230 на 27 ноября 2026:
+- Exact implementation head 0c1d749610fc42a391e85a85430e27cdc2bf0804, GitHub Actions run #46022091769: Linux, Windows и macOS — success; все семь test modules и formatting прошли, Linux TRX floor 2,773 пройден.
+- Документальные исправления после этого run ещё требуют exact-head CI на обновлённом implementation head.
+- PR #230 остаётся открытым, Ready for review и не слитым.
+
+Внешнее условие перед первым production publish остаётся обязательным и не должно считаться выполненным автоматически:
+- repository owner должен проверить tag protection для release tags (запрет update/delete при разрешённом первичном создании доверенным publisher);
+- проверить branch/ruleset protection и правила required checks;
+- настроить Environment production: required reviewer, запрет self-review, допустимые deployment refs;
+- задать PRODUCTION_SSH_HOST, PRODUCTION_SSH_USER, PRODUCTION_SSH_PRIVATE_KEY, PRODUCTION_SSH_KNOWN_HOSTS именно в Environment production.
+
+Repository rulesets endpoint вернул пустой список; branch protection read отвечает 403 для подключённой GitHub-интеграции, а legacy tag protection и Environment settings недоступны. Это означает «не подтверждено», а не «отсутствует». Production tag/deployment не запускать, пока владелец репозитория не подтвердит эти настройки.
