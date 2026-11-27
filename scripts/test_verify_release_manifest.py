@@ -175,6 +175,26 @@ class ReleasePolicyTypeSafetyTests(unittest.TestCase):
                 "1.2.3",
             )
 
+    def test_semver_numeric_prerelease_identifiers_cannot_have_leading_zeroes(self) -> None:
+        policy = {"scheme": "SemVer", "componentCount": 3, "allowPrerelease": True}
+        valid = (
+            "1.2.3-0",
+            "1.2.3-rc.1",
+            "1.2.3-01alpha",
+            "1.2.3-rc.1+build.0001",
+        )
+        invalid = (
+            "1.2.3-01",
+            "1.2.3-rc.01",
+            "1.2.3-01+build.1",
+        )
+        for version in valid:
+            with self.subTest(version=version):
+                validate_version(policy, version)
+        for version in invalid:
+            with self.subTest(version=version), self.assertRaises(SystemExit):
+                validate_version(policy, version)
+
     def test_allow_prerelease_must_be_a_json_boolean_for_every_scheme(self) -> None:
         for invalid in (1, 0, "false", None):
             with self.subTest(value=invalid), self.assertRaises(SystemExit):
