@@ -100,6 +100,17 @@ internal static class ReleasePublishExecutor
                 return FailBeforeTag(request,
                     "GitHub CLI is not authenticated for workflow observation. Authenticate gh before publishing; no release tag was pushed by this command.");
 
+            var workflowList = await AgentTaskGitOperations.RunGitHubCliAsync(
+                ghPath, repositoryRoot, ct,
+                "workflow", "list", "--all", "--repo", origin.Repository!,
+                "--json", "id,name,path,state");
+            var workflowDefinitionError = ValidateReleaseWorkflowDefinitionPreflight(
+                workflowList.ExitCode, workflowList.TimedOut, workflowList.StdOut, workflowList.StdErr);
+            if (workflowDefinitionError is not null)
+                return FailBeforeTag(request,
+                    "The release workflow is missing, disabled or unreadable. "
+                    + workflowDefinitionError + " No release tag was pushed by this command.");
+
             var workflowAccess = await AgentTaskGitOperations.RunGitHubCliAsync(
                 ghPath, repositoryRoot, ct,
                 "run", "list", "--repo", origin.Repository!,
@@ -551,6 +562,40 @@ internal static class ReleasePublishExecutor
             result[parts[1]] = parts[0].ToLowerInvariant();
         }
         return new RemoteTagMap(result, null);
+    }
+
+    internal static string? ValidateReleaseWorkflowDefinitionPreflight(
+        int exitCode, bool timedOut, string json, string stderr)
+    {
+        if (timedOut)
+            return "GitHub CLI timed out while inspecting the repository workflows.";
+        if (exitCode != 0)
+            return "GitHub CLI could not list repository workflows. Check Actions read permission. " + Clip(stderr);
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+                return "GitHub CLI returned an invalid workflow list.";
+
+            var releaseWorkflows = document.RootElement.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.Object
+                    && string.Equals(Text(item, "path"), ".github/workflows/release.yml", StringComparison.Ordinal))
+                .ToArray();
+            if (releaseWorkflows.Length != 1)
+                return "Expected exactly one .github/workflows/release.yml workflow.";
+
+            var release = releaseWorkflows[0];
+            if (Integer(release, "id") <= 0
+                || !string.Equals(Text(release, "state"), "active", StringComparison.OrdinalIgnoreCase))
+                return "The .github/workflows/release.yml workflow is not active.";
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            return "GitHub CLI returned malformed workflow-list JSON.";
+        }
     }
 
     internal static string? ValidateWorkflowPreflight(
