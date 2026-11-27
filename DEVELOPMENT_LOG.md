@@ -2432,3 +2432,35 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Re-run exact-head CI on the post-journal branch head; confirm the permission contract test and all three platform jobs pass.
 2. Continue static release workflow and UI/RLS acceptance. External merge-queue and production protection settings remain administrator acceptance blockers.
 3. PR #230 remains open and unmerged; no production tag or deployment. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Localize Release Prepare/Publish failure summaries
+
+**Implementation commits**
+- beeb442df8138e03d320e8eb33f9baa1bbc89488 — English base Release failure resources.
+- 4ed9f47e9ff32bd25725dcad7e6ea901aa0e67dc — Russian translations.
+- a5aaf49bbf7733df8c4dd0bba27e659c4d8e02f5 — German translations.
+- 39093054488f15c4333b0d6a2826ee54cc32e60b — Japanese translations.
+- 0efcc485281f15d642447e107c21dc4f7662611e — Chinese translations.
+- 14f6a09f57f9a609f5e5cfd13abec65d1742e639 — render localized Prepare/Verify and Publish failure summaries in Roadmap.
+- 803e655ad03e4e62ff111e28bbf8aecaf8cee6af — include the new resources in the existing all-cultures localization availability test.
+
+### UI behavior
+
+- Roadmap previously rendered raw Release PreparationError and PublicationError strings as a small warning caption. Those diagnostics come from the workstation/API path and are generally English, even when the UI locale is Russian/German/Japanese/Chinese.
+- The UI now shows a translated, explanatory failure summary and a separate diagnostic-details label, while preserving the complete technical text with line breaks and long-line wrapping.
+- Publication summary explicitly warns that if the immutable tag was pushed, a retry will reuse the same Candidate/tag.
+- Added all three keys to the existing UI notification resource test for en/ru/de/ja/zh. No new test case was added, so the Linux TRX count floor does not change.
+- LocalizationParityTests already checks that newly added neutral keys exist in every supported satellite resource; no key was added to the untranslated baseline.
+
+### Validation
+
+- CI #45980768813 was started on SHA 34111f1f2f05ba96e5abd5fe109bc012a3c6b445 and predates these localization changes.
+- These Razor/resource/test updates require a fresh exact-head Linux/Windows/macOS CI run. No .NET/application behavior or database schema changed.
+- PR #230 stays open and unmerged. No production tag/deployment. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Finish the localized diagnostic UI and all-cultures test on exact-head CI.
+2. Continue release UI/RLS acceptance and validate retry states without creating a production tag.
+3. External Merge Queue, Merge method=merge, classic v* tag protection and production Environment reviewers remain acceptance blockers.
