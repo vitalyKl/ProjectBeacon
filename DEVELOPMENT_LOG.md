@@ -3,7 +3,7 @@
 **Implementation branch:** `feat/release-management`  
 **Plan branch:** `docs/release-management-plan`  
 **Initial base:** `main` at `22a1a9e559a97124f939b6da2de2e4f9612f4d94`  
-**Current PR base (25 Nov 2026):** `main` at `90a1778359ae0af5efd622af2876159e31c3480b` (`0.7.5.9`)  
+**Current PR base (27 Nov 2026):** `main` at `ed4dace38357f5062478ba3322148ab352d916ce` (`0.7.5.10`)  
 **Started:** 2026-11-24  
 **Scope:** universal ProjectBeacon product feature for customer projects; no SaaS Control Plane, billing, or platform-operator work.
 
@@ -1854,3 +1854,23 @@ Implemented a fail-closed terminal outcome:
 - Windows and macOS: restore, build, EF pending-model-change check, all seven test modules and formatting passed.
 - This run validates the integration of main and the first Roadmap failure-state fix. It predates the subsequent empty-state regression fix and its new tests in commit `c9981c12fb37a05e5bc950c17f53f2ca67919974`; the new head requires another CI run.
 - The repository's CI intentionally excludes PR `synchronize`. No PR merge is permitted on the basis of the earlier run alone.
+
+
+## 2026-11-27 — Exact-head CI passed after Roadmap regression fix
+
+**CI run:** [#45951725841](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45951725841)  
+**Validated implementation head:** `7647e7539c65608c84545424638af2403952e090`  
+**Result:** success on Linux, Windows and macOS.
+
+- Linux completed release-manifest policy tests, restore/build, EF pending-model-change validation, all seven test modules, TRX guards and formatting.
+- Windows and macOS completed restore/build, EF pending-model-change validation, all seven test modules and formatting.
+- This run includes the Roadmap empty-state regression coverage from `c9981c12fb37a05e5bc950c17f53f2ca67919974`. It supersedes the preceding journal entry's statement that the new exact-head run was still required.
+- The PR head at the time of validation was exactly `7647e7539c65608c84545424638af2403952e090`; the subsequent journal-only update does not change application code. Trigger CI again after this journal update because the workflow does not run on PR `synchronize`.
+- Remaining acceptance blockers are unchanged: live async GitHub merge-queue testing in a disposable repository, administrator verification of classic `v*` tag protection and `production` Environment reviewers, and real-project acceptance of the Release workflow. No production tag/deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Re-run the cross-platform CI on the post-journal branch head.
+2. Complete live merge-queue acceptance in a separate disposable repository with required checks configured.
+3. Have a repository administrator verify classic tag protection and `production` Environment required reviewers.
+4. Continue user-project acceptance for roles/RLS, localized settings and failures, Candidate/Publish/recovery states.
