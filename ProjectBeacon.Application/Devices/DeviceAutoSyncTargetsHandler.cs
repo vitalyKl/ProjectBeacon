@@ -128,6 +128,7 @@ public sealed class GetDeviceAutoSyncTargetsHandler
             Guid? landingAttemptId = null;
             string? mergeRequestId = null;
             string? mergeRequestStatus = null;
+            DateTime? mergeRequestAcceptedAtUtc = null;
             string? candidateTreeSha = null;
             string? postMergeCheckCommand = null;
             int? persistedPostMergeCheckExitCode = null;
@@ -168,6 +169,9 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                     // for a removed merge-queue entry.
                     landingAttemptId = landingAttempt.Id;
                     mergeRequestStatus = landingAttempt.GitHubMergeRequestStatus;
+                    mergeRequestAcceptedAtUtc = landingAttempt.IsGitHubMergePending
+                        ? landingAttempt.UpdatedAt
+                        : null;
                     candidateTreeSha = landingAttempt.CandidateTreeSha;
                     var configuredCheck = reviewCheckCommand?.Trim();
                     if (!string.IsNullOrWhiteSpace(configuredCheck))
@@ -199,7 +203,8 @@ public sealed class GetDeviceAutoSyncTargetsHandler
                 persistedPostMergeCheckExitCode,
                 persistedPostMergeCheckOutputHash,
                 landingAttempt?.IsGitHubMergeQueued == true,
-                mergeRequestStatus));
+                mergeRequestStatus,
+                mergeRequestAcceptedAtUtc));
         }
 
         return targets;
@@ -226,4 +231,5 @@ public sealed record DeviceRemoteLandingTargetDto(
     int? PersistedPostMergeCheckExitCode = null,
     string? PersistedPostMergeCheckOutputHash = null,
     bool GitHubMergeQueued = false,
-    string? MergeRequestStatus = null);
+    string? MergeRequestStatus = null,
+    DateTime? MergeRequestAcceptedAtUtc = null);
