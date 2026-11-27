@@ -133,7 +133,11 @@ public sealed class AuditEventTests
             tagName = "customer/releases/0.7.5.10",
             candidateSha = new string('a', 40),
             workstationId = Guid.NewGuid().ToString("D"),
-            publicationRevision = 2
+            publicationRevision = 2,
+            tagPushed = true,
+            workflowRunId = 12345L,
+            targetVersion = "0.7.5.10",
+            deployedSha = new string('b', 40)
         });
 
         var auditEvent = Create(detailsJson);
@@ -149,8 +153,10 @@ public sealed class AuditEventTests
             """{"candidateId":"not-a-guid"}""",
             """{"workstationId":"not-a-guid"}""",
             """{"candidateSha":"not-a-git-sha"}""",
+            """{"deployedSha":"not-a-git-sha"}""",
             """{"tagName":"release/../0.7.5.10"}""",
-            """{"publicationRevision":1.5}"""
+            """{"publicationRevision":1.5}""",
+            """{"workflowRunId":0}"""
         };
 
         foreach (var detailsJson in invalidDetails)
