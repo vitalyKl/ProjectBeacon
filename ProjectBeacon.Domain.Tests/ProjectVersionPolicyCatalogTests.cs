@@ -166,7 +166,7 @@ public sealed class ProjectVersionPolicyCatalogTests
 
         Assert.True(ProjectVersionPolicyCatalog.Validate(policy with { Sources = [root, escaped] }, out var policyError), policyError);
         Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
-            policy, root, "\\"0.7.5.8\\"", out var rootVersion, out var rootError), rootError);
+            policy, root, "\"0.7.5.8\"", out var rootVersion, out var rootError), rootError);
         Assert.Equal("0.7.5.8", rootVersion);
         Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
             policy, escaped, """{"a/b":{"m~n":"0.7.5.8"}}""", out var escapedVersion, out var escapedError), escapedError);
