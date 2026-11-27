@@ -2936,3 +2936,29 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 2. Keep the first publication blocked until the repository owner verifies release-tag protections and production Environment reviewers/secrets in GitHub Settings.
 3. After that external configuration is confirmed, finish the acceptance review of candidate CI vs tag-triggered release workflow; do not create a release tag in this implementation PR.
 4. Keep PR #230 open until code checks and release safety prerequisites are complete.
+
+
+## 2026-11-27 — Preflight GitHub workflow observability before release tag creation
+
+### Finding
+
+- ReleasePublishExecutor previously called EnsureImmutableTagAsync before checking whether GitHub CLI was installed/authenticated.
+- A workstation with valid git push credentials but missing GitHub CLI authentication or Actions read access could push the immutable release tag, triggering the production workflow, and only then fail to observe its result.
+- This is a fail-unsafe ordering: workflow observability is a required part of publication and must be established before the first possible tag push.
+
+### Correction
+
+- GitHub CLI presence and gh auth status --hostname github.com are now checked before tag creation.
+- The executor also runs gh run list --repo <origin> --workflow release.yml and validates the JSON response before it calls EnsureImmutableTagAsync. This proves that the authenticated CLI can read the exact release workflow's run list.
+- A failed or timed-out preflight aborts before this command can push a new tag. If a tag already exists from a previous attempt, completion handling remains conservative and treats missing failure evidence as “tag may already exist”.
+- Added ReleasePublishExecutorTests coverage for empty-but-valid workflow lists, access failures, timeouts and malformed responses.
+- Added script-level CI/deploy secret-scope tests in scripts/test_release_workflow_permissions.py.
+- Raised both mirrored Linux TRX floors from 2,772 to 2,773; the CI and release workflow guard blocks remain identical.
+
+### Validation status
+
+- Previous run #46020122611 is for ce88a48, before this preflight change. Its Python workflow-security assertions passed in the Linux lane, but it does not validate the current code.
+- New branch head: de3e1306277b332756c57fa0c1d50677b7395c49.
+- Run the full Linux/Windows/macOS matrix on this exact head before accepting the preflight change.
+- PR #230 remains open and unmerged. No release tag or deployment was created.
+- The external production Environment and tag protection settings remain unverified through the connected GitHub integration; see the production safeguards update in the release-management plan. They remain a blocker before the first production publish.
