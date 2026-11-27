@@ -81,6 +81,32 @@ public sealed class ReleasePublishExecutorTests
     }
 
     [Fact]
+    public void PreTagFailure_ProvidesExplicitNegativeTagEvidence()
+    {
+        var request = new ReleasePublishExecutor.PublishRequest(
+            Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+            ReleaseId,
+            CandidateId,
+            Version,
+            "main",
+            TagName,
+            CandidateSha,
+            new string('b', 40),
+            "https://example.test/v1/version",
+            1,
+            1);
+
+        var failed = ReleasePublishExecutor.FailBeforeTag(request, "GitHub Actions access denied.");
+        Assert.False(failed.Ok);
+        Assert.Equal("GitHub Actions access denied.", failed.Error);
+        using var document = System.Text.Json.JsonDocument.Parse(failed.Result!);
+        Assert.False(document.RootElement.GetProperty("tagPushed").GetBoolean());
+        Assert.Equal("Publish", document.RootElement.GetProperty("action").GetString());
+        Assert.Equal(ReleaseId.ToString("D"),
+            document.RootElement.GetProperty("releaseId").GetString());
+    }
+
+    [Fact]
     public void WorkflowPreflight_RequiresSuccessfulGitHubActionsReadBeforeTagPush()
     {
         Assert.Null(ReleasePublishExecutor.ValidateWorkflowPreflight(0, false, "[]", ""));
