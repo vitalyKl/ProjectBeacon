@@ -3130,3 +3130,24 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - The failed macOS job was re-run on the same SHA; that retry was still in progress when this entry was written. It is not counted as green.
 - Current implementation head after the validator and regression-test commits: 51fc6bbff88ab70fd0a2f45203254ec201af59d0. A fresh exact-head Linux/Windows/macOS run is required; no green result is claimed for this head.
 - No production tag, deployment, or merge was performed. Live Merge Queue acceptance and administrator verification of GitHub branch/tag protection and the production Environment remain external blockers. SaaS Control Plane and billing remain out of scope.
+
+## 2026-11-28 — Cross-platform CI now reports individual test failures
+
+### Finding
+
+- The Windows/macOS matrix ran all seven test modules but did not write TRX reports or print failed test names/messages.
+- The failed macOS Test — Web step in run #46051958285 therefore exposed only an aggregate count (257 total, 1 failed, 253 passed, 3 skipped). The actual failing fact and assertion were not available from the job log.
+
+### Correction
+
+- Added per-module TRX output for API, Application, CLI, Domain, Infrastructure, Web and Worker in the Windows/macOS matrix.
+- Added a cross-platform PowerShell report step that reads the TRX files and groups each failed test with its name, message and stack trace. It runs after test steps even when one or more suites failed, unless the workflow is cancelled.
+- The CLI test keeps its existing GPU-trait exclusion and now writes its own TRX report.
+- Linux remains the authoritative PostgreSQL/TRX-count lane. Its test commands, symlink security gates, 2,775 minimum result floor and byte-identical release.yml guard block were not changed.
+- CI commits: 2f6de15dd4ddc2dad5e069c5df4769ea0063f425, 29739645d478c5e55c1acd70359c1c2487c7a083.
+
+### Validation status
+
+- Current PR head after CI diagnostics: 29739645d478c5e55c1acd70359c1c2487c7a083; a new exact-head Linux/Windows/macOS run is required. No green result is claimed.
+- The same-SHA retry of the previous macOS failure, run #46051958285, was still running API tests at the last status check. It tests the earlier documentation-only head 43b18f32adc5b30280597da7c1cd197f541501b3, not this current branch head.
+- PR #230 remains open and unmerged. No production tag or deployment was created. External merge-queue and GitHub production-protection acceptance remain unresolved. SaaS Control Plane and billing remain out of scope.
