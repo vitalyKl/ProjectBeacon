@@ -1,9 +1,9 @@
 namespace ProjectBeacon.Cli.Tests;
 
+using System.Text.Json.Nodes;
 using ProjectBeacon.Cli.Client;
 using ProjectBeacon.Cli.Client.AgentHarness;
 using ProjectBeacon.Domain.Entities.Projects;
-using System.Text.Json.Nodes;
 
 public sealed class ReleasePrepareExecutorTests
 {
