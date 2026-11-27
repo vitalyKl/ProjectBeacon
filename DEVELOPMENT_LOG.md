@@ -3106,3 +3106,27 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Code-level S0-S6 paths and regression coverage are present; exact-head cross-platform CI is green.
 - The remaining external acceptance is a real async merge / Merge Queue and first-publication observation in a writable organization-owned disposable repository, plus owner verification of tag/branch protection and Environment production reviewers, deployment refs and SSH secrets.
 - These external settings are unverified through the connected integration. No production tag or deployment was created; PR #230 remains open and unmerged.
+
+## 2026-11-28 — Reject symlinked release manifest directories
+
+### Security review finding
+
+- The tag workflow validator rejected a symlink at .beacon/release.json and symlinks in configured version-source paths, but did not reject .beacon itself being a symlink.
+- Checking only MANIFEST.is_symlink() does not detect a regular file reached through a symlinked parent directory. That left the workflow gate's manifest path validation weaker than the ReleasePrepare worktree guard.
+
+### Correction
+
+- Added safe_manifest_path(ROOT): the checkout must contain a real .beacon directory directly under the checkout root and a real release.json file directly inside it.
+- Both the directory and file are checked before resolving; resolved parents are checked again to ensure the manifest remains inside the regular .beacon directory.
+- The release gate now reads and sizes only the validated resolved manifest path.
+- Added regression coverage for a valid regular manifest, a .beacon directory symlink whose target contains a valid-looking manifest, and a symlinked release.json file.
+- Implementation commit: f31531d73a9ab132a14f05be1eec4e504667379f.
+- Test commit: 51fc6bbff88ab70fd0a2f45203254ec201af59d0.
+
+### Validation status
+
+- Last fully green exact code head: 1532a507ba698bd82c81070828c03a99fc6e427a, CI run https://github.com/vitalyKl/ProjectBeacon/actions/runs/46030846976.
+- The subsequent head 43b18f32adc5b30280597da7c1cd197f541501b3 differed from that green head only in DEVELOPMENT_LOG.md and the copied release-management plan. Run https://github.com/vitalyKl/ProjectBeacon/actions/runs/46051958285 passed Linux and Windows but failed one macOS Test — Web step. Its log did not expose the failed test name because the matrix lane does not emit a TRX failure report.
+- The failed macOS job was re-run on the same SHA; that retry was still in progress when this entry was written. It is not counted as green.
+- Current implementation head after the validator and regression-test commits: 51fc6bbff88ab70fd0a2f45203254ec201af59d0. A fresh exact-head Linux/Windows/macOS run is required; no green result is claimed for this head.
+- No production tag, deployment, or merge was performed. Live Merge Queue acceptance and administrator verification of GitHub branch/tag protection and the production Environment remain external blockers. SaaS Control Plane and billing remain out of scope.
