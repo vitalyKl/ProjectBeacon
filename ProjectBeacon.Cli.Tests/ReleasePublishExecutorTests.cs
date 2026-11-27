@@ -80,24 +80,25 @@ public sealed class ReleasePublishExecutorTests
         Assert.False(Validate(tagObject: TagObject() + "\nProjectBeacon-Release: " + ReleaseId.ToString("D")));
     }
     [Fact]
-    public void AmbiguousTagPush_OnlyReportsPreTagWhenRemoteInspectionProvesCandidateTagAbsent()
+    public void AmbiguousTagPush_OnlyReportsPreTagWhenCompleteRemoteEvidenceProvesCandidateTagAbsent()
     {
         Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
-            remoteInspectionSucceeded: false, remoteListingWellFormed: true,
-            observedTargetSha: null, candidateSha: CandidateSha));
+            false, true, false, false, null, CandidateSha));
         Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
-            remoteInspectionSucceeded: true, remoteListingWellFormed: false,
-            observedTargetSha: null, candidateSha: CandidateSha));
+            true, false, false, false, null, CandidateSha));
         Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
-            remoteInspectionSucceeded: true, remoteListingWellFormed: true,
-            observedTargetSha: CandidateSha, candidateSha: CandidateSha));
+            true, true, true, true, CandidateSha, CandidateSha));
+
+        // An incomplete annotated-tag listing is not proof that the Candidate tag is absent.
+        Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
+            true, true, true, false, null, CandidateSha));
+        Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
+            true, true, false, true, CandidateSha, CandidateSha));
 
         Assert.False(ReleasePublishExecutor.MayHavePublishedTag(
-            remoteInspectionSucceeded: true, remoteListingWellFormed: true,
-            observedTargetSha: null, candidateSha: CandidateSha));
+            true, true, false, false, null, CandidateSha));
         Assert.False(ReleasePublishExecutor.MayHavePublishedTag(
-            remoteInspectionSucceeded: true, remoteListingWellFormed: true,
-            observedTargetSha: new string('b', 40), candidateSha: CandidateSha));
+            true, true, true, true, new string('b', 40), CandidateSha));
     }
 
 }
