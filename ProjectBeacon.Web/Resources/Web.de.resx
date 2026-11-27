@@ -3485,4 +3485,13 @@ orthstar</value>
 <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Die Liste der Aufgaben, die auf Ihre Eingabe warten, ist vorübergehend nicht verfügbar. Der Chat bleibt nutzbar; die Seite versucht es automatisch erneut.</value>
   </data>
+  <data name="ReleasePreparationFailedSummary" xml:space="preserve">
+    <value>Die Release-Vorbereitung wurde nicht abgeschlossen. Prüfen Sie die Diagnose unten, beheben Sie die Ursache und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ReleasePublicationFailedSummary" xml:space="preserve">
+    <value>Die Veröffentlichung in Produktion wurde nicht abgeschlossen. Prüfen Sie die Diagnose unten. Wenn der unveränderliche Tag bereits gepusht wurde, verwendet ein erneuter Versuch denselben Candidate und Tag.</value>
+  </data>
+  <data name="ReleaseDiagnosticDetails" xml:space="preserve">
+    <value>Diagnosedetails</value>
+  </data>
 </root>
