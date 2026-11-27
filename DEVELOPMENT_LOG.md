@@ -3158,3 +3158,26 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - The report step intentionally uses PowerShell 7; the current macOS 26 hosted image includes PowerShell 7.6.4, and Windows runners provide pwsh as the default PowerShell Core shell.
 - Follow-up workflow commit: 88c15b5d561b7b539a6d5b6cf1878480121bec62.
 - Current PR head after this journal update will be rechecked from GitHub. Exact-head CI is still outstanding; no green status is claimed.
+
+## 2026-11-28 — Release manifest must match its immutable Candidate snapshot
+
+### Finding
+
+- ReleasePrepare writes both releaseRevision and snapshotJson into .beacon/release.json, but the tag-time validator previously checked versionPolicyRevision only and did not verify that the snapshot described the same project, release, version, target branch, policy or release revision.
+- Python's isinstance(value, int) also accepts bool values, and numeric comparisons accept floats such as 1.0; those are not valid integer JSON tokens for schema/revision fields.
+
+### Correction
+
+- The tag-time validator now requires integer schemaVersion=1 and positive integer versionPolicyRevision/releaseRevision; booleans and floating-point values are rejected.
+- Numeric componentCount is a real JSON integer; SemVer requires componentCount=3; allowPrerelease must be a JSON Boolean.
+- snapshotJson must be a bounded JSON object with schemaVersion=1. The validator cross-checks projectId, versionPolicyRevision, releaseId, targetVersion, targetBranch, releaseRevision, and the five version-policy fields against the top-level release manifest.
+- Added five Python regression tests for a valid bound snapshot, release revision drift, boolean schemaVersion, wrong project identity, and strict positive integer parsing.
+- Source commit: 03e34991a95c0b2764784edf6b1cdf56335863ad.
+- Test commit: 30be3e4ab7a558c397ddf64563bf422b81190921.
+- Test import correction: a7217fbdc3706a8873f8a98003fdb335efc58ba2.
+
+### Validation status
+
+- The source and test files were checked through the GitHub file/blob API. The new helper logic was exercised in an isolated Python harness against valid and mismatched snapshot/revision cases. The full repository test script was not executed locally because the container has no DNS/network access to fetch repository files.
+- Current source/test head before this journal update: a7217fbdc3706a8873f8a98003fdb335efc58ba2. Exact-head GitHub Actions CI remains required; no green status is claimed.
+- The previous CI retry remains run #46051958285 on an older SHA and does not validate these changes. PR #230 remains open and unmerged; no production tag or deployment has been created.
