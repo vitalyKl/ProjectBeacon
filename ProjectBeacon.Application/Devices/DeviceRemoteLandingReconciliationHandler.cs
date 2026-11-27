@@ -834,7 +834,6 @@ public sealed class ReconcileDeviceRemoteLandingHandler
         });
     }
 
-        });
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
 
