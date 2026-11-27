@@ -47,7 +47,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<Web>>()["LandingReasonGitHubAsyncMergeFailed"].Value, cut.Markup);
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>()["LandingReasonGitHubAsyncMergeFailed"].Value, cut.Markup);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<Web>>()["LandingReasonGitHubMergePending"].Value, cut.Markup);
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>()["LandingReasonGitHubMergePending"].Value, cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
     }
 
@@ -133,7 +133,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<Web>>()["LandingReasonGitHubMergeQueued"].Value, cut.Markup);
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>()["LandingReasonGitHubMergeQueued"].Value, cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
     }
 }
