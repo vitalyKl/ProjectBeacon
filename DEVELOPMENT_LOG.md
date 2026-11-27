@@ -2123,3 +2123,34 @@ Implemented a fail-closed terminal outcome:
 - Code commit: 2de0e5f3dba63c434430900bf6598f82d6c2d17f.
 - Test commit: aa85877a7baffdab021fc8833b40ec00e453d27e.
 - The current CI run was created for an earlier head. A new exact-head run is required after this journal commit.
+
+
+## 2026-11-27 — Fail-closed tag metadata and publication completion evidence
+
+**Implementation commits**
+- a633b755aa205be53a7fb583ddd169817fb1b965 — preserve CR bytes during tag identity parsing and clean temporary verification refs even when fetch is cancelled.
+- 123745108c8f9668b1ef35f906be87dee19ca0f0 — reject a carriage return appended to an exact Release tag identity line.
+- 62b9e67c52f4044c520c51b68d3c967d83456987 and 2555277d727c4ba884eb24446651aa79b5eb6b6a — treat incomplete/mismatched Publish failure evidence as “tag may have been pushed”; only an explicit typed false bound to the exact project/Release/Candidate/version/tag/SHA may produce FailedBeforeTag.
+- 2aaf5d597c9d2b0f13f4cfe6d0bd94495e800380 — regression test for missing, malformed and mismatched tag-pushed evidence.
+- 21149f8b7534b96365a97b27c345284c73faaa24 and e99a96d31dfd8d1f3306634b511c33e8154e283c — synchronize CI and release.yml Linux TRX floors at 2,767.
+
+### Details
+
+- Git tag objects use LF delimiters. The identity parser previously split on both CR and LF, which could discard a carriage return before exact line comparison. It now splits only on LF; CR remains part of the line and causes a mismatch. Added a trailing-CR assertion alongside the existing exact-identity test.
+- Remote tag verification fetches into a unique local-only ref. Cleanup now runs from a finally block that covers the fetch itself and uses CancellationToken.None, so request cancellation cannot interrupt deletion of a ref already written by Git.
+- Server completion previously treated a valid JSON object with a missing `tagPushed` field as false. That could incorrectly mark a publication as FailedBeforeTag even when a tag may already exist. The server now accepts false only with a typed boolean and a matching Publish result identity (project, release, candidate, version, tag and candidate SHA). Missing, malformed or mismatched evidence conservatively records FailedAfterTag and requires retry with the original immutable payload.
+- Added one Application test fact for the publication-completion evidence validator; the CLI tag test adds an assertion inside an existing fact. Linux result minimum is now 2,767 in both workflows; their full TRX guard blocks were checked identical.
+
+### Validation
+
+- The immediately preceding exact-head CI [#45960317995](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45960317995) passed on SHA `85b83094c168e59d9e2359faa72ba1f34707eeab`: Linux, Windows and macOS all green; Linux TRX 2,766 results, 7 modules, one expected platform-conditional skip, symlink gates Passed.
+- The code/test/threshold commits above are newer than that run. A new exact-head CI run is required on the post-journal head; do not treat #45960317995 as validation of these additional changes.
+- Live Merge Queue still requires a writable org-owned disposable repository. Queue Merge method=merge, classic `v*` tag protection and `production` Environment required reviewers still need administrator verification.
+- No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Run exact-head Linux/Windows/macOS CI on the current post-journal head and resolve any compile, test, TRX or formatting failures.
+2. Complete live merge-queue acceptance in a writable org-owned disposable repository with Merge method=merge.
+3. Have an administrator verify tag protection and production Environment reviewers.
+4. Complete real-project Candidate/Publish/deployment and failure-recovery acceptance before considering PR #230 for merge.
