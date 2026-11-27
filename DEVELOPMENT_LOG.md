@@ -2084,3 +2084,11 @@ Implemented a fail-closed terminal outcome:
 1. Run exact-head CI on the latest branch head, including the three annotated-tag identity facts and the 2,765 Linux TRX gate.
 2. Complete live queue acceptance on a disposable org-owned repository with method=merge and required CI checks.
 3. Finish publication/deployment end-to-end acceptance and recovery paths once administrator settings are verified.
+
+
+### Follow-up — fail-closed remote listing diagnostics
+
+- A local bare-remote integration exercise confirmed that fetching an annotated tag to a unique ref under refs/beacon/release-tag-verification works, returns the annotated tag object and peeled commit, and can be cleaned up without changing refs/tags.
+- Added final fail-closed checks for malformed git ls-remote output after an ambiguous push and during final tag verification; partial parsed output is no longer sufficient evidence.
+- Code commit: eb1033d9bc19f3dd091c74a43474b029d3a4e811.
+- This change is newer than CI #45959467058 and requires a new exact-head full CI run. The prior run covers head e5ec37cda058b584c638a42cfe241acd6f8806fe only.
