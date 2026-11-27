@@ -1666,3 +1666,11 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Добавлено пять Python regression tests на valid snapshot, revision drift, boolean schema version, неверный project ID и строгий integer parsing.
 - Source: 03e34991a95c0b2764784edf6b1cdf56335863ad; tests: 30be3e4ab7a558c397ddf64563bf422b81190921; import fix: a7217fbdc3706a8873f8a98003fdb335efc58ba2.
 - Full exact-head CI ещё не выполнен; production tags/deployments и PR merge запрещены до закрытия внешних acceptance.
+
+### Строгая проверка version policy JSON types — 28 ноября 2026
+
+- Общий version validator требует JSON Boolean для allowPrerelease.
+- componentCount обязан быть JSON integer; NumericComponents ограничен 1–8, SemVer — ровно 3, в соответствии с ProjectVersionPolicyCatalog.
+- Добавлены три регрессионных теста на bool/float/string/отсутствующий componentCount, SemVer component-count drift и не-Boolean allowPrerelease.
+- Implementation: 6816b7d458d93ff0cf763c28d3962ec78f160c3e; tests: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077.
+- Exact-head CI остаётся обязательным; merge/production publish не выполнялись.
