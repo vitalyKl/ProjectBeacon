@@ -1897,3 +1897,32 @@ Implemented a fail-closed terminal outcome:
 1. Run Linux/Windows/macOS CI on the exact branch head containing these six tests and fix any compile/test failures.
 2. Add further handler/completion integration coverage only where current tests expose a specific gap.
 3. Complete live GitHub merge-queue acceptance in a separate disposable repository; verify publication protection settings with a repository administrator.
+
+
+## 2026-11-27 — Harden ReleasePrepare manifest path and align release CI gates
+
+**Implementation commits**
+- `03647840f8fd5f404094dcf8606463bc9f2da293` — reject repository-controlled symlinks/junctions at the Release manifest destination.
+- `8ac58c314c8394217fa8b9f47e733f064daf9db4` — add ReleasePrepare manifest path regression tests.
+- `a16a69dbdd16d6e40f96dbdb1ed694942fd85763`, `e8940dc7c1cd491ecb7c4441b29b8e7179f08721`, `4cfcad84542168ef1ffb0664bf08c33f15a182ab` — align CI/release TRX result floors and diagnostics.
+
+### Changes
+
+- ReleasePrepare now resolves `.beacon/release.json` only after checking the release worktree, `.beacon` directory and manifest file for symlinks/junctions and verifying their resolved paths remain inside the release worktree.
+- The shared reparse-point check now detects dangling symbolic links through `FileSystemInfo.LinkTarget`; `File.Exists` and `Directory.Exists` alone do not detect those.
+- Added three CLI regression tests: valid in-worktree manifest path, rejection of a `.beacon` directory symlink, and rejection of a dangling `release.json` file symlink.
+- Together with the six preceding Prepare/Verify/Publish application-handler tests, the changed test suite adds nine facts.
+- The preceding green Linux CI run reported 2,753 test results. The cross-platform CI and tag-triggered release workflow now both require at least 2,762 Linux TRX results, and their complete TRX guard blocks are identical. The skip-diagnostic newline handling was also aligned.
+
+### Validation state
+
+- The earlier green CI #45951725841 validates the pre-regression-test implementation head only; it does not validate these new tests or the symlink hardening.
+- The intermediate CI run #45954279454 targets head `9e62bb971d2561ebd7fb1b065efde56a9e80ed91`, so it does not include the symlink hardening or the updated release gate. It must not be treated as validation of the current implementation.
+- A new full Linux/Windows/macOS CI run is required on the latest PR head after this journal update. No production tag/deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Run full CI on the exact latest PR head; verify all nine added tests are included and the Linux TRX result count reaches the new floor.
+2. Complete live GitHub merge-queue acceptance in a disposable repository.
+3. Have a repository administrator verify classic `v*` tag protection and `production` Environment required reviewers.
+4. Complete user-project acceptance for the release workflow and deployment recovery paths.
