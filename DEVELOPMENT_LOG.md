@@ -3216,3 +3216,16 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Current implementation/test commits above are committed to feat/release-management. Full C# test execution and exact-head GitHub Actions remain pending; this environment cannot clone/download the repository for a local dotnet run.
 - CI is intentionally not triggered on PR synchronize; workflow_dispatch is the documented route (Actions → CI → Run workflow). The available GitHub connection does not expose a workflow-dispatch action, so no current-head run is claimed.
 - PR #230 remains open and unmerged. No production tag/deployment. Live Merge Queue and owner verification of GitHub branch/tag protection plus production Environment approvals/deployment refs/secrets remain external blockers. SaaS Control Plane and billing remain out of scope.
+
+## 2026-11-28 — Keep JSON array-index writes aligned with RFC 6901 readers
+
+- Continued the read/write parity review after root-pointer support exposed another discrepancy in the C# JSON writer.
+- ProjectVersionPolicyCatalog and the Python release gate accept array indexes only as ASCII decimal digits, without a leading zero except for the index "0". The ReleasePrepare writer previously relied on int.TryParse and could temporarily accept values such as "00", "+0" or Unicode numerals, only to fail during the subsequent projection check.
+- Added TryParseJsonArrayIndex and used it for both intermediate and final JSON array segments. The writer now applies the same canonical-index rule as the reader before mutating the document.
+- Added regression coverage for "00", "+0" and an Arabic-Indic digit; each case must fail without changing the source file.
+- Implementation: 0192fc29fa4ace5f260cd8b3549c32acccf6bf55.
+- Tests: 5f1eb5dc89fc56a8cc4285ea17c2ee12b0e8bf10.
+
+### Validation status
+
+- Exact source/test blobs were re-read from GitHub after commit. Full dotnet test and exact-head CI still require the documented manual workflow dispatch; neither is claimed green for the current branch.
