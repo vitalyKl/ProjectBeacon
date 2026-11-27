@@ -207,7 +207,10 @@ public static class ProjectVersionPolicyCatalog
                 error = "Version source paths must be unique, relative, and stay inside the project workspace.";
                 return false;
             }
-            if (source.Selector is null || source.Selector.Length is < 1 or > 500 || source.Selector.Any(char.IsControl))
+            if (source.Selector is null
+                || source.Selector.Length > 500
+                || (source.Selector.Length == 0 && !string.Equals(source.Format, "Json", StringComparison.Ordinal))
+                || source.Selector.Any(char.IsControl))
             {
                 error = $"Version source '{source.Path}' has an invalid selector.";
                 return false;
@@ -559,6 +562,9 @@ public static class ProjectVersionPolicyCatalog
 
     private static bool IsValidJsonPointer(string selector)
     {
+        // RFC 6901 permits the empty string as the pointer to the document root.
+        if (selector.Length == 0)
+            return true;
         if (!selector.StartsWith("/", StringComparison.Ordinal))
             return false;
         return selector.Split('/').Skip(1).All(part => TryUnescapeJsonPointerPart(part, out _));
