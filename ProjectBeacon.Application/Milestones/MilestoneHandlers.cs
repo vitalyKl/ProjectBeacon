@@ -4,6 +4,8 @@ using Application.Common;
 using Application.Authorization;
 using Application.Proposals;
 using Application.Audit;
+using Application.Devices;
+using Application.Releases;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
 using Domain.Enums;
@@ -79,49 +81,54 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
 
     public async Task<Result<MilestoneDto>> HandleAsync(UpdateMilestoneCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
-                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
-        if (command.Actor is not { IsHuman: true, UserId: not null } actor
-            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
-            return Result.Forbidden<MilestoneDto>("Project membership is required to update a milestone.");
+        return await MilestoneMutationCoordinator.ExecuteAsync(
+            _dbFactory,
+            command.Request.MilestoneId,
+            command.Request.ProjectId,
+            async (db, milestone, token) =>
+            {
+                if (command.Actor is not { IsHuman: true, UserId: not null } actor
+                    || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, token))
+                    return Result.Forbidden<MilestoneDto>("Project membership is required to update a milestone.");
 
-        var contentChanged =
-            (command.Request.Name is not null && !string.Equals(milestone.Name, command.Request.Name, StringComparison.Ordinal))
-            || (command.Request.Description is not null && !string.Equals(milestone.Description, command.Request.Description, StringComparison.Ordinal))
-            || (command.Request.Order is not null && milestone.Order != command.Request.Order.Value);
-        if (contentChanged && command.Request.ExpectedRevision != milestone.Revision)
-            return Result.Failure<MilestoneDto>(
-                "Milestone changed since it was loaded. Refresh it and retry.",
-                ErrorKind.Conflict);
+                var contentChanged =
+                    (command.Request.Name is not null && !string.Equals(milestone.Name, command.Request.Name, StringComparison.Ordinal))
+                    || (command.Request.Description is not null && !string.Equals(milestone.Description, command.Request.Description, StringComparison.Ordinal))
+                    || (command.Request.Order is not null && milestone.Order != command.Request.Order.Value);
+                if (contentChanged && command.Request.ExpectedRevision != milestone.Revision)
+                    return Result.Failure<MilestoneDto>(
+                        "Milestone changed since it was loaded. Refresh it and retry.",
+                        ErrorKind.Conflict);
 
-        milestone.Update(command.Request.Name, command.Request.Description, command.Request.Order);
-        if (contentChanged)
-        {
-            var linkedTaskIds = await db.Tasks
-                .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
-                .Select(task => task.Id)
-                .ToArrayAsync(ct);
-            var attribution = ContentAttribution.FromActor(command.Actor);
-            var saved = await _contentWriter.SaveAsync(
-                db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
-                milestoneTaskIds: linkedTaskIds);
-            if (!saved.Success)
-                return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone content conflict.", ErrorKind.Conflict);
-        }
-        else
-        {
-            await db.SaveChangesAsync(ct);
-        }
+                milestone.Update(command.Request.Name, command.Request.Description, command.Request.Order);
+                if (contentChanged)
+                {
+                    var linkedTaskIds = await db.Tasks
+                        .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                        .Select(task => task.Id)
+                        .ToArrayAsync(token);
+                    var attribution = ContentAttribution.FromActor(command.Actor);
+                    var saved = await _contentWriter.SaveAsync(
+                        db, milestone, attribution.Type ?? "Human", attribution.Id, token,
+                        milestoneTaskIds: linkedTaskIds);
+                    if (!saved.Success)
+                        return Result.Failure<MilestoneDto>(
+                            saved.Error ?? "Milestone content conflict.", saved.Kind);
+                }
+                else
+                {
+                    await db.SaveChangesAsync(token);
+                }
 
-        return Result.Ok(MapToDto(milestone));
+                return Result.Ok(MapToDto(milestone));
+            },
+            ct);
     }
 
     private static MilestoneDto MapToDto(Milestone milestone) =>
-        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId, milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId);
+        new(milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
+            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt,
+            milestone.Revision, milestone.ReleaseId);
 }
 /// <summary>
 /// Deletes a milestone.
@@ -154,40 +161,46 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
 
     public async Task<Result> HandleAsync(DeleteMilestoneCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
-                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
-        if (milestone is null)
-            return Result.Failure("Milestone not found.", ErrorKind.NotFound);
-        if (command.Actor is not { IsHuman: true, UserId: not null } actor
-            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
-            return Result.Forbidden("Project membership is required to delete a milestone.");
+        var result = await MilestoneMutationCoordinator.ExecuteAsync<bool>(
+            _dbFactory,
+            command.Request.MilestoneId,
+            command.Request.ProjectId,
+            async (db, milestone, token) =>
+            {
+                if (command.Actor is not { IsHuman: true, UserId: not null } actor
+                    || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, token))
+                    return Result.Forbidden<bool>("Project membership is required to delete a milestone.");
 
-        var orgId = await db.Projects.IgnoreQueryFilters()
-            .Where(project => project.Id == milestone.ProjectId)
-            .Select(project => (Guid?)project.OrgId)
-            .FirstOrDefaultAsync(ct);
-        if (orgId is null)
-            return Result.Failure("Project not found.");
+                var orgId = await db.Projects.IgnoreQueryFilters()
+                    .Where(project => project.Id == milestone.ProjectId)
+                    .Select(project => (Guid?)project.OrgId)
+                    .FirstOrDefaultAsync(token);
+                if (orgId is null)
+                    return Result.Failure<bool>("Project not found.", ErrorKind.NotFound);
 
-        var linkedTaskIds = await db.Tasks
-            .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
-            .Select(task => task.Id)
-            .ToArrayAsync(ct);
+                var linkedTaskIds = await db.Tasks
+                    .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                    .Select(task => task.Id)
+                    .ToArrayAsync(token);
 
-        milestone.Delete();
-        db.Milestones.Remove(milestone);
-        _auditWriter?.Stage(db, AuditEventFactory.ForActor(
-            actor, "content.deleted", nameof(ContentTargetKind.Milestone),
-            milestone.Id.ToString("D"), orgId, milestone.ProjectId));
-        var attribution = ContentAttribution.FromActor(actor);
-        var saved = await _contentWriter.SaveAsync(
-            db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
-            deleted: true, milestoneTaskIds: linkedTaskIds);
-        return saved.Success
+                milestone.Delete();
+                db.Milestones.Remove(milestone);
+                _auditWriter?.Stage(db, AuditEventFactory.ForActor(
+                    actor, "content.deleted", nameof(ContentTargetKind.Milestone),
+                    milestone.Id.ToString("D"), orgId, milestone.ProjectId));
+                var attribution = ContentAttribution.FromActor(actor);
+                var saved = await _contentWriter.SaveAsync(
+                    db, milestone, attribution.Type ?? "Human", attribution.Id, token,
+                    deleted: true, milestoneTaskIds: linkedTaskIds);
+                return saved.Success
+                    ? Result.Ok(true)
+                    : Result.Failure<bool>(saved.Error ?? "Milestone delete conflict.", saved.Kind);
+            },
+            ct);
+
+        return result.Success
             ? Result.Ok()
-            : Result.Failure(saved.Error ?? "Milestone delete conflict.", ErrorKind.Conflict);
+            : Result.Failure(result.Error ?? "Milestone delete conflict.", result.Kind);
     }
 }
 /// <summary>
@@ -269,33 +282,37 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
 
     public async Task<Result<MilestoneDto>> HandleAsync(CloseMilestoneCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
-                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
-        if (command.Actor is not { IsHuman: true, UserId: not null } actor
-            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
-            return Result.Forbidden<MilestoneDto>("Project membership is required to close a milestone.");
-        var previousRevision = milestone.Revision;
-        milestone.Close();
-        if (milestone.Revision != previousRevision)
-        {
-            var linkedTaskIds = await db.Tasks
-                .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
-                .Select(task => task.Id)
-                .ToArrayAsync(ct);
-            var attribution = ContentAttribution.FromActor(actor);
-            var saved = await _contentWriter.SaveAsync(
-                db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
-                milestoneTaskIds: linkedTaskIds);
-            if (!saved.Success)
-                return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone close conflict.", ErrorKind.Conflict);
-        }
-        return Result.Ok(new MilestoneDto(
-            milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
-            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId));
+        return await MilestoneMutationCoordinator.ExecuteAsync(
+            _dbFactory,
+            command.Request.MilestoneId,
+            command.Request.ProjectId,
+            async (db, milestone, token) =>
+            {
+                if (command.Actor is not { IsHuman: true, UserId: not null } actor
+                    || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, token))
+                    return Result.Forbidden<MilestoneDto>("Project membership is required to close a milestone.");
+
+                var previousRevision = milestone.Revision;
+                milestone.Close();
+                if (milestone.Revision != previousRevision)
+                {
+                    var linkedTaskIds = await db.Tasks
+                        .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                        .Select(task => task.Id)
+                        .ToArrayAsync(token);
+                    var attribution = ContentAttribution.FromActor(command.Actor);
+                    var saved = await _contentWriter.SaveAsync(
+                        db, milestone, attribution.Type ?? "Human", attribution.Id, token,
+                        milestoneTaskIds: linkedTaskIds);
+                    if (!saved.Success)
+                        return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone close conflict.", saved.Kind);
+                }
+                return Result.Ok(new MilestoneDto(
+                    milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
+                    milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt,
+                    milestone.Revision, milestone.ReleaseId));
+            },
+            ct);
     }
 }
 /// <summary>
@@ -319,32 +336,91 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
 
     public async Task<Result<MilestoneDto>> HandleAsync(ReopenMilestoneCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
-                && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
-        if (milestone is null)
-            return Result.Failure<MilestoneDto>("Milestone not found.", ErrorKind.NotFound);
-        if (command.Actor is not { IsHuman: true, UserId: not null } actor
-            || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, ct))
-            return Result.Forbidden<MilestoneDto>("Project membership is required to reopen a milestone.");
-        var previousRevision = milestone.Revision;
-        milestone.Reopen();
-        if (milestone.Revision != previousRevision)
-        {
-            var linkedTaskIds = await db.Tasks
-                .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
-                .Select(task => task.Id)
-                .ToArrayAsync(ct);
-            var attribution = ContentAttribution.FromActor(actor);
-            var saved = await _contentWriter.SaveAsync(
-                db, milestone, attribution.Type ?? "Human", attribution.Id, ct,
-                milestoneTaskIds: linkedTaskIds);
-            if (!saved.Success)
-                return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone reopen conflict.", ErrorKind.Conflict);
-        }
-        return Result.Ok(new MilestoneDto(
-            milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
-            milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt, milestone.Revision, milestone.ReleaseId));
+        return await MilestoneMutationCoordinator.ExecuteAsync(
+            _dbFactory,
+            command.Request.MilestoneId,
+            command.Request.ProjectId,
+            async (db, milestone, token) =>
+            {
+                if (command.Actor is not { IsHuman: true, UserId: not null } actor
+                    || !await ProposalProjectAuthorization.CanWriteAsync(db, actor, milestone.ProjectId, token))
+                    return Result.Forbidden<MilestoneDto>("Project membership is required to reopen a milestone.");
+
+                var previousRevision = milestone.Revision;
+                milestone.Reopen();
+                if (milestone.Revision != previousRevision)
+                {
+                    var linkedTaskIds = await db.Tasks
+                        .Where(task => task.ProjectId == milestone.ProjectId && task.MilestoneId == milestone.Id)
+                        .Select(task => task.Id)
+                        .ToArrayAsync(token);
+                    var attribution = ContentAttribution.FromActor(command.Actor);
+                    var saved = await _contentWriter.SaveAsync(
+                        db, milestone, attribution.Type ?? "Human", attribution.Id, token,
+                        milestoneTaskIds: linkedTaskIds);
+                    if (!saved.Success)
+                        return Result.Failure<MilestoneDto>(saved.Error ?? "Milestone reopen conflict.", saved.Kind);
+                }
+                return Result.Ok(new MilestoneDto(
+                    milestone.Id, milestone.Name, milestone.Description, milestone.ProjectId,
+                    milestone.Order, milestone.CreatedAt, milestone.UpdatedAt, milestone.ClosedAt,
+                    milestone.Revision, milestone.ReleaseId));
+            },
+            ct);
     }
 }
+
+/// <summary>
+/// Serializes every mutation of an existing milestone with ReleasePrepare and applies the
+/// immutable Candidate-scope guard before invoking the handler-specific mutation.
+/// </summary>
+internal static class MilestoneMutationCoordinator
+{
+    public static async Task<Result<T>> ExecuteAsync<T>(
+        IBeaconDbFactory dbFactory,
+        Guid milestoneId,
+        Guid? projectId,
+        Func<IBeaconDb, Milestone, CancellationToken, Task<Result<T>>> mutation,
+        CancellationToken ct)
+    {
+        if (milestoneId == Guid.Empty)
+            return Result.Failure<T>("Milestone id is required.", ErrorKind.Validation);
+
+        await using var db = dbFactory.CreateDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var scope = await db.Milestones.IgnoreQueryFilters().AsNoTracking()
+                .Where(item => item.Id == milestoneId
+                    && (projectId == null || item.ProjectId == projectId.Value))
+                .Select(item => new { item.ProjectId })
+                .FirstOrDefaultAsync(ct);
+            if (scope is null)
+                return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scope.ProjectId, ct))
+                return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+
+            var milestone = await db.Milestones.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == scope.ProjectId, ct);
+            if (milestone is null)
+                return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+
+            var blockReason = await ReleaseMilestoneMutationGuard.GetBlockReasonAsync(
+                db, milestone.ProjectId, milestone.Id, ct);
+            if (blockReason is not null)
+                return Result.Failure<T>(blockReason, ErrorKind.Conflict);
+
+            var result = await mutation(db, milestone, ct);
+            if (!result.Success)
+                return result;
+
+            await transaction.CommitAsync(ct);
+            return result;
+        });
+    }
+}
+
