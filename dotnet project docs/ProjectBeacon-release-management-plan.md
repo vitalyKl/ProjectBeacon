@@ -1113,3 +1113,17 @@ Implementation: `feat/release-management`, PR #230.
 - Live Merge Queue по-прежнему требует writable org-owned disposable repository; ProjectBeacon — public personal-account repository, подключённый пользователь не состоит в организации.
 - В eligible org-owned test repository Merge Queue method должен быть `merge`. Администратор также должен подтвердить classic tag protection `v*` и Environment `production` required reviewers.
 - Не создавать production tags/deployments и не вливать PR #230 до выполнения live acceptance и проверки protections. SaaS Control Plane и billing вне области работ.
+
+
+## Дополнение — exact-head CI и fail-closed publication evidence (27 ноября 2026)
+
+- CI [#45960317995](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45960317995) завершился success на implementation SHA `85b83094c168e59d9e2359faa72ba1f34707eeab`.
+- Linux/Windows/macOS: Build, EF model checks, все семь тестовых модулей и formatting прошли. Linux TRX: 2 766 результатов, 7 модулей, один ожидаемый platform-conditional skip, ноль failures; symlink gates Passed.
+- После этого run добавлены дополнительные hardening changes, которые не входят в проверенный SHA:
+  - tag object parser теперь делит строки только по LF, не удаляя CR до exact identity comparison; добавлен тест на trailing CR;
+  - temporary tag verification ref cleanup охватывает fetch и использует CancellationToken.None, чтобы отмена запроса не прерывала удаление локального ref;
+  - серверный Publish completion принимает tagPushed=false только если failure result содержит typed boolean и точный Publish identity: projectId, releaseId, candidateId, version, tagName и candidateSha. Missing/malformed/mismatched evidence консервативно трактуется как возможный опубликованный tag (FailedAfterTag).
+- Добавлен Application regression fact для неполного/несовпадающего tag-pushed evidence. CI и release.yml TRX floors повышены до 2 767; полные guards остаются идентичными.
+- Source/test/workflow commits: `a633b755aa205be53a7fb583ddd169817fb1b965`, `123745108c8f9668b1ef35f906be87dee19ca0f0`, `62b9e67c52f4044c520c51b68d3c967d83456987`, `2555277d727c4ba884eb24446651aa79b5eb6b6a`, `2aaf5d597c9d2b0f13f4cfe6d0bd94495e800380`, `21149f8b7534b96365a97b27c345284c73faaa24`, `e99a96d31dfd8d1f3306634b511c33e8154e283c`.
+- Журнал implementation branch записал изменения в commit `1db2e3d2a42e435b9ac0671d0d2742b431980559`. Новый exact-head CI требуется на post-journal PR head.
+- Live Merge Queue по-прежнему нельзя проверить на ProjectBeacon (public personal-account repository). Нужен org-owned disposable repository с queue method=merge; tag protection `v*` и Environment `production` reviewers требуют administrator verification. Production tag/deploy и PR merge не выполнять до этих проверок.
