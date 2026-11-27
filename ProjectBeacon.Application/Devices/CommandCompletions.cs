@@ -1528,9 +1528,7 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
 
         var hasResult = TryObject(resultJson, out var result);
         var trustedResult = hasResult && IsPublicationResultForPayload(payload, result);
-        var tagPushed = trustedResult && TryReadBool(result, "tagPushed", out var reportedTagPushed)
-            ? reportedTagPushed
-            : true; // Missing or mismatched evidence is conservative: the immutable tag may already exist.
+        var tagPushed = ReadTagPushedEvidence(payload, resultJson);
         var runId = trustedResult ? ReadLong(result, "workflowRunId") : null;
         var runUrl = trustedResult ? ReadString(result, "workflowRunUrl") : null;
 
