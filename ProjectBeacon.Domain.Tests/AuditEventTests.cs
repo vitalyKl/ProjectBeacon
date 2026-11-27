@@ -156,7 +156,12 @@ public sealed class AuditEventTests
             """{"deployedSha":"not-a-git-sha"}""",
             """{"tagName":"release/../0.7.5.10"}""",
             """{"publicationRevision":1.5}""",
-            """{"workflowRunId":0}"""
+            """{"workflowRunId":0}""",
+            """{"workflowRunId":-1}""",
+            """{"workflowRunId":"12345"}""",
+            """{"workflowRunId":1.5}""",
+            """{"tagPushed":"true"}""",
+            """{"tagPushed":1}"""
         };
 
         foreach (var detailsJson in invalidDetails)
