@@ -1874,3 +1874,26 @@ Implemented a fail-closed terminal outcome:
 2. Complete live merge-queue acceptance in a separate disposable repository with required checks configured.
 3. Have a repository administrator verify classic tag protection and `production` Environment required reviewers.
 4. Continue user-project acceptance for roles/RLS, localized settings and failures, Candidate/Publish/recovery states.
+
+
+## 2026-11-27 — Add Release Prepare/Verify/Publish handler guard tests
+
+**Test source commit:** `d2e309585b8e041be61ec7a25bdc86fb2f124b53`
+
+- Added six application-handler regression tests:
+  - Prepare rejects a project Member and leaves preparation NotStarted.
+  - Prepare rejects a project without configured version-file projections and queues no workstation command.
+  - VerifyLanding rejects a Member and queues no workstation command.
+  - VerifyLanding rejects a Release that has not reached Prepared/VerifyFailed.
+  - Publish rejects a Member.
+  - Publish rejects a Planned/non-Candidate Release and queues no workstation command.
+- These tests exercise authorization and lifecycle barriers before workstation side effects; they do not create tags, trigger deployment, or merge a PR.
+- The green CI run #45951725841 validates the immediately preceding application head `7647e7539c65608c84545424638af2403952e090`, but predates these newly added tests. The doc-only run #45953557893 targets journal head `77adf061f19d27a414799eb6c98e9be9525c0bae` and does not contain the test commit.
+- A fresh exact-head cross-platform CI run is required after this test and journal update. The workflow intentionally excludes PR `synchronize`; do not infer test success from either earlier run.
+- No product code behavior changed. The branch remains isolated; no SaaS Control Plane, billing, production tag, deployment, or PR merge.
+
+### Next
+
+1. Run Linux/Windows/macOS CI on the exact branch head containing these six tests and fix any compile/test failures.
+2. Add further handler/completion integration coverage only where current tests expose a specific gap.
+3. Complete live GitHub merge-queue acceptance in a separate disposable repository; verify publication protection settings with a repository administrator.
