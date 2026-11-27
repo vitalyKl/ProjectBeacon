@@ -124,7 +124,7 @@
     <value>Шаблоны</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Профиль рабочей станции: задаёт режим AgentProvider и модели ролей Planner/Actor/Review по умолчанию. Эти модели используются как резервные, если для фазы задачи не назначена отдельная модель; настройки типа задачи ниже имеют приоритет.</value>
+    <value>Профиль рабочей станции: задаёт режим AgentProvider и модели ролей Planner/Actor/Review по умолчанию. Эти модели используются как резервные, если для семантической фазы задачи не настроена отдельная модель; модели фаз, заданные ниже в видах задач, имеют приоритет.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>Новый шаблон</value>
@@ -262,7 +262,7 @@
     <value>Модель решений</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>Модель по умолчанию для фаз без параллельного разбиения. Модель, заданная непосредственно у фазы, имеет приоритет.</value>
+    <value>Модель по умолчанию для фаз, не разделённых на параллельные подзадачи. Модель, настроенная непосредственно для фазы, имеет приоритет.</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>Модель работников</value>
@@ -1604,7 +1604,7 @@
     <value>Рабочей станции ещё нет. Добавьте устройство в настройках и запустите beacon.exe.</value>
   </data>
 <data name="DeviceOfflineHint" xml:space="preserve">
-    <value>Устройство не в сети. Запустите beacon client и дождитесь статуса «Подключено».</value>
+    <value>Устройство не в сети. Запустите artifacts/daemon-win-x64/beacon.exe (или beacon client) и дождитесь статуса «Подключено».</value>
   </data>
 <data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>Список папок берётся с выбранной рабочей станции, не из этого браузера.</value>
@@ -1625,10 +1625,10 @@
     <value>Папка проекта сохранена на этом устройстве.</value>
   </data>
 <data name="HowToAddModel" xml:space="preserve">
-    <value>Llama.cpp: положите GGUF в каталог локальных моделей в настройках и нажмите «Выбрать GGUF». Остальным типам нужна команда запуска. Сохранение регистрирует модель, «Применить на устройстве» пишет конфиг AgentProvider.</value>
+    <value>Llama.cpp: поместите файлы GGUF в каталог локальных моделей в разделе «Настройки», затем нажмите «Выбрать GGUF». Для других типов укажите ID модели в разделе «Дополнительно». Сохранение регистрирует модель; кнопка «Применить на устройстве» записывает конфигурацию агента.</value>
   </data>
 <data name="ModelSaveHint" xml:space="preserve">
-    <value>llama-swap подхватит реестр на следующем heartbeat клиента. Чтобы AgentProvider увидел модель, нажмите «Применить на устройстве». Само по себе это задачу не запускает.</value>
+    <value>llama-swap подхватит реестр при следующем heartbeat клиента. Чтобы агент увидел модель, её необходимо применить на устройстве. Ни одно из этих действий не запускает задачу.</value>
   </data>
 <data name="LaunchCommandRequired" xml:space="preserve">
     <value>Для этого типа бэкенда нужна команда запуска.</value>
@@ -1643,10 +1643,10 @@
     <value>Само ничего не запускается. Укажите папку на панели управления, добавьте модель в настройках, затем запустите пайплайн или завершите задачу через MCP finish_work.</value>
   </data>
 <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>Создайте подзадачу и запустите сессию актора. «Запустить» только помечает сессию активной в Beacon и не стартует AgentProvider.</value>
+    <value>Создайте подзадачу, затем запустите сессию Actor. Команда «Запустить сессию» лишь помечает её как активную в Beacon — сам агент не запускается.</value>
   </data>
 <data name="LaunchSessionHint" xml:space="preserve">
-    <value>Запуск сессии меняет статус в базе. AgentProvider при этом не стартует.</value>
+    <value>Команда «Запустить сессию» обновляет статус в базе данных, но не запускает агента.</value>
   </data>
 <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>Нет активных сессий пайплайна. Модели сами задачи не начинают: откройте задачу и запустите пайплайн или используйте MCP.</value>
@@ -1688,7 +1688,7 @@
     <value>Чатов пока нет.</value>
   </data>
 <data name="ChatEmptyHint" xml:space="preserve">
-    <value>Начните чат. AgentProvider работает на станции через beacon client.</value>
+    <value>Начните чат. Агент работает на рабочей станции через beacon client.</value>
   </data>
 <data name="Message" xml:space="preserve">
     <value>Сообщение</value>
@@ -2027,10 +2027,10 @@
     <value>К последнему</value>
   </data>
 <data name="ChatReasoningEffort" xml:space="preserve">
-    <value>Уроеен рассуждений</value>
+    <value>Уровень рассуждений</value>
   </data>
 <data name="ChatEffortDefault" xml:space="preserve">
-    <value>По умольаний</value>
+    <value>По умолчанию</value>
   </data>
 <data name="ChatEffortLow" xml:space="preserve">
     <value>Низкий</value>
@@ -2048,10 +2048,10 @@
     <value>Модель готова: {0}</value>
   </data>
 <data name="ChatModelSwitching" xml:space="preserve">
-    <value>Перекление модели: {0}</value>
+    <value>Переключение модели: {0}</value>
   </data>
 <data name="ChatUsageSpeed" xml:space="preserve">
-    <value>{0} Вок/с</value>
+    <value>{0} ток./с</value>
   </data>
 <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Модель не загружена: {0}</value>
@@ -2108,10 +2108,10 @@
     <value>Изменение вступит в силу после перезапуска клиента рабочей станции.</value>
   </data>
 <data name="AgentRuntimeActive" xml:space="preserve">
-    <value>Фактически запущенный харнес</value>
+    <value>Текущая среда выполнения</value>
   </data>
 <data name="AgentRuntimePendingRestart" xml:space="preserve">
-    <value>Выбранный харнес отличается от запущенного на этой рабочей станции. Перезапустите клиент рабочей станции, чтобы применить выбор.</value>
+    <value>Выбранная среда выполнения отличается от той, которая сейчас запущена на этой рабочей станции. Перезапустите клиент рабочей станции, чтобы применить выбор.</value>
   </data>
 <data name="AgentRuntimeUnavailable" xml:space="preserve">
     <value>Недоступен</value>
@@ -2159,7 +2159,7 @@
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
-<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки рабочей станции и модели ролей по умолчанию. В pipeline они используются только если для соответствующей фазы задачи не задана отдельная модель.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это значения ролей по умолчанию для рабочей станции и настройки AgentProvider. В сессиях конвейера привязки ролей используются только в том случае, если для семантической фазы задачи не настроена собственная модель.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это выбор моделей для pipeline задач. Значения по умолчанию для решений/работников и модели отдельных фаз имеют приоритет над привязками ролей рабочей станции.</value></data>
 <data name="DaemonUpdates" xml:space="preserve"><value>Обновление демона</value></data>
 <data name="DaemonUpdateDescription" xml:space="preserve"><value>Проверка и установка последней версии клиента ProjectBeacon без ручной замены папки установки.</value></data>
@@ -2170,7 +2170,7 @@
 <data name="CheckDaemonUpdates" xml:space="preserve"><value>Проверить обновления</value></data>
 <data name="UpdateDaemonNow" xml:space="preserve"><value>Обновить демон</value></data>
 <data name="DaemonUpdateRequiresOnline" xml:space="preserve"><value>Для проверки и установки обновлений рабочая станция должна быть в сети.</value></data>
-<data name="UpdateDaemonConfirm" xml:space="preserve"><value>Установить версию клиента {0}? Демон автоматически перезапустится.</value></data>
+<data name="UpdateDaemonConfirm" xml:space="preserve"><value>Установить версию клиента рабочей станции {0}? Демон перезапустится автоматически.</value></data>
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Обновление проверено и запланировано. Клиент рабочей станции перезапускается.</value></data>
 <data name="CheckClientUpdate" xml:space="preserve"><value>Проверить обновления демона</value></data>
 <data name="UpdateClient" xml:space="preserve"><value>Обновить демон</value></data>
@@ -2315,7 +2315,7 @@
     <value>Отменить редактирование</value>
   </data>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
-    <value>Имена инструментов в harness имеют вид mcp_&lt;сервер&gt;_&lt;инструмент&gt;. Чтобы разрешить их в pipeline, добавьте точное имя или mcp_&lt;сервер&gt;_* в Allowed MCP Tools у подзадачи Actor.</value>
+    <value>Имена инструментов публикуются в формате mcp_&lt;server&gt;_&lt;tool&gt;. Чтобы разрешить их в конвейерах задач, добавьте точное имя или шаблон mcp_&lt;server&gt;_* в список Allowed MCP Tools подзадачи Actor.</value>
   </data>
   <data name="TaskCurrentActivity" xml:space="preserve">
     <value>Текущая активность</value>
@@ -3362,5 +3362,170 @@
   </data>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Список задач, ожидающих вашего ответа, временно недоступен. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>Внешний вид</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>Тёмная</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>Светлая</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>Как в системе</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>Переключить на светлую тему</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>Переключить на тёмную тему</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>Создайте проект, переименуйте открытый проект или удалите проект, которым вы управляете.</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>Удалить проект</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>Удалить проект «{0}»? Его задачи, контекст и участники будут удалены.</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>Проект сохранён.</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>Проект удалён.</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>Укажите название проекта.</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>Открыть</value>
+  </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>Операции</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>Аналитика</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>Управление</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>Проверки</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>Чат с агентом</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>Поиск или запуск команды</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>Палитра команд</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>Поиск по страницам</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>Подходящих команд нет</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>Все рабочие станции работают нормально</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>Некоторые рабочие станции требуют внимания</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>Рабочие станции не в сети</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>Нет рабочих станций</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>Рабочих станций: {0} · в сети: {1}</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>Краткая сводка по текущему проекту</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>Работа с задачами на доске</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>Задачи, которых нет на доске</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>Вехи проекта</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>Знания о проекте</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>Зафиксированные решения</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>Снимки доски</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>Сессия агента</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>Настройка агентов</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>Устройства, на которых работают агенты</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>Этот проект</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>Учётная запись</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>Подключения моделей</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>Задача</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>Создать проект</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>Требуют внимания: {0}</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>Сейчас выполняется</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>Сейчас нет выполняемых задач.</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>Требует внимания</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>Нет элементов, требующих внимания.</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>Нагрузка системы</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>Рабочие станции ещё не передавали данные о загрузке процессора, памяти и GPU.</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>Состояние парка рабочих станций</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>Следующий шаг</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>Проверка отделена от выполнения. Одобрение завершает проверку, но не запись о проделанной работе.</value>
+  </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>Текущий проект</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>Цель</value>
   </data>
 </root>
