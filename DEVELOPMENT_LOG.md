@@ -2343,3 +2343,47 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Trigger full exact-head CI and verify the Python permission contract test passes.
 2. Confirm all three platform jobs, all seven test modules, TRX (2,768 minimum), formatting and EF checks remain green.
 3. Preserve the external acceptance blockers: org-owned disposable repository for live Merge Queue, queue Merge method=merge, classic v* tag protection and production Environment required reviewers.
+
+
+## 2026-11-27 — Exact-head CI passed: remote tag safety and least-privilege Release workflow
+
+**CI run:** [#45974881947](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45974881947)  
+**Validated implementation SHA:** `500c2e872239c9807920fc94ae67c66095164ab1`  
+**Result:** success on Linux, Windows and macOS.
+
+### Validation details
+
+- All three platforms passed Restore, Build, EF pending-model-change validation, all seven test modules and `dotnet format`.
+- Linux authoritative lane passed the workflow permission contract test before build/test.
+- Linux TRX gate: **2,768 results**, 1 expected platform-conditional skip, 0 failures, 7 modules. Both workspace symlink security gates passed.
+- `ci.yml` and `release.yml` retain identical full TRX guard blocks and the same `MIN_TOTAL = 2768`.
+- `merge_group: checks_requested` is present in CI; the workflow permission contract test verifies its presence.
+- This run includes the latest ReleasePublish ambiguous-push handling, complete remote annotated-tag verification, byte-exact tag identity, FailedAfterTag retry lifecycle coverage and the automated Release workflow permission contract.
+
+### Changes represented by this validated head
+
+- Ambiguous/failed tag push and incomplete remote inspection are fail-closed as potentially published. `tagPushed=false` is only accepted where a successful, well-formed remote listing conclusively proves the Candidate tag is absent or belongs to a different commit.
+- Existing/concurrently-created remote annotated tags are fetched to unique temporary refs and checked for exact tag object SHA, peeled commit, type, tag name, Release/Candidate identity and version. CR, trailing whitespace, altered and duplicate identity lines are rejected.
+- After a tag might have been published, retry can only reuse the original Candidate/tag/version/endpoint payload. Completion evidence must match the exact queued Publish identity; missing/malformed/mismatched evidence never becomes negative proof.
+- Release workflow permissions are constrained and regression-tested: global contents read; image job alone has packages write; scan has packages read; client gets contents write for GitHub Release assets; tests/deploy do not get package write.
+- The Linux test floor is kept aligned between regular CI and tag-triggered release workflow.
+
+### Remaining acceptance blockers
+
+1. Live async GitHub Merge Queue acceptance needs a writable org-owned disposable repository. ProjectBeacon is public and owned by a personal account; the connected account currently has no organization memberships or other writable repository. Do not simulate queue scenarios or destructive PR operations against ProjectBeacon.
+2. On that eligible test repository, an administrator must set the queue Merge method to `merge` and required CI checks, then verify pending/enqueued, UUID expiry with/without queue entry, queue removal, direct/queued completion, closed-unmerged PR, head/base drift and failed post-merge check.
+3. A repository administrator must verify classic tag protection `v*` and required reviewers on Environment `production`; current integration lacks permission to inspect those settings.
+4. End-to-end real-project acceptance remains: ReleasePrepare → merge-commit landing → immutable Candidate → Publish/tag → release Actions workflow → exact deployed version/SHA, including failure and retry recovery.
+
+### Status and safety
+
+- PR #230 remains open and unmerged. `main` is not behind the feature branch.
+- No production tag or deployment was created. No PR was merged.
+- SaaS Control Plane and billing were not touched.
+- This journal-only commit changes the PR head; run CI again on the post-journal SHA because the workflow intentionally does not run on `pull_request.synchronize`.
+
+### Next
+
+1. Trigger and verify exact-head Linux/Windows/macOS CI on the post-journal commit.
+2. Resolve external merge-queue and publication-protection acceptance blockers when an eligible organization repository/admin is available.
+3. Continue user-project UI, localization, RLS and release recovery acceptance without merging or publishing production.
