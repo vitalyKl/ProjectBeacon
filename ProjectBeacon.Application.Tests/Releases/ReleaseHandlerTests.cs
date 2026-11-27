@@ -231,10 +231,13 @@ public sealed class ReleaseHandlerTests : IDisposable
         release.TransitionTo(ReleaseStatus.InProgress);
         var milestone = Milestone.Create("Included work", null, _projectId, 1);
         milestone.AssignRelease(release.Id);
+        var label = Label.Create("Frozen label", "#52525b", _projectId);
         var task = TaskItem.Create("Included task", _projectId);
         task.SetMilestone(milestone.Id);
+        task.AssignLabel(label.Id);
         _db.Releases.Add(release);
         _db.Milestones.Add(milestone);
+        _db.Labels.Add(label);
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -275,8 +278,16 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.False(addStep.Success);
         Assert.Equal(ErrorKind.Conflict, addStep.Kind);
 
+        var deleteLabel = await new DeleteLabelHandler(Factory())
+            .HandleAsync(
+                new DeleteLabelRequest(_projectId, label.Id),
+                TestContext.Current.CancellationToken);
+        Assert.False(deleteLabel.Success);
+        Assert.Equal(ErrorKind.Conflict, deleteLabel.Kind);
+
         await _db.Entry(task).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal("Included task", task.Title);
+        Assert.Equal(label.Id, task.LabelId);
         Assert.Empty(await _db.TaskSteps.Where(step => step.TaskId == task.Id)
             .ToListAsync(TestContext.Current.CancellationToken));
     }
