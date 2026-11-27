@@ -1714,3 +1714,44 @@ After the prior correction removed the malformed character literal, the next cro
 2. Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified through the connector. An administrator must confirm these in GitHub Settings before any production tag/deployment.
 3. Continue user-project acceptance of Release Management (project settings, role/RLS enforcement, failure UI, localization, candidate/publish/recovery states).
 4. PR #230 remains open and unmerged until live merge-queue acceptance and publication protection checks are complete. No production tag/deployment was created. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Align JSON version-source readers with RFC 6901
+
+**Implementation source head before this journal entry:** `74486e8517136165e2705b948cb6e2e50895a0e7`  
+**Current PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)
+
+### Finding
+
+The previous commit tightened the .NET policy validator to RFC 6901, but the tag-triggered Python release gate still used permissive string replacement for JSON Pointer tokens and Python's Unicode-aware `str.isdigit()` for array indexes. Consequences:
+
+- A malformed escape such as `~2` could be accepted by the release gate when a JSON property happened to have that literal name, even though Beacon's policy API rejected it.
+- Unicode numerals could be accepted as Python array indexes but rejected by the .NET candidate/version reader.
+- The valid RFC 6901 empty pointer (the document root) was rejected by both policy validation and the release workflow.
+
+### Changes
+
+- `ProjectBeacon.Domain/Entities/Projects/ProjectVersionPolicy.cs`: the empty selector is now accepted only for JSON sources, as RFC 6901 defines it as the pointer to the whole document. XML/TOML/Regex still require non-empty selectors.
+- `scripts/verify_release_manifest.py`: added strict token decoding; only `~0` and `~1` are accepted. The root pointer `""` is supported. Array indexes now use ASCII decimal digits only, permit `0` or non-zero-leading decimal strings, and reject empty, signed, Unicode and leading-zero indexes.
+- `ProjectBeacon.Domain.Tests/ProjectVersionPolicyCatalogTests.cs`: covered root-pointer policy validation and extraction, escaped slash/tilde object keys, malformed escapes, leading-zero/Unicode/out-of-range array indexes.
+- `scripts/test_verify_release_manifest.py`: added equivalent root/escape/array-index tests for the Python release gate.
+
+### Validation
+
+- Source and regression tests are committed on `feat/release-management`; current implementation head before this journal update is `74486e8517136165e2705b948cb6e2e50895a0e7`.
+- The last green exact-head CI is [#45899056564](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45899056564) on `e87f4e6fc962b82102957b6d48c4ea7eac45f475`. It predates the JSON Pointer fixes and does not validate them.
+- No local .NET SDK/build is available in this execution environment. A new CI on the post-journal head is required; do not treat the earlier green run as validation of these changes.
+
+### Branch integration state
+
+- `main` has advanced to `ed4dace38357f5062478ba3322148ab352d916ce` with the UI-readable-errors change and version `0.7.5.10`.
+- The implementation branch is one commit behind `main` and GitHub currently reports PR #230 as not mergeable. The main commit changes several UI/resource files also touched by Release Management. Do not force-update the branch or overwrite those files; after CI, perform a deliberate three-way integration of the latest `main` changes and rerun the full matrix.
+- The plan remains on its separate documentation branch. This development branch is not merged to `main`.
+
+### Remaining blockers / next
+
+1. Run exact-head Linux/Windows/macOS CI after this journal commit; fix all failures before more source edits.
+2. Integrate `main` commit `ed4dace3` into this branch with a real three-way merge, preserving both UI error handling and Release/Roadmap changes.
+3. Complete live async GitHub merge-queue acceptance in a disposable repository (pending→enqueued, 24-hour pending UUID expiry and GraphQL queue-entry recovery, queue removal, direct/queued completion, closed-unmerged PR, PR/head/base drift and post-merge check failure). Current unit tests/CI do not replace the live exercise.
+4. Administrator verification of classic `v*` tag protection and GitHub Environment `production` required reviewers remains outstanding. No production tag or deployment.
+5. Continue independent user-project acceptance for RLS/roles, localization, UI failure states, Release Candidate/Publish/recovery.
