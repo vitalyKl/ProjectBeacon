@@ -3,7 +3,7 @@ using ProjectBeacon.Domain.Enums;
 using MudBlazor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
-using ProjectBeacon.Web;
+using ProjectBeacon.Web.Resources;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
