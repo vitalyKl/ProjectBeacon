@@ -255,48 +255,71 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
 
     public async Task<Result<bool>> HandleAsync(DeleteProjectCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var check = await _auth.CanAsync(db, command.Actor, ResourceType.Project, AuthAction.Administer, projectId: command.ProjectId, ct: ct);
-        if (!check.Success)
-            return Result.Forbidden<bool>();
+        return await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            command.ProjectId,
+            [],
+            async (db, token) =>
+            {
+                var check = await _auth.CanAsync(
+                    db, command.Actor, ResourceType.Project, AuthAction.Administer,
+                    projectId: command.ProjectId, ct: token);
+                if (!check.Success)
+                    return Result.Forbidden<bool>();
 
-        var project = await db.Projects.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(p => p.Id == command.ProjectId, ct);
-        if (project is null)
-            return Result.Failure<bool>("Project not found.");
+                var project = await db.Projects.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(item => item.Id == command.ProjectId, token);
+                if (project is null)
+                    return Result.Failure<bool>("Project not found.", ErrorKind.NotFound);
 
-        var taskIds = db.Tasks.IgnoreQueryFilters().Where(t => t.ProjectId == command.ProjectId).Select(t => t.Id);
-        await db.TaskDependencies.IgnoreQueryFilters()
-            .Where(d => taskIds.Contains(d.TaskId) || taskIds.Contains(d.DependentTaskId))
-            .ExecuteDeleteAsync(ct);
+                // A project is the immutable parent of all release candidates and their
+                // audit history. Do not cascade-delete it while any Release record remains.
+                var hasReleaseHistory = await db.Releases.IgnoreQueryFilters()
+                    .AnyAsync(release => release.ProjectId == command.ProjectId, token);
+                if (hasReleaseHistory)
+                    return Result.Failure<bool>(
+                        "This project contains release history and cannot be deleted. Preserve the releases and retire the project instead.",
+                        ErrorKind.Conflict);
 
-        await db.Decisions.IgnoreQueryFilters()
-            .Where(d => d.ProjectId == command.ProjectId)
-            .ExecuteUpdateAsync(s => s.SetProperty(d => d.SupersededById, (Guid?)null), ct);
-        await db.Decisions.IgnoreQueryFilters()
-            .Where(d => d.ProjectId == command.ProjectId)
-            .ExecuteDeleteAsync(ct);
+                var taskIds = db.Tasks.IgnoreQueryFilters()
+                    .Where(task => task.ProjectId == command.ProjectId)
+                    .Select(task => task.Id);
+                await db.TaskDependencies.IgnoreQueryFilters()
+                    .Where(dependency => taskIds.Contains(dependency.TaskId)
+                        || taskIds.Contains(dependency.DependentTaskId))
+                    .ExecuteDeleteAsync(token);
 
-        await db.ContextSections.IgnoreQueryFilters()
-            .Where(s => s.RepoId == command.ProjectId && s.ProjectId != command.ProjectId)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RepoId, (Guid?)null), ct);
-        await db.ContextSections.IgnoreQueryFilters()
-            .Where(s => s.ProjectId == command.ProjectId)
-            .ExecuteDeleteAsync(ct);
-        await db.Constraints.IgnoreQueryFilters()
-            .Where(c => c.ProjectId == command.ProjectId)
-            .ExecuteDeleteAsync(ct);
+                await db.Decisions.IgnoreQueryFilters()
+                    .Where(decision => decision.ProjectId == command.ProjectId)
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(decision => decision.SupersededById, (Guid?)null), token);
+                await db.Decisions.IgnoreQueryFilters()
+                    .Where(decision => decision.ProjectId == command.ProjectId)
+                    .ExecuteDeleteAsync(token);
 
-        db.Projects.Remove(project);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            return Result.Failure<bool>("Project could not be deleted.");
-        }
+                await db.ContextSections.IgnoreQueryFilters()
+                    .Where(section => section.RepoId == command.ProjectId
+                        && section.ProjectId != command.ProjectId)
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(section => section.RepoId, (Guid?)null), token);
+                await db.ContextSections.IgnoreQueryFilters()
+                    .Where(section => section.ProjectId == command.ProjectId)
+                    .ExecuteDeleteAsync(token);
+                await db.Constraints.IgnoreQueryFilters()
+                    .Where(constraint => constraint.ProjectId == command.ProjectId)
+                    .ExecuteDeleteAsync(token);
 
-        return Result.Ok(true);
-    }
-}
+                db.Projects.Remove(project);
+                try
+                {
+                    await db.SaveChangesAsync(token);
+                }
+                catch (DbUpdateException)
+                {
+                    return Result.Failure<bool>("Project could not be deleted.");
+                }
+
+                return Result.Ok(true);
+            },
+            ct);
+    }}
