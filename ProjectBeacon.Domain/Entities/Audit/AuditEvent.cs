@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Projects;
 
 /// <summary>
 /// Append-only security and operator activity event. It stores identifiers and allowlisted
@@ -22,7 +23,8 @@ public sealed class AuditEvent : Entity
         "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId",
         "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId",
         "deployedSha", "hotfixRequestId", "repository", "pullRequestNumber",
-        "pullRequestUrl", "mergeRequestId"
+        "pullRequestUrl", "mergeRequestId", "candidateId", "candidateSha",
+        "tagName", "workstationId", "publicationRevision"
     };
 
     private static readonly Regex DetailCodePattern =
@@ -144,17 +146,19 @@ public sealed class AuditEvent : Entity
                 if (value.ValueKind == JsonValueKind.String)
                 {
                     var code = value.GetString();
-                    var pattern = property.Name is "sourceBranch" or "targetBranch"
-                        ? BranchNamePattern
-                        : property.Name == "repository"
-                            ? GitHubRepositoryPattern
-                            : property.Name == "pullRequestUrl"
-                                ? GitHubPullRequestUrlPattern
-                                : property.Name == "targetVersion"
-                                    ? new Regex("^[A-Za-z0-9._+:/-]{1,100}$", RegexOptions.CultureInvariant | RegexOptions.Compiled)
-                                    : DetailCodePattern;
-                    if (code is null || !pattern.IsMatch(code))
-                        throw new ArgumentException($"Audit detail '{property.Name}' must be a short code, not free-form text.", nameof(detailsJson));
+                    var valid = code is not null && (property.Name switch
+                    {
+                        "candidateId" or "workstationId" => Guid.TryParseExact(code, "D", out _),
+                        "candidateSha" => Regex.IsMatch(code, "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.CultureInvariant),
+                        "tagName" => ProjectVersionPolicyCatalog.IsSafeGitTagName(code),
+                        "sourceBranch" or "targetBranch" => BranchNamePattern.IsMatch(code),
+                        "repository" => GitHubRepositoryPattern.IsMatch(code),
+                        "pullRequestUrl" => GitHubPullRequestUrlPattern.IsMatch(code),
+                        "targetVersion" => Regex.IsMatch(code, "^[A-Za-z0-9._+:/-]{1,100}$", RegexOptions.CultureInvariant),
+                        _ => DetailCodePattern.IsMatch(code)
+                    });
+                    if (!valid)
+                        throw new ArgumentException($"Audit detail '{property.Name}' must contain valid structured metadata, not free-form text.", nameof(detailsJson));
                 }
                 else if (value.ValueKind == JsonValueKind.Number)
                 {
