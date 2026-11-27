@@ -2698,3 +2698,32 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 2. Verify macOS/Linux/Windows Build and the fresh-context Publish completion audit integration test.
 3. Resolve any further test or formatting failures before considering merge readiness.
 4. Keep external live Merge Queue and publication-protection acceptance blockers open until an org-owned disposable repository and administrator verification are available.
+
+
+## 2026-11-27 — Exact-head CI green after publication audit scope fix
+
+**CI run:** [#45988134913](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45988134913)  
+**Validated SHA:** `2ad852f6d083004a194466aa98af7c242204d508`  
+**Result:** success on Linux, Windows and macOS.
+
+- All three platform jobs passed Build, EF pending-model-change validation, seven test modules and formatting.
+- Linux authoritative lane: 2,771 TRX results, one expected platform-conditional skip, zero failures; symlink security gates passed.
+- The ReleasePublishCompletion audit helper scope correction and fresh-DbContext Publish audit assertions passed in the Application tests on all three platforms.
+- Resource/localization regressions remained closed; Web tests passed on Linux, Windows and macOS.
+- This supersedes the earlier failed pre-fix run #45987491865, whose `CS0103` build error was caused by the helper being placed in the wrong completion class.
+
+### Follow-up — enforce audit JSON value types
+
+- A final schema review found that generic scalar validation could still accept `workflowRunId` as a string and `tagPushed` as a string/number, despite these being an integer and boolean contract.
+- Added explicit JSON value-kind enforcement: `workflowRunId` must be a positive Int64 JSON number; `tagPushed` must be a JSON boolean.
+- Extended the existing Domain audit test with negative cases for string/negative/fractional workflowRunId and string/numeric tagPushed. No new test facts were added.
+- Implementation/test commits: `3180d3e248169aad31d630f2f6aa9cd3cf3694d2`, `7d3b1ee17c396bb8f3c22b770d0c44f58cc7be31`.
+- CI/release TRX floors remain 2,771 and their full guard blocks remain identical.
+- These strict-type changes are newer than successful CI #45988134913 and require a fresh exact-head run.
+
+### Next
+
+1. Run Linux/Windows/macOS exact-head CI for the audit JSON type enforcement and confirm formatting.
+2. Keep PR #230 open until external Merge Queue and publication protection acceptance is complete.
+3. Live queue tests require a writable org-owned disposable repository; admin must verify queue Merge method=merge, classic `v*` tag protection and `production` Environment reviewers.
+4. No production tag, deployment or PR merge. SaaS Control Plane and billing remain out of scope.
