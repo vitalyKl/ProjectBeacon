@@ -81,6 +81,25 @@ public sealed class ReleasePublishExecutorTests
     }
 
     [Fact]
+    public void WorkflowPreflight_RequiresSuccessfulGitHubActionsReadBeforeTagPush()
+    {
+        Assert.Null(ReleasePublishExecutor.ValidateWorkflowPreflight(0, false, "[]", ""));
+
+        Assert.Contains(
+            "invalid workflow-run list",
+            ReleasePublishExecutor.ValidateWorkflowPreflight(0, false, "{}", "") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "could not list",
+            ReleasePublishExecutor.ValidateWorkflowPreflight(1, false, "[]", "HTTP 403") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "timed out",
+            ReleasePublishExecutor.ValidateWorkflowPreflight(0, true, "[]", "") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void AmbiguousTagPush_OnlyReportsPreTagWhenCompleteRemoteEvidenceProvesCandidateTagAbsent()
     {
         Assert.True(ReleasePublishExecutor.MayHavePublishedTag(
