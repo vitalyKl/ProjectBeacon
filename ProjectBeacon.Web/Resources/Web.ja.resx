@@ -103,7 +103,7 @@
     <value>テンプレート</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>モデルの使い方を保存します。モデル一覧はこのアカウントに残ります。</value>
+    <value>ワークステーションのプロファイルです。AgentProvider のモードと、Planner／Actor／Review ロールの既定のモデル割り当てを設定します。タスクの各フェーズに個別のモデル設定がない場合、これらのロールモデルが代替として使用されます。下のタスク種別で設定したフェーズモデルが優先されます。</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>新しいテンプレート</value>
@@ -223,7 +223,7 @@
     <value>タスクの種類</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>種類は仕事の進め方です。判断モデルが計画とレビューを行い、作業モデルがスクリーンショット1枚のような短い区切りを担当します。</value>
+    <value>新しいタスクごとにコピーされるタスクワークフローのテンプレートです。Decision モデルと Worker モデルが通常フェーズと fan-out フェーズの既定値を提供し、フェーズに個別のモデルが設定されている場合はそちらが優先されます。フェーズモデルはワークステーションのロール割り当てより優先されます。</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>新しい種類</value>
@@ -241,13 +241,13 @@
     <value>判断モデル</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>作業を計画し、区切りのレビューを読みます。</value>
+    <value>並列サブタスクに分割されないフェーズで使用する既定モデルです。フェーズ固有のモデルが設定されている場合は、そちらが優先されます。</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>作業モデル</value>
   </data>
 <data name="WorkerModelHint" xml:space="preserve">
-    <value>フェーズをサブタスクに分けるときに使います。空なら判断モデルです。</value>
+    <value>フェーズを並列サブタスクに分割する場合の既定モデルです。未設定の場合は Decision モデルが使用されます。フェーズ固有のモデルが設定されている場合は、そちらが引き続き優先されます。</value>
   </data>
 <data name="PhaseTitle" xml:space="preserve">
     <value>フェーズ</value>
@@ -388,7 +388,7 @@
     <value>العربية</value>
   </data>
 <data name="Lang_hi" xml:space="preserve">
-    <value>हिन्दī</value>
+    <value>हिन्दी</value>
   </data>
 <data name="Lang_th" xml:space="preserve">
     <value>ไทย</value>
@@ -1009,7 +1009,7 @@
     <value>パイプライン</value>
   </data>
 <data name="PipelineNotStarted" xml:space="preserve">
-    <value>パイプラインは開始されていません。</value>
+    <value>このタスクはまだ開始されていません。タスクを開始すると Planner セッションが作成され、実行が始まります。</value>
   </data>
 <data name="StagePlanning" xml:space="preserve">
     <value>計画</value>
@@ -1727,8 +1727,7 @@ Beacon がホストするコーディングエージェントは置かない。<
     <value>ワークステーション</value>
   </data>
 <data name="FolderExample" xml:space="preserve">
-    <value>C:\\work\
-orthstar</value>
+    <value>C:\work\northstar</value>
   </data>
 <data name="ChatNeedsFolder" xml:space="preserve">
     <value>チャットの前に、ダッシュボードでプロジェクトフォルダを付けてください。</value>
@@ -2034,7 +2033,7 @@ orthstar</value>
     <value>{0} tok/s</value>
   </data>
 <data name="ChatModelNotLoaded" xml:space="preserve">
-    <value>モデル未読み゙み: {0}</value>
+    <value>モデルが読み込まれていません: {0}</value>
   </data>
 <data name="ChatUsage" xml:space="preserve">
     <value>トークン: {0} · {1}</value>
@@ -2181,7 +2180,7 @@ orthstar</value>
     <value>デーモンを更新</value>
   </data>
   <data name="UpdateDaemonConfirm" xml:space="preserve">
-    <value>このワークステーションの Beacon クライアントを更新しますか？</value>
+    <value>ワークステーションクライアントのバージョン {0} をインストールしますか？デーモンは自動的に再起動します。</value>
   </data>
   <data name="UpdateDaemonNow" xml:space="preserve">
     <value>今すぐ更新</value>
@@ -3380,5 +3379,185 @@ orthstar</value>
   </data>
   <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>入力待ちのタスク一覧は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>外観</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>ダーク</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>ライト</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>システム</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>ライトテーマに切り替え</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>ダークテーマに切り替え</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>プロジェクトを作成するか、開いているプロジェクトの名前を変更するか、管理権限のあるプロジェクトを削除します。</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>プロジェクトを削除</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>{0} を削除しますか？タスク、コンテキスト、メンバーも削除されます。</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>プロジェクトを保存しました。</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>プロジェクトを削除しました。</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>プロジェクト名は必須です。</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>開く</value>
+  </data>
+  <data name="ServerCompileNoTree" xml:space="preserve">
+    <value>サーバーでのコンパイルには作業ツリーは含まれません。エージェントブリーフはワークステーション上で補完されます。</value>
+  </data>
+  <data name="MilestoneCounts" xml:space="preserve">
+    <value>{0} 件が未完了 · {1} 件が完了</value>
+  </data>
+  <data name="ReportTaskCount" xml:space="preserve">
+    <value>{0} 件のタスク</value>
+  </data>
+  <data name="SubtaskReported" xml:space="preserve">
+    <value>報告済み</value>
+  </data>
+  <data name="MoreTasks" xml:space="preserve">
+    <value>ほか {0} 件</value>
+  </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>運用</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>インテリジェンス</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>ガバナンス</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>レビュー</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>エージェントチャット</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>検索またはコマンドを実行</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>コマンドパレット</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>ページを検索</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>該当するコマンドはありません</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>フリートは正常に稼働中</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>フリートに要対応</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>フリートはオフライン</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>ワークステーションがありません</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>{0} 台のワークステーション · オンライン {1} 台</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>現在のプロジェクトの概要</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>ボードで作業</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>ボードにないタスク</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>マイルストーン</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>プロジェクトのナレッジ</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>記録済みの決定事項</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>ボードのスナップショット</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>エージェントセッション</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>エージェントの設定</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>エージェントを実行するデバイス</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>このプロジェクト</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>アカウント</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>モデル接続</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>タスク</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>プロジェクトを作成</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>{0} 件の項目に対応が必要です</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>実行中</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>進行中の作業はありません。</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>要対応</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>対応が必要な項目はありません。</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>システム負荷</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>CPU、メモリ、GPU の負荷を報告したワークステーションはまだありません。</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>フリートの稼働状況</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>次のステップ</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>検証と実行は別です。承認によって完了するのはレビューであり、作業ログではありません。</value>
+  </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>現在のプロジェクト</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>目標</value>
   </data>
 </root>
