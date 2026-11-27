@@ -1529,3 +1529,40 @@ CI после этих изменений требует минимум 2 771 Li
 - задать PRODUCTION_SSH_HOST, PRODUCTION_SSH_USER, PRODUCTION_SSH_PRIVATE_KEY, PRODUCTION_SSH_KNOWN_HOSTS именно в Environment production.
 
 Repository rulesets endpoint вернул пустой список; branch protection read отвечает 403 для подключённой GitHub-интеграции, а legacy tag protection и Environment settings недоступны. Это означает «не подтверждено», а не «отсутствует». Production tag/deployment не запускать, пока владелец репозитория не подтвердит эти настройки.
+
+## Дополнение — preflight production workflow и доказательство отказа до тега (27 ноября 2026)
+
+Проверка implementation branch feat/release-management, PR #230, выявила два важных требования к безопасной публикации:
+
+1. Нельзя отправлять immutable release tag, пока workstation не доказала, что сможет наблюдать за production workflow. Иначе git push может уже запустить production deployment, а отсутствие GitHub CLI / авторизации / Actions read access обнаружится только после необратимого шага.
+2. Отказ до попытки отправить тег должен быть отличим от отказа с неоднозначным результатом push. Иначе серверная консервативная обработка неполного completion payload может ошибочно записать FailedAfterTag.
+
+### Реализовано в ReleasePublishExecutor
+
+До EnsureImmutableTagAsync workstation теперь выполняет:
+
+- проверку наличия GitHub CLI;
+- gh auth status --hostname github.com;
+- gh workflow list --all --repo <origin> --json id,name,path,state — в ответе должен быть ровно один .github/workflows/release.yml, с положительным ID и состоянием active;
+- gh run list --repo <origin> --workflow release.yml — подтверждается фактическая возможность читать список запусков целевого workflow, при этом пустой список предыдущих запусков допустим только после подтверждения активного определения workflow;
+- повторную проверку неизменности Candidate commit/tree.
+
+При отсутствии workflow, отключённом workflow, malformed response, отказе в доступе или timeout публикация прерывается до отправки нового тега.
+
+### Семантика completion
+
+- Все распознанные отказы после валидации payload, но до входа в операцию отправки тега, возвращают результат, привязанный к исходным Release/Candidate/version/tag/SHA, с явным tagPushed=false.
+- После входа в EnsureImmutableTagAsync ошибки остаются консервативными: удалённая сторона могла принять push, даже если локальная команда не получила подтверждения.
+- Сервер объединяет отрицательное свидетельство текущей попытки с уже сохранённым фактом PublicationTagPushed; повторная неудачная попытка не может стереть доказательство более ранней отправки тега.
+
+Добавлены regression tests для active / disabled / missing / malformed workflow, GitHub Actions read failure / timeout и точного JSON completion tagPushed=false. Linux TRX floor поднят до 2 773; соответствующие guard-блоки в CI и release workflow синхронны.
+
+### Проверка CI
+
+- Полный cross-platform run #46022091769 на implementation SHA 0c1d749610fc48acbd8355bd2619dcc5c8430b42 завершился success: Linux, Windows и macOS; все семь suites (API, Application, CLI, Domain, Infrastructure, Web, Worker), build, EF model check и formatting прошли.
+- После этого были добавлены только документальные коммиты о результате и remote landing authority. Для текущего PR head 895ca4dfa9128a4e5d37be55f225660dc1bf2135 выполняется отдельная проверка #46024858852; на момент обновления Linux завершился success, Windows и macOS выполняли завершающие formatting checks.
+- PR #230 остаётся открытым, Ready for review и не слитым. Тег и production deployment в рамках проверки не создавались.
+
+### Production safety blocker остаётся
+
+Подтверждение наличия workflow и Actions read access на workstation не заменяет GitHub-side protection. До первого реального production publish владелец репозитория должен подтвердить protection для release tags, required reviewer и запрет self-review в Environment production, допустимые deployment refs и наличие четырёх SSH secrets именно в этом Environment. Подключённая GitHub-интеграция не смогла прочитать эти настройки; неизвестное состояние нельзя считать безопасно настроенным.
