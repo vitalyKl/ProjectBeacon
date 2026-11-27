@@ -85,6 +85,7 @@ public class UpdateMilestoneHandler : ICommandHandler<UpdateMilestoneCommand, Re
             _dbFactory,
             command.Request.MilestoneId,
             command.Request.ProjectId,
+            command.Actor,
             async (db, milestone, token) =>
             {
                 if (command.Actor is not { IsHuman: true, UserId: not null } actor
@@ -165,6 +166,7 @@ public class DeleteMilestoneHandler : ICommandHandler<DeleteMilestoneCommand, Re
             _dbFactory,
             command.Request.MilestoneId,
             command.Request.ProjectId,
+            command.Actor,
             async (db, milestone, token) =>
             {
                 if (command.Actor is not { IsHuman: true, UserId: not null } actor
@@ -215,7 +217,10 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     public async Task<Result<MilestoneDto>> HandleAsync(GetMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones
+        // Resolve only the explicitly requested milestone and optional route project.
+        // The exact lookup intentionally crosses the ambient filter so an existing resource
+        // can produce the documented 403; mismatched route project ids still return 404.
+        var milestone = await db.Milestones.IgnoreQueryFilters()
             .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
                 && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
         if (milestone is null)
@@ -286,6 +291,7 @@ public class CloseMilestoneHandler : ICommandHandler<CloseMilestoneCommand, Resu
             _dbFactory,
             command.Request.MilestoneId,
             command.Request.ProjectId,
+            command.Actor,
             async (db, milestone, token) =>
             {
                 if (command.Actor is not { IsHuman: true, UserId: not null } actor
@@ -340,6 +346,7 @@ public class ReopenMilestoneHandler : ICommandHandler<ReopenMilestoneCommand, Re
             _dbFactory,
             command.Request.MilestoneId,
             command.Request.ProjectId,
+            command.Actor,
             async (db, milestone, token) =>
             {
                 if (command.Actor is not { IsHuman: true, UserId: not null } actor
@@ -380,6 +387,7 @@ internal static class MilestoneMutationCoordinator
         IBeaconDbFactory dbFactory,
         Guid milestoneId,
         Guid? projectId,
+        ActorContext? actor,
         Func<IBeaconDb, Milestone, CancellationToken, Task<Result<T>>> mutation,
         CancellationToken ct)
     {
@@ -393,19 +401,34 @@ internal static class MilestoneMutationCoordinator
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            var scope = await db.Milestones.AsNoTracking()
-                .Where(item => item.Id == milestoneId
-                    && (projectId == null || item.ProjectId == projectId.Value))
-                .Select(item => new { item.ProjectId })
-                .FirstOrDefaultAsync(ct);
-            if (scope is null)
-                return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+            Guid scopedProjectId;
+            if (projectId is { } requestedProjectId)
+            {
+                if (actor is not { IsHuman: true, UserId: not null } humanActor
+                    || !await ProposalProjectAuthorization.CanWriteAsync(
+                        db, humanActor, requestedProjectId, ct))
+                    return Result.Forbidden<T>("Project membership is required to mutate this milestone.");
 
-            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scope.ProjectId, ct))
-                return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+                scopedProjectId = requestedProjectId;
+                if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scopedProjectId, ct))
+                    return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+            }
+            else
+            {
+                var scope = await db.Milestones.AsNoTracking()
+                    .Where(item => item.Id == milestoneId)
+                    .Select(item => new { item.ProjectId })
+                    .FirstOrDefaultAsync(ct);
+                if (scope is null)
+                    return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+
+                scopedProjectId = scope.ProjectId;
+                if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scopedProjectId, ct))
+                    return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+            }
 
             var milestone = await db.Milestones
-                .FirstOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == scope.ProjectId, ct);
+                .FirstOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == scopedProjectId, ct);
             if (milestone is null)
                 return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
 
