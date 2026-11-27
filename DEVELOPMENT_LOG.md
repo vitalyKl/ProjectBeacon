@@ -3,7 +3,7 @@
 **Implementation branch:** `feat/release-management`  
 **Plan branch:** `docs/release-management-plan`  
 **Initial base:** `main` at `22a1a9e559a97124f939b6da2de2e4f9612f4d94`  
-**Current PR base (27 Nov 2026):** `main` at `ed4dace38357f5062478ba3322148ab352d916ce` (`0.7.5.10`)  
+**Current PR base (27 Nov 2026):** `main` at `7258d4e20a4cc5ad32f5a7b0994ae400365a4c5a` (`0.7.5.10`)  
 **Started:** 2026-11-24  
 **Scope:** universal ProjectBeacon product feature for customer projects; no SaaS Control Plane, billing, or platform-operator work.
 
@@ -27,7 +27,7 @@ This log is maintained in the repository and updated in the same branch as imple
 | Git tags | GitSync fetch uses `--no-tags`. | Define and implement tag sync separately from working-tree fast-forward. |
 | Version policy | The implementation branch now has project-scoped VersionPolicy and Release entities. Initial implementation was based on `0.7.5.9`; current `main` and feature branch version are `0.7.5.10`. | Keep all changes isolated in this feature branch; CI and EF model checks are green on the latest verified head. |
 | Version workflow | Release workflow and configured version schemes were reconciled in S3/S4; current repository version is `0.7.5.10`. | Do not allow tag/deploy publication until GitHub-side tag protection and Environment production safeguards are confirmed. |
-| Landing authority | PR #194's original contract remains the local GitLand executor, but this feature branch adds a server-authorized GitHub async merge path for validated remote PRs. | GitHub is authoritative for a remote merge; the pinned workstation executes the request and AutoSync reconciles only after MERGED proof. No bypass of repository rules or competing local merge authority. |
+| Landing authority | The feature branch includes a server-authorized GitHub async merge path for validated remote PRs. | GitHub is authoritative for remote merge; the pinned workstation executes the request and AutoSync reconciles only after MERGED proof. No bypass of repository rules or competing local merge authority. |
 | GitHub protection | Tag rulesets and production environment reviewers have not yet been verified. | Do not assume dangerous publication is externally protected. Verify before S3. |
 
 ## Progress
@@ -47,9 +47,8 @@ This log is maintained in the repository and updated in the same branch as imple
 ## Next actions
 
 1. Keep production publication disabled until the repository owner verifies release-tag update/delete protection, branch/ruleset required checks, and Environment production reviewers, self-review policy, deployment refs and four SSH secrets.
-2. Validate first publication and GitHub Merge Queue behavior in a writable organization-owned disposable repository; do not use a production tag or the implementation PR for this acceptance test.
-3. Finish the S6 independent-project acceptance fixture (including a non-Directory.Build.props version source such as package.json) and record its end-to-end result.
-4. Keep PR #230 open and unmerged until the external safeguards and the disposable-repository acceptance checks are complete.
+2. Validate first publication and actual GitHub Merge Queue behavior in a writable organization-owned disposable repository; do not use a production tag or the implementation PR for this acceptance test.
+3. Keep PR #230 open and unmerged until the external safeguards and disposable-repository acceptance checks are complete.
 
 ## Blockers and decisions
 
@@ -3043,3 +3042,34 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - PR #230 remains open, Ready for review, mergeable and unmerged.
 - No release tag or production deployment was created.
 - SaaS Control Plane, billing and operator-console work remain outside this branch.
+
+## 2026-11-27 — S6 independent package.json flow and final cross-platform matrix green
+
+### S6 independent-project acceptance coverage
+
+- Added an independent npm sample fixture using package.json, SemVer 2.4.1 and JSON Pointer /version. The fixture does not depend on Directory.Build.props.
+- The MCP integration test runs version_check against an isolated workspace and verifies the configured package.json projection, official version, in_sync status and release-2.4.1 tag projection.
+- The ReleasePrepare writer test updates package.json from 2.4.1 to 2.4.2, preserves the other manifest fields, then verifies extraction against the same VersionPolicy and tag formatting.
+- The pre-existing Domain fixture test also validates policy/extraction/normalization and the independent release tag pattern.
+- Both CI workflows now have the same Linux TRX floor of 2,775; their guard blocks were compared and are identical.
+
+### Exact-head validation
+
+- Exact implementation head: 260bd39430fc1157bbde744502f2387c364c4b69.
+- GitHub Actions run #46028191547 completed success on Linux, Windows and macOS.
+- All seven suites passed on every platform: API, Application, CLI, Domain, Infrastructure, Web and Worker. This includes both new S6 CLI tests on Windows, macOS and Linux.
+- Build, EF model check and formatting passed on all platforms. Linux also passed release workflow permissions, release manifest tag policy, failed-test report and TRX floor 2,775.
+- No failing steps remain in the exact-head run.
+
+### Repository and PR state
+
+- Main base: 7258d4e20a4cc5ad32f5a7b0994ae400365a4c5a, version 0.7.5.10. Feature branch is 1,073 commits ahead and 0 behind main at this checkpoint.
+- PR #230 remains open, Ready for review, mergeable and unmerged. No production tag or deployment was created.
+- S6 now has independent-project read/write code coverage. The remaining cross-project acceptance is live Merge Queue / first-publication behavior in a writable organization-owned disposable repository; do not use a production tag.
+- External GitHub protections remain a hard blocker before first production publish: tag update/delete protections, branch/ruleset required checks, Environment production reviewers/self-review/deployment refs and the four Environment-scoped SSH secrets are still unverified.
+
+### Remaining work
+
+1. Repository owner verifies all GitHub-side protections and Environment production settings.
+2. Run an explicit live async merge / Merge Queue acceptance and first-publish observation in a disposable organization-owned repository.
+3. Keep the implementation PR unmerged until both external acceptance conditions pass.
