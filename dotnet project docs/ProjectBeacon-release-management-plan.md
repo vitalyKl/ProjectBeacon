@@ -200,3 +200,13 @@
 Открытый вопрос 9.4 исходного плана закрыт реализацией и проверкой в ветке `feat/release-management`: при наличии GitHub PR remote merge выполняется через GitHub как авторитетную систему, а workstation выступает исполнителем только после server-side authorization и повторной проверки Candidate/Review evidence. GitHub async merge вызывается с точным PR head SHA и `merge_action=default`; Beacon не запрашивает обход branch/repository rules. Ответы `pending` и `enqueued` не означают завершённое слияние. AutoSync подтверждает фактический `MERGED`, merge commit, ancestry/tree и post-merge check, после чего сервер записывает remote landing proof. Локальный GitLand не конкурирует с GitHub за авторитет remote merge.
 
 Это решение не отменяет внешнюю проверку branch/ruleset/tag protection и Environment `production`: эти настройки не удалось прочитать подключённой интеграцией и они остаются обязательным условием первого production publish.
+
+
+### Итоговая проверка S0-S6 и оставшиеся внешние acceptance — 27 ноября 2026
+
+- S6 independent-project fixture закрыт: npm fixture использует package.json, SemVer 2.4.1, JSON Pointer /version и custom tag pattern release-{version}; тесты читают и обновляют manifest без Directory.Build.props, сохраняя остальные JSON fields.
+- Async merge recovery различает pending и enqueued. Pending-to-enqueued фиксируется для того же UUID; при истечении UUID переход восстанавливается по живой GraphQL queue entry. Отказ фиксируется только при явном HTTP 404, истечении исходных 24 часов, всё ещё открытом точном PR и отсутствии queue entry. Permission/network/rate-limit errors остаются retryable.
+- AutoSync error text больше не называет любой незавершённый запрос отказом merge queue.
+- Python release manifest parser приведён к RFC 6901: пустой root pointer, строгие ~0/~1 escapes и ASCII decimal array indexes. Roadmap release-load failures отделены от успешного empty state и покрыты Web tests.
+- Exact PR head 1532a507ba698bd82c81070828c03a99fc6e427a, run #46030846976: Linux, Windows и macOS success; все семь suites, build, EF model check и formatting успешны. Linux release security scripts and TRX guard also passed.
+- Остались только внешние acceptance: live async merge / Merge Queue и first-publish observation в writable disposable repository, подтверждение владельцем tag/branch protection и Environment production reviewers/self-review/deployment refs/four SSH secrets. Пока это не сделано, PR не сливать и production tag/deployment не создавать.
