@@ -134,16 +134,6 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, rootedProjectId, ct))
                     return Result.Failure<WorkstationCommandDto>("Project not found.", ErrorKind.NotFound);
 
-                // ReleasePrepare and GitLand share the repository mutation boundary.
-                // The project row lock above makes this check atomic with Prepare's preflight;
-                // do not enqueue a new GitLand while another repository operation is active.
-                if (command.Request.Kind == WorkstationCommandKind.GitLand
-                    && await ProjectRuntimeMutationGate.HasActiveRepositoryOperationAsync(
-                        db, rootedProjectId, ct))
-                    return Result.Failure<WorkstationCommandDto>(
-                        "The project has an active repository operation or pipeline session. Resolve it before queueing GitLand.",
-                        ErrorKind.Conflict);
-
                 var currentDevice = await db.DaemonDevices
                     .FirstOrDefaultAsync(candidate => candidate.Id == command.Request.DeviceId, ct);
                 if (currentDevice is null || currentDevice.IsRevoked || currentDevice.UserId != command.Request.UserId)
@@ -160,6 +150,16 @@ public class EnqueueCommandHandler : ICommandHandler<EnqueueCommandCommand, Resu
                 var resolved = await ProjectRuntimeResolver.ResolveAsync(db, rootedProjectId, currentDevice.Id, ct);
                 if (!resolved.Success)
                     return Result.Failure<WorkstationCommandDto>(resolved.Error ?? CommandSandbox.RuntimeRequired);
+
+                // ReleasePrepare and GitLand share the repository mutation boundary.
+                // The project row lock above makes this check atomic with Prepare's preflight;
+                // do not enqueue a new GitLand while another repository operation is active.
+                if (command.Request.Kind == WorkstationCommandKind.GitLand
+                    && await ProjectRuntimeMutationGate.HasActiveRepositoryOperationAsync(
+                        db, rootedProjectId, ct))
+                    return Result.Failure<WorkstationCommandDto>(
+                        "The project has an active repository operation or pipeline session. Resolve it before queueing GitLand.",
+                        ErrorKind.Conflict);
 
                 var sanitized = CommandSandbox.SanitizeProjectPayload(payloadJson, command.Request.Kind);
                 if (!sanitized.Success)
