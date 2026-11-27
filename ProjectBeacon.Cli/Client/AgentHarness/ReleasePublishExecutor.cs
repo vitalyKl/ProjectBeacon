@@ -252,6 +252,20 @@ internal static class ReleasePublishExecutor
 
     private sealed record TagEvidence(bool Success, bool TagPushed, string? Error);
 
+    /// <summary>
+    /// Only a successful, well-formed remote inspection that proves the tag is absent
+    /// or points elsewhere can establish that the Candidate was not published.
+    /// Any failed or malformed inspection is conservatively treated as possibly pushed.
+    /// </summary>
+    internal static bool MayHavePublishedTag(
+        bool remoteInspectionSucceeded,
+        bool remoteListingWellFormed,
+        string? observedTargetSha,
+        string candidateSha) =>
+        !remoteInspectionSucceeded
+        || !remoteListingWellFormed
+        || string.Equals(observedTargetSha, candidateSha, StringComparison.OrdinalIgnoreCase);
+
     private static async Task<TagEvidence> EnsureImmutableTagAsync(
         string root, string[] filters, string originUrl, PublishRequest request,
         string expectedMessage, CancellationToken ct)
@@ -260,17 +274,20 @@ internal static class ReleasePublishExecutor
             root, filters, ct, originUrl, "ls-remote", "--tags", originUrl,
             "refs/tags/" + request.TagName, "refs/tags/" + request.TagName + "^{}");
         if (!Succeeded(remote))
-            return new TagEvidence(false, false, "Could not inspect the remote release tag. No tag was created.");
-
-        var localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
-        if (localTag.Exists && !localTag.Valid)
-            return new TagEvidence(false, false, "A local tag with this name exists but does not match the immutable Candidate. Refusing to overwrite it.");
+            return new TagEvidence(false, true,
+                "Could not inspect the remote release tag. The tag may already exist; refusing to classify this publication as pre-tag.");
 
         var remoteEntries = ParseLsRemote(remote.StdOut);
         if (remoteEntries.Error is not null)
-            return new TagEvidence(false, false, remoteEntries.Error);
+            return new TagEvidence(false, true,
+                "Could not safely interpret the remote release tag listing; the tag may already exist. " + remoteEntries.Error);
         var hasRemote = remoteEntries.ShaByRef.ContainsKey("refs/tags/" + request.TagName)
             || remoteEntries.ShaByRef.ContainsKey("refs/tags/" + request.TagName + "^{}");
+
+        var localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
+        if (localTag.Exists && !localTag.Valid)
+            return new TagEvidence(false, hasRemote,
+                "A local tag with this name exists but does not match the immutable Candidate. Refusing to overwrite it.");
 
         if (hasRemote && !localTag.Exists)
         {
@@ -278,8 +295,8 @@ internal static class ReleasePublishExecutor
                 root, filters, ct, originUrl, "fetch", "--no-tags", "--no-recurse-submodules",
                 originUrl, "refs/tags/" + request.TagName + ":refs/tags/" + request.TagName);
             if (!Succeeded(fetch))
-                return new TagEvidence(false, false,
-                    "The remote release tag exists but could not be fetched without moving local refs. Refusing to overwrite it.");
+                return new TagEvidence(false, true,
+                    "The remote release tag already exists but could not be fetched and verified. Refusing to overwrite it.");
             localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
             var advertisedTagObjectSha = remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
             if (!localTag.Valid
@@ -297,7 +314,10 @@ internal static class ReleasePublishExecutor
             var remoteTagObjectSha = remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
             if (!string.Equals(remoteSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(remoteTagObjectSha, localTag.TagObjectSha, StringComparison.OrdinalIgnoreCase))
-                return new TagEvidence(false, false, "The remote tag object or target differs from the locally verified immutable Candidate. Refusing to move it.");
+                return new TagEvidence(false,
+                    MayHavePublishedTag(remoteInspectionSucceeded: true, remoteListingWellFormed: true,
+                        remoteSha, request.CandidateSha),
+                    "The remote tag object or target differs from the locally verified immutable Candidate. Refusing to move it.");
         }
 
         if (localTag.Exists && !localTag.Valid)
@@ -338,16 +358,21 @@ internal static class ReleasePublishExecutor
                     root, filters, ct, originUrl, "ls-remote", "--tags", originUrl,
                     "refs/tags/" + request.TagName, "refs/tags/" + request.TagName + "^{}");
                 var after = ParseLsRemote(afterFailedPush.StdOut);
-                if (after.Error is not null)
-                    return new TagEvidence(false,
-                        after.ShaByRef.ContainsKey("refs/tags/" + request.TagName),
-                        "Could not safely interpret the remote tag after an ambiguous push: " + after.Error);
+                if (!Succeeded(afterFailedPush) || after.Error is not null)
+                    return new TagEvidence(false, true,
+                        "The tag push outcome is ambiguous and the remote tag could not be conclusively inspected. Treating the tag as potentially published; retry only with the same immutable Candidate. "
+                        + (after.Error ?? Clip(afterFailedPush.StdErr)));
                 var afterSha = after.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var peeled)
                     ? peeled
                     : after.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-                if (!Succeeded(afterFailedPush) || !string.Equals(afterSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase))
+                if (!MayHavePublishedTag(
+                    remoteInspectionSucceeded: true,
+                    remoteListingWellFormed: true,
+                    afterSha,
+                    request.CandidateSha))
                     return new TagEvidence(false, false,
-                        "Tag push was rejected or its result is unknown. The tag was not moved; inspect the remote before retrying. " + Clip(push.StdErr));
+                        "The push failed and a successful remote inspection confirms that the Candidate tag was not published. "
+                        + Clip(push.StdErr));
 
                 // A competing writer may have created the same tag name while our push
                 // acknowledgement was lost. Matching the peeled commit is insufficient:
