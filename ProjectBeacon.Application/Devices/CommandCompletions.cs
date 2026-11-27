@@ -1383,6 +1383,36 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
             detailsJson: JsonSerializer.Serialize(details)));
     }
 
+    /// <summary>
+    /// A workstation may lose its acknowledgement after pushing the immutable tag.
+    /// Accept a negative tag-pushed assertion only when the failure result is bound to
+    /// this exact server-queued Publish payload and includes an explicit boolean.
+    /// Incomplete or mismatched evidence must never make a Candidate cancellable.
+    /// </summary>
+    internal static bool ReadTagPushedEvidence(JsonObject payload, string? resultJson)
+    {
+        if (!TryObject(resultJson, out var result)
+            || !IsPublicationResultForPayload(payload, result)
+            || !TryReadBool(result, "tagPushed", out var tagPushed))
+            return true;
+        return tagPushed;
+    }
+
+    private static bool IsPublicationResultForPayload(JsonObject payload, JsonObject result) =>
+        ReadString(result, "action") == "Publish"
+        && ReadGuid(result, "projectId") != Guid.Empty
+        && ReadGuid(result, "projectId") == ReadGuid(payload, "projectId")
+        && ReadGuid(result, "releaseId") != Guid.Empty
+        && ReadGuid(result, "releaseId") == ReadGuid(payload, "releaseId")
+        && ReadGuid(result, "candidateId") != Guid.Empty
+        && ReadGuid(result, "candidateId") == ReadGuid(payload, "candidateId")
+        && !string.IsNullOrWhiteSpace(ReadString(result, "version"))
+        && string.Equals(ReadString(result, "version"), ReadString(payload, "version"), StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(ReadString(result, "tagName"))
+        && string.Equals(ReadString(result, "tagName"), ReadString(payload, "tagName"), StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(ReadString(result, "candidateSha"))
+        && string.Equals(ReadString(result, "candidateSha"), ReadString(payload, "candidateSha"), StringComparison.OrdinalIgnoreCase);
+
     private static bool TryObject(string? json, out JsonObject value)
     {
         value = new JsonObject();
@@ -1406,8 +1436,14 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
     private static int ReadInt(JsonObject value, string name) =>
         value[name] is JsonValue element && element.TryGetValue<int>(out var number) ? number : 0;
 
+    private static bool TryReadBool(JsonObject value, string name, out bool flag)
+    {
+        flag = false;
+        return value[name] is JsonValue element && element.TryGetValue<bool>(out flag);
+    }
+
     private static bool ReadBool(JsonObject value, string name) =>
-        value[name] is JsonValue element && element.TryGetValue<bool>(out var flag) && flag;
+        TryReadBool(value, name, out var flag) && flag;
 
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
@@ -1490,17 +1526,17 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
             return;
         }
 
-        var tagPushed = TryObject(resultJson, out var result)
-            ? ReadBool(result, "tagPushed")
-            : true; // Completion can be lost after the remote tag was created; retry must inspect, never rewrite it.
-        var runId = TryObject(resultJson, out result) ? ReadLong(result, "workflowRunId") : null;
-        var runUrl = TryObject(resultJson, out result) ? ReadString(result, "workflowRunUrl") : null;
+        var hasResult = TryObject(resultJson, out var result);
+        var trustedResult = hasResult && IsPublicationResultForPayload(payload, result);
+        var tagPushed = trustedResult && TryReadBool(result, "tagPushed", out var reportedTagPushed)
+            ? reportedTagPushed
+            : true; // Missing or mismatched evidence is conservative: the immutable tag may already exist.
+        var runId = trustedResult ? ReadLong(result, "workflowRunId") : null;
+        var runUrl = trustedResult ? ReadString(result, "workflowRunUrl") : null;
 
         if (!success)
         {
-            var reportedError = TryObject(resultJson, out result)
-                ? ReadString(result, "error")
-                : null;
+            var reportedError = trustedResult ? ReadString(result, "error") : null;
             release.RecordPublicationFailure(row.Id,
                 reportedError ?? error ?? row.Error ?? "Release publication workstation command failed.",
                 tagPushed, runId, runUrl);
