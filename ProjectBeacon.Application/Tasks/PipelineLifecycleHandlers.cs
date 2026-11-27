@@ -351,6 +351,16 @@ public class ApprovePipelineHandler : ICommandHandler<ApprovePipelineCommand, Re
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineStateDto>("Task not found.");
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, task.ProjectId, ct))
+                return Result.Failure<PipelineStateDto>("Project not found.", ErrorKind.NotFound);
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineStateDto>(releaseBlock, ErrorKind.Conflict);
+            task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
             if (task.PipelineStage != TaskPipelineStage.Approved)
                 return Result.Failure<PipelineStateDto>("Pipeline is not approved.");
 
@@ -445,6 +455,16 @@ public class ForceClosePipelineHandler : ICommandHandler<ForceClosePipelineComma
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
             var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, task.ProjectId, ct))
+                return Result.Failure<PipelineStateDto>("Project not found.", ErrorKind.NotFound);
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineStateDto>(releaseBlock, ErrorKind.Conflict);
+            task = await db.Tasks.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineStateDto>("Task not found.");
