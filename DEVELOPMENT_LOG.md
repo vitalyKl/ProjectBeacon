@@ -1755,3 +1755,52 @@ The previous commit tightened the .NET policy validator to RFC 6901, but the tag
 3. Complete live async GitHub merge-queue acceptance in a disposable repository (pending→enqueued, 24-hour pending UUID expiry and GraphQL queue-entry recovery, queue removal, direct/queued completion, closed-unmerged PR, PR/head/base drift and post-merge check failure). Current unit tests/CI do not replace the live exercise.
 4. Administrator verification of classic `v*` tag protection and GitHub Environment `production` required reviewers remains outstanding. No production tag or deployment.
 5. Continue independent user-project acceptance for RLS/roles, localization, UI failure states, Release Candidate/Publish/recovery.
+
+
+## 2026-11-27 — JSON Pointer parity and expiry-safe GitHub async landing recovery
+
+**Implementation source head before this journal entry:** `a6efad9df6a61d0c279e931fe7b93e5cd06db3c0`  
+**PR:** [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230)
+
+### Version-source parity: RFC 6901
+
+The .NET policy reader and Python tag-triggered release gate now use the same JSON Pointer rules:
+
+- Empty pointer `""` selects the entire JSON document. The policy allows an empty selector only for Json sources.
+- Only `~0` and `~1` escapes are accepted; trailing `~` and other escape codes fail validation/extraction.
+- Array indexes use ASCII decimal digits, are non-negative, and cannot contain leading zeroes except the single index `0`. Empty, signed, Unicode-digit, and out-of-range indexes are rejected.
+- Regression tests cover root JSON strings, escaped `/` and `~` object keys, malformed escapes, and array-index parity.
+- The C# root fixture was corrected to contain a valid JSON string literal rather than a plain text token.
+
+### Expired GitHub async merge requests
+
+The previous AutoSync implementation correctly recovered an expired 24-hour request UUID when GraphQL still showed a live `mergeQueueEntry`, but it left an attempt in `pending` indefinitely when the exact UUID returned 404 and the still-open PR had no queue entry.
+
+Implemented a fail-closed terminal outcome:
+
+- The server now includes the accepted-at timestamp (`LandingAttempt.UpdatedAt` recorded when GitHub accepted `pending`) in the AutoSync target DTO. No database migration is needed.
+- The pinned workstation classifies only an explicit HTTP 404 as a missing/expired async UUID. HTTP 403, rate limiting, timeouts, malformed responses, or GraphQL errors remain unknown/retryable and do not fail the landing.
+- After 24 hours, the client queries GraphQL. It reports `GitHubAsyncMergeFailed` only when the exact PR is still OPEN and GraphQL confirms `mergeQueueEntry` is null. A present queue entry is still recovered as `enqueued`; an entry that is already known enqueued continues to use the separate queue-removal logic.
+- The existing device-authenticated server failure handler revalidates the exact landing attempt, request UUID, PR/source/base and Review proof before moving ExecutePending to Failed. The task remains InProgress/Approved; no landing success proof is written and the task is not closed.
+- Added CLI tests for the exact 24-hour boundary and for HTTP 404 vs 403/429/timeout classification; added application coverage that the pending acceptance timestamp is exported in the AutoSync DTO. AutoSync diagnostics now say the merge request did not complete, rather than incorrectly claiming every failure is a queue rejection.
+
+### Verification state
+
+- Changes are committed on `feat/release-management`; source/test head before this journal update is `a6efad9df6a61d0c279e931fe7b93e5cd06db3c0`.
+- The last green CI is [#45899056564](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45899056564) on `e87f4e6fc962b82102957b6d48c4ea7eac45f475`. It predates the JSON Pointer, expiry-recovery, and test-fixture changes.
+- The Actions run list currently contains no run for `a6efad9d`; the commit combined-status response has no statuses. This repository's CI does not run on PR `synchronize`, and this GitHub connection exposes no workflow-dispatch write action. Do not claim the current source head is CI-green. Local .NET SDK/build is unavailable in this environment.
+- A focused Python exercise of the strict JSON Pointer behavior passed for the root selector, escaped keys and invalid array indexes; this is not a substitute for repository CI.
+
+### Branch integration and acceptance blockers
+
+- `main` remains at `ed4dace38357f5062478ba3322148ab352d916ce` (readable UI errors, version `0.7.5.10`). The feature branch is `845` commits ahead and `1` behind; GitHub reports PR #230 as not mergeable. The main commit overlaps UI/resource files changed by Release Management. A deliberate three-way merge is still required; no forced ref update or overwrite was performed.
+- Live GitHub merge-queue acceptance remains outstanding: async pending/enqueued, UUID expiry and GraphQL recovery, queue removal, direct/queued completion, closed-unmerged PR, source/base drift and post-merge check failure. Unit tests do not replace a real merge-queue run.
+- Classic `v*` tag protection and GitHub Environment `production` required reviewers remain unverified. No production tag or deployment.
+- Continue independent user-project acceptance for RLS/roles, localized settings and errors, Candidate/Publish/recovery. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Obtain a full Linux/Windows/macOS CI run for the exact post-journal head.
+2. Resolve the one-commit divergence from `main` with a real three-way merge and rerun CI.
+3. Finish a controlled live merge-queue exercise in a disposable GitHub repository with required checks configured.
+4. Have an administrator verify classic tag protection and production Environment reviewers before any publication test.
