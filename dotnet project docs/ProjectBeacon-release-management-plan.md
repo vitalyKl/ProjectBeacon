@@ -986,3 +986,42 @@ Source/test head до последнего journal commit: `74486e8517136165e270
 3. Провести live acceptance async merge queue в disposable GitHub repository (pending/enqueued, expired UUID с queue entry и без него, queue removal, direct/queued completion, закрытый unmerged PR, source/base drift, failed post-merge check).
 4. Администратору проверить classic tag protection `v*` и GitHub Environment `production` required reviewers. Production tag/deploy не создавать до проверки.
 5. Продолжить user-project acceptance: RLS/roles, localized UI/error states, Candidate/Publish/recovery. SaaS Control Plane и billing остаются вне scope.
+
+
+---
+
+## Дополнение — exact-head CI, release manifest hardening и merge-commit policy (27 ноября 2026)
+
+Implementation: ветка `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230).
+
+### Проверка CI
+
+- CI [#45955852379](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45955852379) успешно проверил implementation SHA `e02e4d7579c3251e7b6ee5b82c8eaf7fc4611ad9` на Linux, Windows и macOS.
+- Все три платформы прошли Build, EF model validation, семь test modules и formatting.
+- Linux TRX guard прошёл с 2 762 результатами, одним ожидаемым platform-conditional skip и нулём failures. Новые Prepare/Verify/Publish handler tests и ReleasePrepare symlink tests вошли в этот run.
+- Следующие commits добавили явный merge-commit contract и regression assertion. Их проверяет новый exact-head run #45957896644; до его завершения нельзя считать текущий head CI-валидированным.
+
+### Безопасность ReleasePrepare manifest
+
+- ReleasePrepare проверяет .beacon и .beacon/release.json на symlink/junction перед записью; dangling symlink также распознаётся через LinkTarget.
+- Это предотвращает запись release manifest за пределы выделенного release worktree.
+- ReleasePrepare использует один resolved filesystem path для записи и SHA-256 проверки манифеста.
+- Регрессионные тесты покрывают безопасный путь, symlink каталога .beacon и dangling symlink файла release.json.
+
+### Merge method — обязательное ограничение
+
+- VerifyLanding требует, чтобы точный подготовленный ReleasePrepare commit SHA оставался предком удалённой target branch. Release tag validator также ищет single-parent preparation commit и Beacon-Release trailer.
+- Проверка на временном Git repository подтвердила: merge commit сохраняет исходный ReleasePrepare SHA в ancestry; squash создаёт новый SHA и исходный коммит не является предком. Rebase также переписывает SHA.
+- Поэтому Release PR должен сливаться через merge-commit strategy. Для прямого async merge Beacon явно отправляет merge_method=merge при сохранении merge_action=default.
+- Если для ветки настроена GitHub Merge Queue, её отдельный административный параметр **Merge method** также должен быть установлен в **merge**. merge_method в API поддерживается для direct merges; merge queue использует метод, выбранный в настройках очереди.
+- VerifyLanding остаётся fail-closed при отсутствии исходного prepared SHA. В этом случае Candidate не создаётся, PublishRelease нельзя вызвать, production tag/deploy не запускается.
+- Repository metadata сообщает, что разрешены merge commits, squash и rebase. Сама настройка Merge Queue и защита ветки через текущую GitHub integration не читаются. Это не доказывает, что очередь использует неправильный метод; параметр остаётся непроверенным.
+
+### Текущий статус PR и остаток
+
+- PR #230 открыт, не слит. Текущий implementation head: `8ddd6f535eb5d3bab1886d8829ec9ffa5a4f9820`; base main: `ed4dace38357f5062478ba3322148ab352d916ce`. Feature branch не отстаёт от main.
+- Текущий exact-head CI: [#45957896644](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45957896644), ещё выполняется.
+- Для завершения live acceptance всё ещё нужен отдельный writable disposable repository с настроенной Merge Queue. Деструктивные queue scenarios нельзя запускать на ProjectBeacon.
+- Администратор должен подтвердить Merge Queue method=merge, classic tag protection `v*` и required reviewers Environment `production`.
+- После этого остаётся end-to-end user-project acceptance: ReleasePrepare → PR merge → immutable Candidate → Publish/tag → Actions workflow → deployed version/SHA, включая recovery/failure paths.
+- Не создавать production tag/deployment и не вливать PR #230 до выполнения acceptance blockers. SaaS Control Plane и billing не затрагивать.
