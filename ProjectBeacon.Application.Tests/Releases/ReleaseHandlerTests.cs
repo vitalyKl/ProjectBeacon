@@ -288,7 +288,7 @@ public sealed class ReleaseHandlerTests : IDisposable
 
         var deleteDependencyTarget = await new DeleteTaskHandler(Factory(), new ContentWriter())
             .HandleAsync(
-                new DeleteTaskCommand(new DeleteTaskRequest(externalTask.Id, _projectId), OwnerActor()),
+                new DeleteTaskCommand(new DeleteTaskRequest(externalTask.Id), OwnerActor()),
                 TestContext.Current.CancellationToken);
         Assert.False(deleteDependencyTarget.Success);
         Assert.Equal(ErrorKind.Conflict, deleteDependencyTarget.Kind);
