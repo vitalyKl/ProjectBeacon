@@ -574,7 +574,7 @@ internal static class ReleasePrepareExecutor
         return (urls[0].Trim(), repository, null);
     }
 
-    private static async Task<(bool Success, string? Error)> WriteVersionSourceAsync(
+    internal static async Task<(bool Success, string? Error)> WriteVersionSourceAsync(
         string path, ProjectVersionSourcePolicy source, ProjectVersionPolicy policy, string version, CancellationToken ct)
     {
         if (Reparse(path)) return (false, "Version source is a symlink or junction: " + source.Path);
