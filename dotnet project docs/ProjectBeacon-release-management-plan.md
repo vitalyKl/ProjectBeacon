@@ -947,3 +947,42 @@ Source/test head до последнего journal commit: `74486e8517136165e270
 - Нельзя перезаписывать UI/resource files целиком. Требуется контролируемый three-way merge последнего main commit в feature branch после проверки текущего exact-head CI.
 
 Остаток без изменений: live async GitHub merge-queue acceptance в disposable repository; administrator verification classic tag protection `v*` и required reviewers Environment `production`; user-project acceptance (RLS, roles, errors, locales, Candidate/Publish/recovery). Production tag/deployment не запускать. SaaS Control Plane и billing вне scope.
+
+
+## Дополнение — RFC 6901 и истечение GitHub async merge UUID (27 ноября 2026)
+
+Реализация находится в отдельной ветке `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230).
+
+### Согласование JSON version source
+
+- Пустой JSON Pointer `""` теперь означает корневой JSON-документ; в VersionPolicy он разрешён только для Json source.
+- В обоих валидаторах поддерживаются только escape-последовательности `~0` и `~1`; trailing `~` и остальные коды отклоняются.
+- Индексы массивов используют только ASCII decimal без знака и ведущих нулей (кроме `0`). Unicode-цифры, пустые и выходящие за диапазон индексы отклоняются.
+- Domain/Python regression tests покрывают root scalar, escaped slash/tilde keys, invalid escapes и array index cases. C# root fixture содержит корректную JSON string literal.
+
+### Истечение pending async merge request
+
+Предыдущая реализация восстанавливала `pending → enqueued`, если после истечения UUID GraphQL ещё показывал live `mergeQueueEntry`, но оставляла попытку бессрочно ждать, если UUID уже не существовал и открытый PR не был в очереди.
+
+Добавлен отдельный terminal failure, не смешивающий неизвестное состояние с подтверждённым отказом:
+
+- При принятии GitHub async request Beacon сохраняет момент принятия через существующий `LandingAttempt.UpdatedAt`; он передаётся в AutoSync DTO без миграции БД.
+- Только явный HTTP 404 от lookup точного async UUID классифицируется как истёкший/отсутствующий request. 403, 429, timeout, сетевые и GraphQL ошибки остаются неизвестными/retryable и не переводят attempt в Failed.
+- После 24 часов workstation выполняет GraphQL lookup. `GitHubAsyncMergeFailed` отправляется только при точном `OPEN` PR и отсутствующей `mergeQueueEntry`. Наличие queue entry восстанавливает `enqueued`; для ранее подтверждённой enqueued-записи продолжает действовать отдельная проверка удаления из очереди.
+- Сервер снова проверяет device pin, точный attempt/request UUID, PR/source/base и Review proof. В Failed переходит только landing attempt; Task остаётся InProgress/Approved, success proof не создаётся и Task не закрывается.
+- Добавлены CLI tests для границы 24 часа, HTTP 404 vs 403/429/timeout и Application test для передачи pending timestamp в AutoSync. Диагностика AutoSync больше не утверждает, что всякий сбой означает именно удаление из merge queue.
+
+### Проверка
+
+- Source/test head перед последним journal commit: `a6efad9df6a61d0c279e931fe7b93e5cd06db3c0`; Development Journal commit: `c4888617ae82777bc3987004057c123594a10a8c`.
+- Последний полный зелёный CI [#45899056564](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45899056564) проверял более ранний SHA `e87f4e6f`, не включает ни RFC 6901, ни expiry change.
+- На текущий head новый Actions run не найден, combined status пуст. GitHub connection не предоставляет workflow-dispatch write action, а CI не слушает PR `synchronize`; local .NET SDK недоступен. Нельзя обозначать текущий head как проверенный.
+- Python smoke exercise для JSON Pointer root/escape/index поведений прошёл, но не заменяет CI.
+
+### Остаток
+
+1. Получить полный CI Linux/Windows/macOS на текущий post-journal head.
+2. Влить актуальный `main` через настоящий three-way merge: `main=ed4dace38357f5062478ba3322148ab352d916ce`, feature branch на один commit позади; PR #230 reported not mergeable из-за пересечения UI/resource файлов. Не force-update refs и не перезаписывать UI ресурсы.
+3. Провести live acceptance async merge queue в disposable GitHub repository (pending/enqueued, expired UUID с queue entry и без него, queue removal, direct/queued completion, закрытый unmerged PR, source/base drift, failed post-merge check).
+4. Администратору проверить classic tag protection `v*` и GitHub Environment `production` required reviewers. Production tag/deploy не создавать до проверки.
+5. Продолжить user-project acceptance: RLS/roles, localized UI/error states, Candidate/Publish/recovery. SaaS Control Plane и billing остаются вне scope.
