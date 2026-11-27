@@ -1682,3 +1682,5 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Добавлен тест: "00", "+0" и Arabic-Indic digit отклоняются, исходный файл остаётся неизменным.
 - Implementation: 0192fc29fa4ace5f260cd8b3549c32acccf6bf55; tests: 5f1eb5dc89fc56a8cc4285ea17c2ee12b0e8bf10.
 - Full dotnet/CI validation ещё не выполнена.
+
+- Добавлен positive control для /versions/0: канонический индекс массива по-прежнему обновляет значение. Test commit: 63c9a21e39fedec59e36f5fae8b6cfdc9a382a38.
