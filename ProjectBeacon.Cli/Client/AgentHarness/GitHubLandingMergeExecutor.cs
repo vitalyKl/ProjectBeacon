@@ -332,6 +332,9 @@ internal static class GitHubLandingMergeExecutor
             "--method", "PUT",
             $"repos/{repository}/pulls/{pullRequestNumber}/merge-async",
             "-f", "sha=" + expectedHeadSha,
+            // Direct async merges must preserve the ReleasePrepare commit as an ancestor.
+            // When a merge queue is configured, GitHub uses the queue administrator's selected method.
+            "-f", "merge_method=merge",
             "-f", "merge_action=default"
         ];
     }
