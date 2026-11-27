@@ -1645,3 +1645,11 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Добавлены Python regression tests на штатный manifest, symlink каталога .beacon с валидным на вид целевым файлом и symlink самого release.json.
 - Код: f31531d73a9ab132a14f05be1eec4e504667379f; тесты: 51fc6bbff88ab70fd0a2f45203254ec201af59d0.
 - Новый head ещё требует полного exact-head CI. Никаких production tags/deployments или merge не выполнялось.
+
+### Cross-platform CI diagnostics — 28 ноября 2026
+
+- Windows/macOS CI теперь сохраняет TRX для всех семи тестовых модулей и выводит имя, сообщение и stack trace каждого упавшего теста.
+- Это закрывает наблюдаемую проблему: предыдущий macOS Test — Web failure показывал только aggregate counters, без имени теста и assertion.
+- Linux PostgreSQL lane, Release workflow mirror и TRX floor не менялись.
+- Commits: 2f6de15dd4ddc2dad5e069c5df4769ea0063f425 и 29739645d478c5e55c1acd70359c1c2487c7a083.
+- Exact-head CI для новой матрицы и release manifest symlink guard ещё требуется; предыдущий run относится к более раннему SHA.
