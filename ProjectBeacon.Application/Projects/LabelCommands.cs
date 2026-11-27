@@ -173,4 +173,5 @@ public class DeleteLabelHandler
         return result.Success
             ? Result.Ok()
             : Result.Failure(result.Error ?? "Label delete conflict.", result.Kind);
-    }}
+    }
+}
