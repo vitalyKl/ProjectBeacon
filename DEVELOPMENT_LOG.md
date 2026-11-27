@@ -2562,3 +2562,37 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 2. Fix any remaining failures before calling this branch ready.
 3. Live Merge Queue acceptance still needs an eligible org-owned disposable repository; queue method=merge, classic `v*` tag protection and `production` reviewers remain administrator verification items.
 4. No production tag, deployment or PR merge. SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Close post-main locale merge regressions and strengthen resource coverage
+
+**Validation source:** CI [#45983775039](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45983775039), failed on SHA `104bde53dbbef9825c1905b11a54126d1e37abff`.
+
+### Root causes from the failed run
+
+- Application: `PublishAndCompletion_RehydrateCandidateSnapshotAcrossFreshDbContexts` failed because `AuditEvent.ValidateDetails` rejected the new immutable publication metadata `candidateId`.
+- Web: the GitHub merge state bUnit tests and Task Version Impact render test failed after the locale merge. The UI tests were importing the wrong `Web` resource type for `IStringLocalizer<Web>`, so the assertions were not using the satellite `ProjectBeacon.Web.Resources.Web` resources.
+- The prior locale-merge journal had only recorded the three Release error-summary keys as reapplied. This was incomplete: comparison with feature parent `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548` showed 105 additional Release Management keys missing from each resource file.
+
+### Corrections already on the branch
+
+- `AuditEvent` now has a narrow allowlist for immutable publication metadata: Candidate id/SHA, tag name, workstation id and publication revision. GUID, SHA and safe Git tag values are structurally validated; free-form audit values remain rejected.
+- Restored the missing 105 Release Management localization entries across en/ru/de/ja/zh, preserving main's updated translations. All five files now contain exactly 1,345 resource keys with no missing or orphan keys.
+- Updated TaskPipelinePanel tests to use the actual `ProjectBeacon.Web.Resources.Web` localizer and compare against rendered localized resources rather than fixed English strings.
+- The TaskDetail Version Impact render test now configures an explicit XML version source, matching a real project VersionPolicy.
+- Added the GitHub async-merge pending/queued/failed strings and all Task Version Impact labels to the existing all-cultures resource availability test. This extends the existing test without adding a new test case.
+
+### Current exact-head checks
+
+- Latest implementation/journal head: `70ff6d85c35b6a52fdcdc399c4610a49615beb2b`.
+- Five culture files: 1,345 keys each; all 15 GitHub Merge/Task Version Impact keys are present in every culture.
+- `.github/workflows/ci.yml` and `.github/workflows/release.yml` both require at least 2,771 Linux TRX results; the complete TRX guard blocks are byte-for-byte identical.
+- CI still subscribes to GitHub `merge_group: checks_requested`.
+- The failed run #45983775039 is pre-fix and cannot validate these corrections. No CI run has yet validated the current exact head; re-run the full Linux/Windows/macOS matrix.
+
+### Next
+
+1. Run exact-head CI on `70ff6d85c35b6a52fdcdc399c4610a49615beb2b`; verify the Publish fresh-DbContext integration test, GitHub merge bUnit tests, Version Impact render test, all-culture resource checks, 2,771 TRX minimum and formatting.
+2. Continue static and integration review of Release lifecycle and publication.
+3. Live Merge Queue acceptance still needs a writable org-owned disposable repository; verify queue Merge method=merge, classic `v*` tag protection and `production` Environment reviewers with an administrator.
+4. Keep PR #230 open until all acceptance blockers are closed. No production tag/deployment; SaaS Control Plane and billing remain out of scope.
