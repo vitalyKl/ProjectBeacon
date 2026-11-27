@@ -2114,3 +2114,12 @@ Implemented a fail-closed terminal outcome:
 - Merge Queue live acceptance still requires an org-owned disposable repository; the connected account has no org membership and ProjectBeacon is a public personal-account repository.
 - Queue Merge method=merge, classic v* tag protection and production Environment required reviewers remain administrator verification items.
 - No production tag, deployment or PR merge. SaaS Control Plane and billing remain out of scope.
+
+
+### Follow-up — identity lines are byte-exact
+
+- Tightened the annotated tag identity helper to compare each required header/message line exactly, without trimming trailing whitespace.
+- Added a regression assertion rejecting a Release identity line with a trailing space. This is an assertion within the existing tag-evidence fact; the three-fact TRX increase remains 2,766.
+- Code commit: 2de0e5f3dba63c434430900bf6598f82d6c2d17f.
+- Test commit: aa85877a7baffdab021fc8833b40ec00e453d27e.
+- The current CI run was created for an earlier head. A new exact-head run is required after this journal commit.
