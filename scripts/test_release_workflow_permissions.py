@@ -71,6 +71,26 @@ class ReleaseWorkflowPermissionTests(unittest.TestCase):
         ]
         self.assertEqual(["image"], writers)
 
+    def test_only_client_and_image_jobs_receive_any_write_scope(self) -> None:
+        jobs = ("tests", "client", "image", "scan", "deploy")
+        write_scopes = {
+            name: sorted(
+                scope for scope, access in (self._job_permissions(name) or {}).items()
+                if access == "write"
+            )
+            for name in jobs
+        }
+        self.assertEqual(
+            {
+                "tests": [],
+                "client": ["contents"],
+                "image": ["packages"],
+                "scan": [],
+                "deploy": [],
+            },
+            write_scopes,
+        )
+
     def test_package_reader_and_release_asset_writer_are_scoped(self) -> None:
         self.assertEqual(
             {"contents": "write"},
