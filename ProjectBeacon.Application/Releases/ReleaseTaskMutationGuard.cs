@@ -52,3 +52,42 @@ public static class ReleaseTaskMutationGuard
             : $"This task belongs to Release '{blocked.Name}', whose preparation has started ({blocked.PreparationStatus}). Its scope is frozen. Cancel a failed Release before changing the task, or create a new task for a later Release.";
     }
 }
+
+
+/// <summary>
+/// Freezes the fields and membership of a milestone captured by ReleasePrepare.
+/// The project mutation lock must be held by the caller for the duration of the
+/// surrounding transaction so this check cannot race Candidate snapshot creation.
+/// </summary>
+public static class ReleaseMilestoneMutationGuard
+{
+    public static async Task<string?> GetBlockReasonAsync(
+        IBeaconDb db,
+        Guid projectId,
+        Guid milestoneId,
+        CancellationToken ct = default)
+    {
+        if (projectId == Guid.Empty || milestoneId == Guid.Empty)
+            return null;
+
+        var releaseId = await db.Milestones.AsNoTracking()
+            .Where(milestone => milestone.ProjectId == projectId && milestone.Id == milestoneId)
+            .Select(milestone => milestone.ReleaseId)
+            .FirstOrDefaultAsync(ct);
+        if (releaseId is null)
+            return null;
+
+        var blocked = await db.Releases.AsNoTracking()
+            .Where(release => release.ProjectId == projectId
+                && release.Id == releaseId.Value
+                && release.PreparationStatus != ReleasePreparationStatus.NotStarted
+                && !(release.Status == ReleaseStatus.Cancelled
+                    && release.PreparationStatus == ReleasePreparationStatus.Failed))
+            .Select(release => new { release.Name, release.PreparationStatus })
+            .FirstOrDefaultAsync(ct);
+
+        return blocked is null
+            ? null
+            : $"This milestone belongs to Release '{blocked.Name}', whose preparation has started ({blocked.PreparationStatus}). Its Candidate scope is frozen. Cancel a failed Release before changing the milestone.";
+    }
+}
