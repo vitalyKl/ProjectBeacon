@@ -2596,3 +2596,12 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 2. Continue static and integration review of Release lifecycle and publication.
 3. Live Merge Queue acceptance still needs a writable org-owned disposable repository; verify queue Merge method=merge, classic `v*` tag protection and `production` Environment reviewers with an administrator.
 4. Keep PR #230 open until all acceptance blockers are closed. No production tag/deployment; SaaS Control Plane and billing remain out of scope.
+
+
+### Follow-up — generated resource marker type qualification
+
+- The exact-head build attempt #45986685330 exposed `CS0118`: in the test namespace, short type name `Web` resolved to namespace `ProjectBeacon.Web`, not generated resource marker type.
+- Confirmed the marker is the internal generated class `ProjectBeacon.Web.Resources.Web`; `ProjectBeacon.Web.csproj` grants `InternalsVisibleTo` to `ProjectBeacon.Web.Tests`.
+- Updated the two bUnit test files to use the fully qualified marker type `global::ProjectBeacon.Web.Resources.Web`.
+- Test commits: `142fcc19081caa6135b94556fd649bbe47086726`, `0d72f310cacb92619f4435652cc1f24caad6600a`.
+- The run #45987044512 targets the preceding head `ce4f2a4c6de79af9458342d50d68db3fb74b1efe`, so it predates this type-qualification fix. The latest PR head `0d72f310cacb92619f4435652cc1f24caad6600a` requires a new exact-head CI run.
