@@ -2795,3 +2795,32 @@ The full-path review found more writes outside ordinary task CRUD. These are now
 - Pre-journal branch head: `6e02692cb58f78884294b31300e03f80a44dd7a2`.
 - The earlier green runs validate older commits only. Trigger and verify the full Linux, Windows and macOS CI at the post-journal head before treating the branch as ready to merge.
 - Do not create a production tag or deployment from this branch. SaaS Control Plane, billing and unrelated work remain out of scope.
+
+
+## 2026-11-27 — Resolve intermediate CI failures and close remaining snapshot writes
+
+### Intermediate CI findings on `a6a6d6b`
+
+The cross-platform run completed with failures that were diagnosed from the job logs:
+
+- Four PostgreSQL finish-work concurrency tests observed two successful requests. The project-lock re-read had incorrectly reset the original state/content revision compare-and-swap baseline. The handler now refreshes the tracked entity snapshot after obtaining the lock but preserves the request's original baseline, so a rival commit remains a Conflict and cannot append a second result.
+- The concurrent Reviewer-verdict test expected the stage conflict text including terminal punctuation; the handler now emits the exact stable text.
+- The tenant-filter allowlist test flagged the new coordinator file. New Task/Step/Milestone resolution now uses normal global query filters; the reviewed cross-tenant bypass list is not expanded for the coordinator.
+
+### Additional Candidate-scope coverage
+
+- Project `Name` is part of the immutable candidate payload. `UpdateProjectHandler` now refuses a name change while a prepared Candidate is still frozen, while continuing to serialize all project metadata writes with the project lock.
+- Deleting a task that is used as a dependency by a task inside a frozen Candidate now also checks the referencing task's milestone before deleting dependency rows. This closes the inbound-dependency case where the deleted task itself was outside the Release.
+- Existing `PreparedReleaseFreezesItsMilestoneTaskScope` now additionally verifies project rename and inbound dependency-target deletion return Conflict and leave persisted state unchanged.
+- Release creation is also serialized with the project lock, matching Release update/status/delete and milestone assignment.
+
+### Validation
+
+- Intermediate CI on `a6a6d6b` confirmed all three platform builds and EF model checks succeeded, but API/Application tests exposed the failures above. No claim of green CI is made for that SHA.
+- The fixes are committed on this branch; the next required step is a fresh Linux/Windows/macOS run against the final post-journal SHA.
+- The Linux TRX floor remains `2,772` (one additional xUnit Fact was added earlier in this pass); CI and release workflow guard blocks remain identical.
+- PR #230 remains open and unmerged. No production tag or deployment. SaaS Control Plane, billing and unrelated branches remain out of scope.
+
+### Current branch head before this journal entry
+
+`3858704f34d79561e2d15e88a76b04c212dc8aa5`
