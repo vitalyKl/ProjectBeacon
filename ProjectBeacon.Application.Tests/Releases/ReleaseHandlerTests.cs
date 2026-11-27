@@ -1,10 +1,13 @@
 namespace ProjectBeacon.Application.Tests.Releases;
 
 using Application.Authorization;
+using Application.Devices;
 using Application.Common;
 using Application.Persistence;
 using Application.Projects;
 using Application.Releases;
+using Domain.Common;
+using Domain.Entities.Devices;
 using Domain.Entities.Identity;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
@@ -14,6 +17,7 @@ using ProjectBeacon.Infrastructure.Audit;
 using ProjectBeacon.Infrastructure.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Nodes;
 
 public sealed class ReleaseHandlerTests : IDisposable
 {
@@ -425,6 +429,141 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
         Assert.Equal(ReleaseStatus.Planned, (await _db.Releases.SingleAsync(
             item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
+
+    [Fact]
+    public async Task PublishAndCompletion_RehydrateCandidateSnapshotAcrossFreshDbContexts()
+    {
+        const string version = "0.7.5.9";
+        const string tagName = "v0.7.5.9";
+        var candidateSha = new string('a', 40);
+        var deployedAt = DateTime.UtcNow;
+        var project = await _db.Projects.SingleAsync(
+            item => item.Id == _projectId, TestContext.Current.CancellationToken);
+        var policy = new ProjectVersionPolicy(
+            "NumericComponents",
+            4,
+            null,
+            "v{version}",
+            false,
+            [new ProjectVersionSourcePolicy("Directory.Build.props", "Xml", "//Version")],
+            ReleaseManagementEnabled: true,
+            DeploymentVersionEndpoint: "https://release-test.example/v1/version");
+        project.SetVersionPolicyJson(ProjectVersionPolicyCatalog.Serialize(policy));
+        project.InitializeOfficialVersion(version);
+
+        var device = DaemonDevice.Create(
+            "release-publish-workstation",
+            _ownerId,
+            "release-publish-fingerprint",
+            "release-publish-token-hash",
+            "bcd_release");
+        device.Heartbeat(
+            """{"capabilities":["git-release-prepare-v1","git-release-publish-v1"]}""",
+            """{"workspaceMode":"Branch"}""");
+        var runtime = ProjectRuntime.Create(_projectId, device.Id, "/workspace/release-project");
+        _db.DaemonDevices.Add(device);
+        _db.ProjectRuntimes.Add(runtime);
+
+        var release = Release.Create("Verified candidate", null, _projectId, version, "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        var candidateId = Guid.NewGuid();
+        var prepareCommandId = Guid.NewGuid();
+        var verifyCommandId = Guid.NewGuid();
+        release.BeginPreparation(
+            device.Id, candidateId, prepareCommandId, """{"version":"0.7.5.9"}""");
+        release.RecordPrepareSuccess(prepareCommandId, """{"preparedCommit":"prepared"}""");
+        release.BeginVerification(device.Id, verifyCommandId);
+
+        var candidate = ReleaseCandidateSnapshot.Create(
+            _projectId,
+            release.Id,
+            candidateId,
+            device.Id,
+            version,
+            tagName,
+            "main",
+            new string('1', 40),
+            new string('2', 40),
+            candidateSha,
+            new string('b', 40),
+            project.VersionPolicyRevision,
+            release.Revision,
+            new string('c', 64),
+            """{"files":[],"checks":[]}""",
+            deployedAt.AddMinutes(-2));
+        release.MarkCandidate(candidate);
+        _db.Releases.Add(release);
+        _db.ReleaseCandidateSnapshots.Add(candidate);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // The Candidate snapshot is intentionally stored in a separate table, not
+        // materialized through ReleaseConfiguration as a navigation.
+        await using (var reloadedDb = Factory().CreateDbContext())
+        {
+            var reloaded = await reloadedDb.Releases.SingleAsync(
+                item => item.Id == release.Id, TestContext.Current.CancellationToken);
+            Assert.Null(reloaded.CandidateSnapshot);
+            Assert.Equal(ReleaseStatus.Candidate, reloaded.Status);
+        }
+
+        var queued = await new PublishReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new PublishReleaseCommand(
+                _projectId, release.Id, release.Revision, release.PublicationRevision, OwnerActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(queued.Success, queued.Error);
+        Assert.Equal(ReleasePublicationStatus.Queued, queued.Value!.Release.PublicationStatus);
+        Assert.NotEqual(Guid.Empty, queued.Value.Command.Id);
+
+        var result = new JsonObject
+        {
+            ["action"] = "Publish",
+            ["projectId"] = _projectId.ToString("D"),
+            ["releaseId"] = release.Id.ToString("D"),
+            ["candidateId"] = candidateId.ToString("D"),
+            ["version"] = version,
+            ["tagName"] = tagName,
+            ["candidateSha"] = candidateSha,
+            ["tagPushed"] = true,
+            ["workflowRunId"] = 12345,
+            ["workflowRunUrl"] = "https://github.com/vitalyKl/ProjectBeacon/actions/runs/12345",
+            ["workflowStatus"] = "completed",
+            ["workflowConclusion"] = "success",
+            ["deployedVersion"] = version,
+            ["deployedCommitSha"] = candidateSha,
+            ["deploymentStatus"] = "in_sync",
+            ["deployedAtUtc"] = deployedAt.ToString("O")
+        };
+        var resultJson = result.ToJsonString();
+
+        await using (var completionDb = Factory().CreateDbContext())
+        {
+            var command = await completionDb.WorkstationCommands.SingleAsync(
+                item => item.Id == queued.Value.Command.Id, TestContext.Current.CancellationToken);
+            command.Succeed(resultJson);
+            await new ReleasePublishCompletion().ApplyAsync(
+                completionDb,
+                command,
+                success: true,
+                resultJson,
+                error: null,
+                TestContext.Current.CancellationToken);
+            await completionDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var verifyDb = Factory().CreateDbContext();
+        var published = await verifyDb.Releases.SingleAsync(
+            item => item.Id == release.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(ReleaseStatus.Published, published.Status);
+        Assert.Equal(ReleasePublicationStatus.Published, published.PublicationStatus);
+        Assert.True(published.PublicationTagPushed);
+        Assert.Equal(tagName, published.PublishedTagName);
+        Assert.Equal(candidateSha, published.DeployedCommitSha);
+        Assert.Equal(version, published.DeployedVersion);
+        Assert.Equal(12345, published.DeploymentWorkflowRunId);
     }
 
 }
