@@ -526,7 +526,9 @@ public sealed class SetMilestoneReleaseHandler
         var request = command.Request;
         if (request.ProjectId == Guid.Empty || request.MilestoneId == Guid.Empty
             || request.ReleaseId == Guid.Empty)
-            return Result.Failure("Project, milestone and release ids are required.", ErrorKind.Validation);
+            return Result.Failure(
+                "Project and milestone ids are required; release id cannot be empty.",
+                ErrorKind.Validation);
 
         await using var db = _dbFactory.CreateDbContext();
         var strategy = db.Database.CreateExecutionStrategy();
