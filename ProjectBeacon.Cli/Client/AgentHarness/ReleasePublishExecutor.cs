@@ -54,6 +54,7 @@ internal static class ReleasePublishExecutor
             return FailBeforeTag(request,
                 "Release publication project id does not match the authenticated workstation command.");
 
+        var tagPushAttempted = false;
         try
         {
             var projectRoot = AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(localRoot));
@@ -115,6 +116,7 @@ internal static class ReleasePublishExecutor
                 return FailBeforeTag(request, candidate.Error);
 
             var tagMessage = BuildTagMessage(request);
+            tagPushAttempted = true;
             var tag = await EnsureImmutableTagAsync(
                 repositoryRoot, filters, origin.Url!, request, tagMessage, ct);
             if (!tag.Success)
@@ -171,7 +173,8 @@ internal static class ReleasePublishExecutor
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
             or InvalidOperationException or ArgumentException or JsonException or NotSupportedException)
         {
-            return Fail("Release publication failed safely (" + exception.GetType().Name + "): " + Clip(exception.Message));
+            var message = "Release publication failed safely (" + exception.GetType().Name + "): " + Clip(exception.Message);
+            return tagPushAttempted ? Fail(message) : FailBeforeTag(request, message);
         }
     }
 
@@ -700,7 +703,7 @@ internal static class ReleasePublishExecutor
     private static string Clip(string? value) => string.IsNullOrWhiteSpace(value) ? "No diagnostic details returned." : value.Length > 1200 ? value[..1200] : value;
     internal static (bool Ok, string? Result, string? Error) FailBeforeTag(
         PublishRequest request, string error) =>
-        (false, ResultJson(request, tagPushed: false, null, null, null, null, null, error), error);
+        (false, ResultJson(request, false, null, null, null, null, null, error), error);
 
     private static (bool Ok, string? Result, string? Error) Fail(string error) => (false, null, error);
 }
