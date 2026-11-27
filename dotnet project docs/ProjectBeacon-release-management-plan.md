@@ -1127,3 +1127,37 @@ Implementation: `feat/release-management`, PR #230.
 - Source/test/workflow commits: `a633b755aa205be53a7fb583ddd169817fb1b965`, `123745108c8f9668b1ef35f906be87dee19ca0f0`, `62b9e67c52f4044c520c51b68d3c967d83456987`, `2555277d727c4ba884eb24446651aa79b5eb6b6a`, `2aaf5d597c9d2b0f13f4cfe6d0bd94495e800380`, `21149f8b7534b96365a97b27c345284c73faaa24`, `e99a96d31dfd8d1f3306634b511c33e8154e283c`.
 - Журнал implementation branch записал изменения в commit `1db2e3d2a42e435b9ac0671d0d2742b431980559`. Новый exact-head CI требуется на post-journal PR head.
 - Live Merge Queue по-прежнему нельзя проверить на ProjectBeacon (public personal-account repository). Нужен org-owned disposable repository с queue method=merge; tag protection `v*` и Environment `production` reviewers требуют administrator verification. Production tag/deploy и PR merge не выполнять до этих проверок.
+
+
+---
+
+## Дополнение — exact-head CI для publication hardening (27 ноября 2026)
+
+**Проверенный implementation SHA:** `841dd90bbd1e5375558acb20d2b0515c828876d4`  
+**CI:** [#45962729055](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45962729055)  
+**Результат:** Linux, Windows и macOS — success.
+
+- Все три платформы прошли Restore, Build, EF model validation, семь test modules и formatting.
+- Linux TRX: **2 767 результатов**, 7 модулей, 1 ожидаемый platform-conditional skip, 0 failures. Symlink security gates прошли.
+- Run включает последние изменения по annotated tag object identity, LF-only parsing с сохранением CR bytes, cleanup временного verification ref при cancellation, fail-closed серверную обработку Publish completion и тест отсутствующего/malformed/mismatched `tagPushed`.
+- Порог CI и release.yml синхронизирован на 2 767; полные TRX guard blocks byte-identical.
+- Предыдущий Build failure на SHA `1db2e3d2` был вызван неверной областью видимости publication evidence helpers. Исправление `aa50996534283f5b099e91be657dd378cb8d9f29` вошло в зелёный run #45962729055.
+
+### Подтверждённые гарантии публикации
+
+- Remote annotated tag принимается только после проверки advertised tag-object SHA, fetched tag object, точного имени тега, target Candidate SHA и точных identity lines Release/Candidate/version. Каждая обязательная строка должна встретиться ровно один раз.
+- При remote fetch используется уникальный локальный ref `refs/beacon/release-tag-verification`; cleanup выполняется в `finally` с `CancellationToken.None`, чтобы отмена запроса не оставила частично записанный ref.
+- `tagPushed=false` может перевести публикацию в FailedBeforeTag только при полном result JSON с typed boolean и точным совпадением project/Release/Candidate/version/tag/SHA с исходной Publish-командой. Missing, malformed или mismatched evidence консервативно означает, что тег мог быть опубликован, то есть FailedAfterTag.
+- Подтверждение Published дополнительно требует точного Candidate, annotated tag identity, завершённого успешного Release workflow и равенства production version/gitSha Candidate.
+
+### Остаток до merge/release
+
+1. Live Merge Queue не проверена: ProjectBeacon — публичный personal-account repository, текущий подключённый аккаунт не состоит в организации. Нужен отдельный writable org-owned disposable repository.
+2. Workflow CI содержит `merge_group: checks_requested`; это необходимая публикация required checks на synthetic merge-group refs, но фактическое поведение в live queue ещё не доказано.
+3. Merge Queue method в тестовой организации должен быть `merge`, иначе исходный ReleasePrepare SHA не сохранится в ancestry. Direct async merge запрашивает `merge_method=merge`.
+4. Администратор должен проверить classic tag protection `v*` и required reviewers Environment `production`.
+5. End-to-end acceptance: ReleasePrepare → merge → Candidate → Publish/tag → Release workflow → production version/SHA, включая отказ и retry.
+
+PR #230 остаётся open/unmerged. Production tag и deployment не запускались. SaaS Control Plane и billing не менялись.
+
+Implementation journal: `DEVELOPMENT_LOG.md`, commit `cc89faa0d3d0c078bad27711fb4dfc5d11628f81`.
