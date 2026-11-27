@@ -2387,3 +2387,31 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Trigger and verify exact-head Linux/Windows/macOS CI on the post-journal commit.
 2. Resolve external merge-queue and publication-protection acceptance blockers when an eligible organization repository/admin is available.
 3. Continue user-project UI, localization, RLS and release recovery acceptance without merging or publishing production.
+
+
+## 2026-11-27 — Preserve normal GitLand merge strategy; scope Release merge constraint
+
+**Commits**
+- `00e0bc0fbbcf4d0135ddbcd4e3afa16c24614bca` — remove unconditional merge_method=merge from shared GitHubLandingMergeExecutor.
+- `d2f1448ce622ed70f4363f1d0043b55f139e3bd1` — update the shared executor regression test to assert ordinary GitLand omits merge_method and retains merge_action=default.
+- `ce6577819e57df8c7907f32f97d8e7dba38874b5` — clarify Release PR instructions and VerifyLanding diagnostics for direct vs queued merge strategy.
+
+### Scope correction
+
+- GitHubLandingMergeExecutor is the shared executor for ordinary task GitLand PRs, not a Release-only executor. Forcing `merge_method=merge` there would have changed the repository's configured/default merge strategy for every ordinary GitHub task PR.
+- Removed that global override. Ordinary GitLand again sends the exact source SHA and `merge_action=default`; it leaves the merge method to the repository/queue configuration as before.
+- The Release-specific invariant remains independent and fail-closed: the original ReleasePrepare commit must be an ancestor of the target branch, or VerifyLanding refuses to create Candidate. The tag workflow independently requires its original commit and Beacon-Release trailer.
+- A Release PR must therefore be landed with a merge commit. If a merge queue is enabled, its administrator-selected Merge method must be `merge`. Without a queue, the repository's direct merge strategy must create a merge commit (or an Owner/Admin must explicitly select that option). Squash/rebase cannot produce a Candidate.
+- Important distinction: the current shared GitLand executor does not force a special method only for Release PRs. A dedicated Release-specific merge command would be a separate feature if the merge itself must be initiated by Beacon rather than through repository/approver configuration.
+
+### Validation state
+
+- Exact-head CI #45974881947 passed on implementation SHA `500c2e872239c9807920fc94ae67c66095164ab1` across Linux/Windows/macOS; Linux had 2,768 results, one expected platform skip, zero failures. That green run predates the scope correction above.
+- The current code/test changes require a fresh exact-head CI. Earlier queued/journal-only run #45977259934 does not validate these newer commits.
+- PR #230 remains open/unmerged. No production tag/deployment. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Re-run exact-head Linux/Windows/macOS CI after this journal entry.
+2. Confirm normal GitLand retains its prior merge policy and Release Verify/tag gates continue to reject squash/rebase.
+3. Complete the external live queue and publication-protection acceptance once an eligible organization repository and administrator are available.
