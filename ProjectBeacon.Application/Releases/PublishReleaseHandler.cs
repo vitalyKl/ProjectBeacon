@@ -188,8 +188,7 @@ public sealed class PublishReleaseHandler
                     tagName = candidate.TagName,
                     candidateSha = candidate.CandidateSha,
                     workstationId = device.Id,
-                    publicationRevision = release.PublicationRevision,
-                    deploymentEndpointHost = new Uri(policy.DeploymentVersionEndpoint!).Host
+                    publicationRevision = release.PublicationRevision
                 })));
 
             try
