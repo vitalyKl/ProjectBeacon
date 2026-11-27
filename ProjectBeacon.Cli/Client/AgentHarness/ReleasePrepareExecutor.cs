@@ -640,7 +640,7 @@ internal static class ReleasePrepareExecutor
         for (var i = 0; i < parts.Length - 1; i++)
         {
             if (current is JsonObject obj) current = obj[parts[i]];
-            else if (current is JsonArray array && int.TryParse(parts[i], out var index) && index >= 0 && index < array.Count) current = array[index];
+            else if (current is JsonArray array && TryParseJsonArrayIndex(parts[i], array.Count, out var index)) current = array[index];
             else return (root, false);
             if (current is null) return (root, false);
         }
@@ -651,12 +651,24 @@ internal static class ReleasePrepareExecutor
             parent[final] = JsonValue.Create(value);
             return (root, true);
         }
-        if (current is JsonArray target && int.TryParse(final, out var idx) && idx >= 0 && idx < target.Count)
+        if (current is JsonArray target && TryParseJsonArrayIndex(final, target.Count, out var idx))
         {
             target[idx] = JsonValue.Create(value);
             return (root, true);
         }
         return (root, false);
+    }
+
+    private static bool TryParseJsonArrayIndex(string segment, int count, out int index)
+    {
+        index = -1;
+        if (string.IsNullOrEmpty(segment)
+            || (segment.Length > 1 && segment[0] == '0')
+            || segment.Any(character => character is < '0' or > '9')
+            || !int.TryParse(segment, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out index))
+            return false;
+        return index >= 0 && index < count;
     }
 
     private static bool SetToml(string text, string selector, string value, out string updated)
