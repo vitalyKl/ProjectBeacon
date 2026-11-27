@@ -2293,3 +2293,16 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 The changes above are newer than CI #45972484561, which targeted the earlier ambiguous-push head `f1986015703297ad9c6c6f71aecc5198660d9868`. A fresh exact-head CI run is required after this journal update. The prior fully-green implementation head `841dd90bbd1e5375558acb20d2b0515c828876d4` predates this publication fix and the least-privilege workflow change.
 
 No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+
+### Follow-up — audit every negative tag-pushed return
+
+- Audited every `new TagEvidence(false, ...)` return in `EnsureImmutableTagAsync`.
+- The remaining explicit false outcomes are confined to: a local invalid tag while the successfully parsed remote listing proves no tag exists; failure to create a local tag before any remote push; or a non-zero push followed by a successful, well-formed listing that proves both refs absent or proves a different peeled target.
+- Initial remote inspection failure, malformed response, existing remote tag fetch/verification failure, failed/malformed post-push lookup, incomplete tag/peeled ref pair, Candidate-target match with unverified metadata and final verification errors all preserve `tagPushed=true` or the already-established true state.
+- An annotated tag whose peeled ref is omitted can still be accepted only when a fetched/locally verified annotated tag object matches the advertised remote tag-object SHA and proves the Candidate target. The tag object SHA is not compared directly with the Candidate commit SHA.
+- This closes the last identified path where missing remote evidence could accidentally unlock `FailedBeforeTag`.
+
+CI [#45973251379](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45973251379) targets source/test/workflow head `65471ad201f8cd387a2fc5794ff6bdad4b43b552` and is running. It includes the current code, tests and 2,768-result CI/release gates but predates this journal-only addition. Do not call it green until the run completes; a final exact-head run is still required after this journal update.
+
+No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
