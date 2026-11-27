@@ -1374,23 +1374,6 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
         return true;
     }
 
-    private static Dictionary<string, object> PublicationAuditDetails(
-        Guid candidateId,
-        bool tagPushed,
-        string resultCode,
-        long? workflowRunId = null)
-    {
-        var details = new Dictionary<string, object>
-        {
-            ["candidateId"] = candidateId,
-            ["tagPushed"] = tagPushed,
-            ["resultCode"] = resultCode
-        };
-        if (workflowRunId is > 0)
-            details["workflowRunId"] = workflowRunId.Value;
-        return details;
-    }
-
     private static void AddAudit(IBeaconDb db, Project project, Guid releaseId, string action, object details)
     {
         var actor = new ActorContext(
@@ -1675,6 +1658,23 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
     {
         flag = false;
         return value[name] is JsonValue element && element.TryGetValue<bool>(out flag);
+    }
+
+    private static Dictionary<string, object> PublicationAuditDetails(
+        Guid candidateId,
+        bool tagPushed,
+        string resultCode,
+        long? workflowRunId = null)
+    {
+        var details = new Dictionary<string, object>
+        {
+            ["candidateId"] = candidateId,
+            ["tagPushed"] = tagPushed,
+            ["resultCode"] = resultCode
+        };
+        if (workflowRunId is > 0)
+            details["workflowRunId"] = workflowRunId.Value;
+        return details;
     }
 
     private static void AddAudit(IBeaconDb db, Project project, Guid releaseId, string action, object details)
