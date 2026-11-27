@@ -1,6 +1,9 @@
 using ProjectBeacon.Application.Tasks;
 using ProjectBeacon.Domain.Enums;
 using MudBlazor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
+using ProjectBeacon.Web;
 
 namespace ProjectBeacon.Web.Tests.Bunit;
 
@@ -44,7 +47,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains("GitHub rejected the asynchronous merge request.", cut.Markup);
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<Web>>()["LandingReasonGitHubAsyncMergeFailed"].Value, cut.Markup);
     }
 
     [Fact]
@@ -86,7 +89,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains("GitHub accepted the asynchronous merge request and is still processing it.", cut.Markup);
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<Web>>()["LandingReasonGitHubMergePending"].Value, cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
     }
 
@@ -130,7 +133,7 @@ public sealed class TaskPipelinePanelTests : BUnitRenderBase
         var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
             parameters => parameters.Add(component => component.Pipeline, pipeline));
 
-        Assert.Contains("GitHub has placed the pull request in the merge queue.", cut.Markup);
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<Web>>()["LandingReasonGitHubMergeQueued"].Value, cut.Markup);
         Assert.DoesNotContain(mergeRequestId, cut.Markup);
     }
 }
