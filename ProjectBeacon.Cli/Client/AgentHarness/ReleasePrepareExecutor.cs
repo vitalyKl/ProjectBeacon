@@ -596,10 +596,10 @@ internal static class ReleasePrepareExecutor
         }
         else if (source.Format == "Json")
         {
-            var document = JsonNode.Parse(text);
-            if (document is null || !SetJsonPointer(document, source.Selector, version))
+            var result = SetJsonPointer(JsonNode.Parse(text), source.Selector, version);
+            if (!result.Success || result.Document is null)
                 return (false, "JSON Pointer did not match: " + source.Path);
-            updated = document.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            updated = result.Document.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
         }
         else if (source.Format == "Toml")
         {
@@ -621,24 +621,42 @@ internal static class ReleasePrepareExecutor
         return (true, null);
     }
 
-    private static bool SetJsonPointer(JsonNode root, string pointer, string value)
+    private static (JsonNode? Document, bool Success) SetJsonPointer(JsonNode? root, string pointer, string value)
     {
-        if (!pointer.StartsWith("/", StringComparison.Ordinal)) return false;
+        // RFC 6901's empty pointer addresses the document root itself. Replacing
+        // the root requires returning a new JsonNode because a caller cannot
+        // replace its JsonNode reference by mutating the old node in place.
+        if (pointer.Length == 0)
+            return (JsonValue.Create(value), true);
+        if (!pointer.StartsWith("/", StringComparison.Ordinal) || root is null)
+            return (root, false);
+
         var parts = pointer.Split('/').Skip(1)
             .Select(part => part.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal)).ToArray();
-        if (parts.Length == 0) return false;
+        if (parts.Length == 0)
+            return (root, false);
+
         JsonNode? current = root;
         for (var i = 0; i < parts.Length - 1; i++)
         {
             if (current is JsonObject obj) current = obj[parts[i]];
             else if (current is JsonArray array && int.TryParse(parts[i], out var index) && index >= 0 && index < array.Count) current = array[index];
-            else return false;
-            if (current is null) return false;
+            else return (root, false);
+            if (current is null) return (root, false);
         }
+
         var final = parts[^1];
-        if (current is JsonObject parent && parent[final] is not null) { parent[final] = JsonValue.Create(value); return true; }
-        if (current is JsonArray target && int.TryParse(final, out var idx) && idx >= 0 && idx < target.Count) { target[idx] = JsonValue.Create(value); return true; }
-        return false;
+        if (current is JsonObject parent && parent[final] is not null)
+        {
+            parent[final] = JsonValue.Create(value);
+            return (root, true);
+        }
+        if (current is JsonArray target && int.TryParse(final, out var idx) && idx >= 0 && idx < target.Count)
+        {
+            target[idx] = JsonValue.Create(value);
+            return (root, true);
+        }
+        return (root, false);
     }
 
     private static bool SetToml(string text, string selector, string value, out string updated)
