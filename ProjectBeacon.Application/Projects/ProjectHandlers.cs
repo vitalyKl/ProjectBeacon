@@ -322,4 +322,5 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
                 return Result.Ok(true);
             },
             ct);
-    }}
+    }
+}
