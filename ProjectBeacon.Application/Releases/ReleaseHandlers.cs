@@ -4,6 +4,7 @@ using System.Text.Json;
 using Application.Audit;
 using Application.Authorization;
 using Application.Common;
+using Application.Devices;
 using Application.Persistence;
 using Domain.Entities.Projects;
 using Domain.Entities.Roadmap;
@@ -473,77 +474,94 @@ public sealed class SetMilestoneReleaseHandler
     public async Task<Result> HandleAsync(SetMilestoneReleaseCommand command, CancellationToken ct = default)
     {
         var request = command.Request;
-        if (request.ReleaseId == Guid.Empty)
-            return Result.Failure("Release id cannot be empty.", ErrorKind.Validation);
+        if (request.ProjectId == Guid.Empty || request.MilestoneId == Guid.Empty
+            || request.ReleaseId == Guid.Empty)
+            return Result.Failure("Project, milestone and release ids are required.", ErrorKind.Validation);
+
         await using var db = _dbFactory.CreateDbContext();
-        var permission = await ReleaseAuthorization.RequireAdminAsync(
-            db, _authorization, request.ProjectId, command.Actor, ct);
-        if (!permission.Success)
-            return Result.Forbidden("Only a project or organization Owner/Admin can link a milestone to a release.");
-        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, ct);
-        if (!enabled.Success)
-            return Result.Failure(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
-
-        var milestone = await db.Milestones.FirstOrDefaultAsync(
-            item => item.Id == request.MilestoneId && item.ProjectId == request.ProjectId, ct);
-        if (milestone is null)
-            return Result.Failure("Milestone not found.", ErrorKind.NotFound);
-        if (request.ExpectedRevision < 1 || request.ExpectedRevision != milestone.Revision)
-            return Result.Failure("Milestone changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
-
-        if (milestone.ReleaseId is { } currentReleaseId)
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
         {
-            var currentState = await db.Releases
-                .Where(release => release.Id == currentReleaseId && release.ProjectId == request.ProjectId)
-                .Select(release => new { release.Status, release.PreparationStatus })
-                .FirstOrDefaultAsync(ct);
-            if (currentState is not null
-                && (currentState.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
-                    || (currentState.PreparationStatus != ReleasePreparationStatus.NotStarted
-                        && !(currentState.Status == ReleaseStatus.Cancelled
-                            && currentState.PreparationStatus == ReleasePreparationStatus.Failed))))
-                return Result.Failure(
-                    "Milestones cannot be detached or moved after ReleasePrepare has started.",
-                    ErrorKind.Conflict);
-        }
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        if (request.ReleaseId is { } releaseId)
-        {
-            var exists = await db.Releases.AnyAsync(
-                release => release.Id == releaseId
-                    && release.ProjectId == request.ProjectId
-                    && release.Status != ReleaseStatus.Candidate
-                    && release.Status != ReleaseStatus.Published
-                    && release.Status != ReleaseStatus.Cancelled
-                    && release.PreparationStatus == ReleasePreparationStatus.NotStarted, ct);
-            if (!exists)
-                return Result.Failure("Release not found or no longer accepts milestones.", ErrorKind.NotFound);
-        }
+            // Serialize milestone membership changes with ReleasePrepare. Inspect both the
+            // current and requested Release only after acquiring this lock so an assignment
+            // cannot race the immutable Candidate scope snapshot.
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, request.ProjectId, ct))
+                return Result.Failure("Project not found.", ErrorKind.NotFound);
 
-        var previousReleaseId = milestone.ReleaseId;
-        milestone.AssignRelease(request.ReleaseId);
-        var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct);
-        _auditWriter.Stage(db, AuditEventFactory.ForActor(
-            command.Actor,
-            "project.release.milestone_assigned",
-            "Milestone",
-            milestone.Id.ToString("D"),
-            orgId,
-            request.ProjectId,
-            detailsJson: JsonSerializer.Serialize(new
+            var permission = await ReleaseAuthorization.RequireAdminAsync(
+                db, _authorization, request.ProjectId, command.Actor, ct);
+            if (!permission.Success)
+                return Result.Forbidden("Only a project or organization Owner/Admin can link a milestone to a release.");
+
+            var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, request.ProjectId, ct);
+            if (!enabled.Success)
+                return Result.Failure(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
+
+            var milestone = await db.Milestones.FirstOrDefaultAsync(
+                item => item.Id == request.MilestoneId && item.ProjectId == request.ProjectId, ct);
+            if (milestone is null)
+                return Result.Failure("Milestone not found.", ErrorKind.NotFound);
+            if (request.ExpectedRevision < 1 || request.ExpectedRevision != milestone.Revision)
+                return Result.Failure("Milestone changed since it was loaded. Refresh and retry.", ErrorKind.Conflict);
+
+            if (milestone.ReleaseId is { } currentReleaseId)
             {
-                previousReleaseId = previousReleaseId?.ToString("D") ?? "Unassigned",
-                releaseId = milestone.ReleaseId?.ToString("D") ?? "Unassigned",
-                count = milestone.Revision
-            })));
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure("Milestone changed concurrently. Refresh and retry.", ErrorKind.Conflict);
-        }
-        return Result.Ok();
+                var currentState = await db.Releases
+                    .Where(release => release.Id == currentReleaseId && release.ProjectId == request.ProjectId)
+                    .Select(release => new { release.Status, release.PreparationStatus })
+                    .FirstOrDefaultAsync(ct);
+                if (currentState is not null
+                    && (currentState.Status is ReleaseStatus.Candidate or ReleaseStatus.Published
+                        || (currentState.PreparationStatus != ReleasePreparationStatus.NotStarted
+                            && !(currentState.Status == ReleaseStatus.Cancelled
+                                && currentState.PreparationStatus == ReleasePreparationStatus.Failed))))
+                    return Result.Failure(
+                        "Milestones cannot be detached or moved after ReleasePrepare has started.",
+                        ErrorKind.Conflict);
+            }
+
+            if (request.ReleaseId is { } releaseId)
+            {
+                var exists = await db.Releases.AnyAsync(
+                    release => release.Id == releaseId
+                        && release.ProjectId == request.ProjectId
+                        && release.Status != ReleaseStatus.Candidate
+                        && release.Status != ReleaseStatus.Published
+                        && release.Status != ReleaseStatus.Cancelled
+                        && release.PreparationStatus == ReleasePreparationStatus.NotStarted, ct);
+                if (!exists)
+                    return Result.Failure("Release not found or no longer accepts milestones.", ErrorKind.NotFound);
+            }
+
+            var previousReleaseId = milestone.ReleaseId;
+            milestone.AssignRelease(request.ReleaseId);
+            var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, request.ProjectId, ct);
+            _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                command.Actor,
+                "project.release.milestone_assigned",
+                "Milestone",
+                milestone.Id.ToString("D"),
+                orgId,
+                request.ProjectId,
+                detailsJson: JsonSerializer.Serialize(new
+                {
+                    previousReleaseId = previousReleaseId?.ToString("D") ?? "Unassigned",
+                    releaseId = milestone.ReleaseId?.ToString("D") ?? "Unassigned",
+                    count = milestone.Revision
+                })));
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Failure("Milestone or Release changed concurrently. Refresh and retry.", ErrorKind.Conflict);
+            }
+            return Result.Ok();
+        });
     }
 }
