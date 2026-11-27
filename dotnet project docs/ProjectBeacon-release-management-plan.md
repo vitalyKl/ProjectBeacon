@@ -1466,3 +1466,14 @@ CI после этих изменений требует минимум 2 771 Li
 - Updated tests to request `IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>`.
 - Implementation/test branch now has test commits `142fcc19081caa6135b94556fd649bbe47086726` and `0d72f310cacb92619f4435652cc1f24caad6600a`, plus journal commit `419cc890ed93279ace5548e2deda574ddf7b0e27`.
 - The CI run #45987044512 targeted the pre-fix head `ce4f2a4c6de79af9458342d50d68db3fb74b1efe`; a fresh full cross-platform run is required on the latest exact head.
+
+
+## Дополнение — аудит завершения публикации Release (27 ноября 2026)
+
+- В процессе дополнительного ревью после исправления `candidateId` обнаружилось, что ReleasePublishCompletion создаёт несколько audit events с полями `error` и `workflowRunUrl`, не разрешёнными строгим audit schema. Исправление только allowlist-ключа не закрывало success/failure completion path.
+- Completion теперь записывает исключительно структурированные поля: candidateId, tagPushed, resultCode, workflowRunId, targetVersion, tagName, candidateSha и deployedSha. Неизвестные значения не попадают в аудит; свободный текст ошибки остаётся в Release.PublicationError/diagnostics, workflow URL — в Release publication evidence.
+- Audit schema принимает `tagPushed` как boolean и `workflowRunId` как положительное целое; deployedSha валидируется так же строго, как Candidate SHA.
+- Расширены существующие Domain audit assertions и fresh-DbContext Application integration test: после успешного Publish проверяются точные Candidate/version/tag/deployed SHA/run ID и отсутствие workflowRunUrl/free-form error в audit JSON.
+- Новых test facts не добавлено; CI и Release Linux TRX floor остаются 2 771.
+- Implementation branch: `feat/release-management`; commits `0c47493b`, `7f0f970f`, `32470c63`, `cb2c1d3f`. Полный exact-head CI ещё требуется.
+- Merge Queue live acceptance и настройки GitHub production publication остаются отдельными внешними blockers; production tag/deploy и PR merge не запускать.
