@@ -3181,3 +3181,12 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - The source and test files were checked through the GitHub file/blob API. The new helper logic was exercised in an isolated Python harness against valid and mismatched snapshot/revision cases. The full repository test script was not executed locally because the container has no DNS/network access to fetch repository files.
 - Current source/test head before this journal update: a7217fbdc3706a8873f8a98003fdb335efc58ba2. Exact-head GitHub Actions CI remains required; no green status is claimed.
 - The previous CI retry remains run #46051958285 on an older SHA and does not validate these changes. PR #230 remains open and unmerged; no production tag or deployment has been created.
+
+## 2026-11-28 — Strict release version-policy JSON types
+
+- Centralized the allowPrerelease type check in validate_version so every supported scheme requires a JSON Boolean.
+- componentCount now requires an actual JSON integer (not bool or float); NumericComponents enforces 1-8 and SemVer enforces exactly 3, matching ProjectVersionPolicyCatalog.
+- Added three regression tests for boolean/float/string/missing componentCount, SemVer component-count drift, and non-Boolean allowPrerelease.
+- Implementation: 6816b7d458d93ff0cf763c28d3962ec78f160c3e.
+- Tests: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077.
+- Current implementation/test head before this journal update: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077. Exact-head GitHub Actions remains outstanding; no green result is claimed.
