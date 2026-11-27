@@ -515,9 +515,9 @@ def main() -> None:
         if projected != version:
             fail(f"version source {raw_path!r} projects {projected!r}, expected {version!r}")
 
-    # The release preparation commit can be an ancestor of the tagged commit
-    # when GitHub merges its PR with a merge/squash commit. Locate the commit
-    # that introduced .beacon/release.json and verify its trailer and path scope.
+    # The original ReleasePrepare commit must remain in the tagged commit ancestry.
+    # Release PRs therefore require the merge-commit method; squash and rebase rewrite
+    # the ReleasePrepare commit and cannot prove its Beacon-Release trailer.
     release_commit = git("log", "-1", "--format=%H", "HEAD", "--", ".beacon/release.json")
     if not re.fullmatch(r"[0-9a-f]{40,64}", release_commit):
         fail("could not locate the Beacon ReleasePrepare commit")
