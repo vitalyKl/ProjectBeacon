@@ -58,6 +58,7 @@ public sealed class ReleasePrepareExecutorTests
             var source = new ProjectVersionSourcePolicy("version.json", "Json", "");
             var policy = new ProjectVersionPolicy(
                 "SemVer", 3, null, "release-{version}", false, [source]);
+            Assert.True(ProjectVersionPolicyCatalog.Validate(policy, out var policyError), policyError);
 
             var result = await ReleasePrepareExecutor.WriteVersionSourceAsync(
                 path, source, policy, "2.4.2", TestContext.Current.CancellationToken);
