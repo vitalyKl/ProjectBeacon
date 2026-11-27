@@ -2092,3 +2092,25 @@ Implemented a fail-closed terminal outcome:
 - Added final fail-closed checks for malformed git ls-remote output after an ambiguous push and during final tag verification; partial parsed output is no longer sufficient evidence.
 - Code commit: eb1033d9bc19f3dd091c74a43474b029d3a4e811.
 - This change is newer than CI #45959467058 and requires a new exact-head full CI run. The prior run covers head e5ec37cda058b584c638a42cfe241acd6f8806fe only.
+
+
+## 2026-11-27 — Pin publication retry after immutable tag
+
+**Implementation commits**
+- e569c12168bac0da273ca1a0eb75d74d6012ed41 — add a domain regression test for FailedAfterTag retry.
+- 9b0054661751f96d7683b8a963c40eea622d4667 and 05a894353218347dd2e7791acbd559d39c919e5d — raise CI and release.yml Linux TRX floors to 2,766.
+
+### Lifecycle contract
+
+- Once the immutable tag has been pushed, publication failure must not allow the Release to be cancelled or retargeted. The publication may be retried to observe/recover the workflow/deployment, but only using the original Candidate/tag/version/deployment-endpoint payload.
+- Added a Domain regression fact: create Candidate; queue publication; record FailedAfterTag with a workflow run; reject a different payload; accept retry with the exact original payload; preserve PublicationTagPushed and the prior workflow run id; advance publication revision and bind a new command id.
+- CI and release.yml now require at least 2,766 Linux test results; both complete TRX blocks remain identical.
+- The latest publication/tag changes are newer than the current CI run #45959876969, which targeted the previous head. A new exact-head run is required.
+
+### Validation and external acceptance
+
+- A local bare-remote exercise confirmed a tag can be fetched into a temporary refs/beacon/release-tag-verification ref, its annotated object and peeled commit inspected, and the temporary ref deleted without altering refs/tags.
+- Exact remote tag object identity and malformed ls-remote responses are fail-closed in the current implementation.
+- Merge Queue live acceptance still requires an org-owned disposable repository; the connected account has no org membership and ProjectBeacon is a public personal-account repository.
+- Queue Merge method=merge, classic v* tag protection and production Environment required reviewers remain administrator verification items.
+- No production tag, deployment or PR merge. SaaS Control Plane and billing remain out of scope.
