@@ -1445,3 +1445,15 @@ CI после этих изменений требует минимум 2 771 Li
 - Live Merge Queue acceptance возможна только в отдельном writable org-owned disposable repository. ProjectBeacon public и принадлежит персональному аккаунту; подключённый аккаунт не состоит в организациях.
 - Queue Merge method=merge, classic tag protection `v*`, production Environment required reviewers требуют проверки администратора.
 - PR #230 не вливать и production tag/deploy не создавать до завершения проверок. SaaS Control Plane/billing вне scope.
+
+
+## Дополнение — регрессия локалей и audit metadata после merge main (27 ноября 2026)
+
+- CI #45983775039 на SHA `104bde53dbbef9825c1905b11a54126d1e37abff` выявил четыре Web-тестовые регрессии и одну Application-интеграционную регрессию.
+- Application: Publish fresh-DbContext integration test не проходил из-за отсутствия `candidateId` в allowlist audit details. В реализации добавлен узкий набор ключей immutable publication evidence с проверкой GUID/SHA/tag; произвольный текст по-прежнему запрещён.
+- Web: tests использовали неправильный тип resource localizer после merge, а пять .resx потеряли 105 ключей Release Management. Восстановлены Release/Roadmap/GitHub merge/Task Version Impact записи во всех пяти культурах; тесты используют реальный `ProjectBeacon.Web.Resources.Web` localizer.
+- Все пять resource-файлов имеют ровно 1 345 ключей, missing/orphan key count — 0. Добавлены обязательные проверки локализованных GitHub merge pending/queued/failed и Task Version Impact strings для en/ru/de/ja/zh.
+- TaskDetail bUnit fixture использует валидный XML version source в ProjectVersionPolicy.
+- CI и Release workflow Linux TRX thresholds совпадают на 2 771; complete guard blocks идентичны.
+- Implementation branch `feat/release-management` head после этих исправлений и журнала: `ce4f2a4c6de79af9458342d50d68db3fb74b1efe`. Exact-head CI после этих исправлений ещё не завершён; run #45983775039 остаётся pre-fix failure.
+- Остаток: точный CI на post-fix head; live Merge Queue acceptance в eligible org-owned disposable repo; administrator verification Merge method=merge, classic tag protection `v*` и Environment `production` required reviewers. Production tag/deploy не запускать, PR #230 не вливать.
