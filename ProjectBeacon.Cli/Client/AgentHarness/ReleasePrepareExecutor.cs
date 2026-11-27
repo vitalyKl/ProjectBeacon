@@ -210,10 +210,11 @@ internal static class ReleasePrepareExecutor
             ["sources"] = manifestSources,
             ["snapshotJson"] = snapshotJson
         };
-        var manifestPath = ResolveManifestPath(worktree);
-        if (manifestPath.Error is not null)
-            return Fail(manifestPath.Error);
-        await File.WriteAllTextAsync(manifestPath.Path!, manifest.ToJsonString(JsonOptions), new UTF8Encoding(false), ct);
+        var manifestPathResult = ResolveManifestPath(worktree);
+        if (manifestPathResult.Error is not null)
+            return Fail(manifestPathResult.Error);
+        var manifestPath = manifestPathResult.Path!;
+        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString(JsonOptions), new UTF8Encoding(false), ct);
         changedPaths.Add(".beacon/release.json");
 
         var staged = await Git(worktree, ct, filters,
