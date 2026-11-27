@@ -1374,6 +1374,23 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
         return true;
     }
 
+    private static Dictionary<string, object> PublicationAuditDetails(
+        Guid candidateId,
+        bool tagPushed,
+        string resultCode,
+        long? workflowRunId = null)
+    {
+        var details = new Dictionary<string, object>
+        {
+            ["candidateId"] = candidateId,
+            ["tagPushed"] = tagPushed,
+            ["resultCode"] = resultCode
+        };
+        if (workflowRunId is > 0)
+            details["workflowRunId"] = workflowRunId.Value;
+        return details;
+    }
+
     private static void AddAudit(IBeaconDb db, Project project, Guid releaseId, string action, object details)
     {
         var actor = new ActorContext(
@@ -1486,7 +1503,7 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
                 "Immutable Candidate snapshot was not found while processing publication completion.",
                 tagPushed: true);
             AddAudit(db, project, releaseId, "project.release.publish_failed",
-                new { candidateId, error = release.PublicationError, evidenceMissing = true });
+                PublicationAuditDetails(candidateId, tagPushed: true, resultCode: "CandidateSnapshotMissing"));
             return;
         }
 
@@ -1503,14 +1520,11 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
                 reportedError ?? error ?? row.Error ?? "Release publication workstation command failed.",
                 tagPushed, runId, runUrl);
             AddAudit(db, project, releaseId, "project.release.publish_failed",
-                new
-                {
+                PublicationAuditDetails(
                     candidateId,
-                    tagPushed = release.PublicationTagPushed,
-                    workflowRunId = release.DeploymentWorkflowRunId,
-                    workflowRunUrl = release.DeploymentWorkflowRunUrl,
-                    error = release.PublicationError
-                });
+                    release.PublicationTagPushed,
+                    resultCode: "PublicationFailed",
+                    workflowRunId: release.DeploymentWorkflowRunId));
             return;
         }
 
@@ -1521,14 +1535,9 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
                 invalidReason ?? "Workstation returned invalid deployment evidence.",
                 tagPushed: true, runId, runUrl);
             AddAudit(db, project, releaseId, "project.release.publish_failed",
-                new
-                {
-                    candidateId,
-                    tagPushed = true,
-                    workflowRunId = release.DeploymentWorkflowRunId,
-                    workflowRunUrl = release.DeploymentWorkflowRunUrl,
-                    error = release.PublicationError
-                });
+                PublicationAuditDetails(
+                    candidateId, tagPushed: true, resultCode: "InvalidPublicationEvidence",
+                    workflowRunId: release.DeploymentWorkflowRunId));
             return;
         }
 
@@ -1550,13 +1559,12 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
                 new
                 {
                     candidateId,
-                    version = proof.DeployedVersion,
+                    tagPushed = true,
+                    targetVersion = proof.DeployedVersion,
                     tagName = proof.TagName,
                     candidateSha = candidate.CandidateSha,
-                    deployedCommitSha = proof.DeployedCommitSha,
-                    workflowRunId = proof.WorkflowRunId,
-                    workflowRunUrl = proof.WorkflowRunUrl,
-                    deployedAtUtc = proof.DeployedAtUtc
+                    deployedSha = proof.DeployedCommitSha,
+                    workflowRunId = proof.WorkflowRunId
                 });
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
@@ -1565,14 +1573,9 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
                 "Deployment evidence was rejected: " + Clip(exception.Message),
                 tagPushed: true, proof.WorkflowRunId, proof.WorkflowRunUrl);
             AddAudit(db, project, releaseId, "project.release.publish_failed",
-                new
-                {
-                    candidateId,
-                    tagPushed = true,
-                    workflowRunId = proof.WorkflowRunId,
-                    workflowRunUrl = proof.WorkflowRunUrl,
-                    error = release.PublicationError
-                });
+                PublicationAuditDetails(
+                    candidateId, tagPushed: true, resultCode: "DeploymentEvidenceRejected",
+                    workflowRunId: proof.WorkflowRunId));
         }
     }
 
