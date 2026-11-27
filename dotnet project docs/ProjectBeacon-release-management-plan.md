@@ -1081,3 +1081,35 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 - В существующий tag-evidence regression fact добавлено отрицательное условие для Release identity line с хвостовым пробелом. Общее число новых test facts не изменилось, Linux TRX threshold остаётся 2 766.
 - Code commit: 2de0e5f3dba63c434430900bf6598f82d6c2d17f; test commit: aa85877a7baffdab021fc8833b40ec00e453d27e; journal commit: 85b83094c168e59d9e2359faa72ba1f34707eeab.
 - Текущий точный кодовый head требует новой матрицы CI Linux/Windows/macOS.
+
+
+## Дополнение — fail-closed tag parsing, temporary-ref cleanup и серверное publication evidence (27 ноября 2026)
+
+Implementation: `feat/release-management`, PR #230.
+
+### Tag identity exactness
+
+- Annotated tag message parser больше не использует CR как разделитель строк. Git tag object использует LF; CR остаётся содержимым строки и не может быть нормализован перед exact identity comparison.
+- Добавлен regression assertion: Release identity line с trailing CR отвергается, как уже отвергается trailing space, лишний суффикс и duplicate identity line.
+- Temporary verification ref теперь удаляется из finally, охватывающего remote fetch и чтение tag object. Удаление выполняется с CancellationToken.None; отмена publication не оставляет временный ref из-за прерывания cleanup.
+- Implementation commit: `a633b755aa205be53a7fb583ddd169817fb1b965`; test: `123745108c8f9668b1ef35f906be87dee19ca0f0`.
+
+### Server-side FailedBeforeTag / FailedAfterTag evidence
+
+- Completion handler раньше трактовал любой синтаксически корректный JSON object без свойства `tagPushed` как `false`. Это могло перевести публикацию в FailedBeforeTag и разрешить отмену Candidate, хотя immutable tag мог уже существовать.
+- Теперь отсутствие/неверный тип `tagPushed`, malformed JSON или несовпадающая identity трактуются консервативно: tag мог быть опубликован, состояние FailedAfterTag.
+- Явное `tagPushed=false` принимается только при полном failure result с action=Publish и точным совпадением projectId, releaseId, candidateId, version, tagName и candidateSha с серверным command payload.
+- Добавлен один Application regression fact на exact false, true, missing field, missing result, malformed JSON, mismatched candidate/action/SHA.
+- Code/refactor commits: `62b9e67c52f4044c520c51b68d3c967d83456987`, `2555277d727c4ba884eb24446651aa79b5eb6b6a`; test commit: `2aaf5d597c9d2b0f13f4cfe6d0bd94495e800380`.
+
+### CI
+
+- CI и release.yml Linux TRX floors синхронизированы на 2 767. Их полные TRX guard blocks проверены на byte-identical parity.
+- Предыдущий точный зелёный run [#45960317995](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45960317995) проверил SHA `85b83094c168e59d9e2359faa72ba1f34707eeab`: Linux/Windows/macOS success; Linux 2 766 test results, 7 modules, one expected platform skip.
+- Следующие fixes (CR handling, temp-ref cancellation cleanup, strict server failure evidence and the new test) ещё не входили в этот run; текущий post-journal head требует нового exact-head CI.
+
+### Текущий внешний acceptance
+
+- Live Merge Queue по-прежнему требует writable org-owned disposable repository; ProjectBeacon — public personal-account repository, подключённый пользователь не состоит в организации.
+- В eligible org-owned test repository Merge Queue method должен быть `merge`. Администратор также должен подтвердить classic tag protection `v*` и Environment `production` required reviewers.
+- Не создавать production tags/deployments и не вливать PR #230 до выполнения live acceptance и проверки protections. SaaS Control Plane и billing вне области работ.
