@@ -190,48 +190,60 @@ public sealed class CreateReleaseHandler
         var version = string.IsNullOrWhiteSpace(request.TargetVersion) ? null : request.TargetVersion.Trim();
 
         if (command.ProjectId == Guid.Empty || name.Length is < 1 or > 200)
-            return Result.Failure<ReleaseDto>("Project id and a release name of 1-200 characters are required.", ErrorKind.Validation);
+            return Result.Failure<ReleaseDto>(
+                "Project id and a release name of 1-200 characters are required.", ErrorKind.Validation);
         if (description?.Length > 5000)
-            return Result.Failure<ReleaseDto>("Release description cannot exceed 5000 characters.", ErrorKind.Validation);
+            return Result.Failure<ReleaseDto>(
+                "Release description cannot exceed 5000 characters.", ErrorKind.Validation);
         if (!ProjectVersionPolicyCatalog.IsSafeBranchName(branch))
             return Result.Failure<ReleaseDto>("Target branch is not a valid Git branch name.", ErrorKind.Validation);
 
-        await using var db = _dbFactory.CreateDbContext();
-        var permission = await ReleaseAuthorization.RequireAdminAsync(
-            db, _authorization, command.ProjectId, command.Actor, ct);
-        if (!permission.Success)
-            return Result.Forbidden<ReleaseDto>("Only a project or organization Owner/Admin can create a release.");
-
-        var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, command.ProjectId, ct);
-        if (!enabled.Success)
-            return Result.Failure<ReleaseDto>(enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
-
-        if (version is not null)
-        {
-            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
-                enabled.Value!, version, out var normalized, out var versionError))
-                return Result.Failure<ReleaseDto>(
-                    versionError ?? "Target version does not match the project version policy.", ErrorKind.Validation);
-            version = normalized;
-        }
-
-        var release = Release.Create(name, description, command.ProjectId, version, branch, request.Order);
-        db.Releases.Add(release);
-
-        var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, command.ProjectId, ct);
-        _auditWriter.Stage(db, AuditEventFactory.ForActor(
-            command.Actor, "project.release.created", "Release", release.Id.ToString("D"),
-            orgId, command.ProjectId,
-            detailsJson: JsonSerializer.Serialize(new
+        return await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            command.ProjectId,
+            [],
+            async (db, token) =>
             {
-                newState = release.Status.ToString(),
-                targetVersion = release.TargetVersion ?? "Unspecified",
-                targetBranch = release.TargetBranch,
-                count = release.Order
-            })));
-        await db.SaveChangesAsync(ct);
+                var permission = await ReleaseAuthorization.RequireAdminAsync(
+                    db, _authorization, command.ProjectId, command.Actor, token);
+                if (!permission.Success)
+                    return Result.Forbidden<ReleaseDto>(
+                        "Only a project or organization Owner/Admin can create a release.");
 
-        return Result.Ok(ReleaseMapping.ToDto(release, 0));
+                var enabled = await ReleaseAuthorization.RequireEnabledAsync(db, command.ProjectId, token);
+                if (!enabled.Success)
+                    return Result.Failure<ReleaseDto>(
+                        enabled.Error ?? "Release Management is unavailable.", enabled.Kind);
+
+                if (version is not null)
+                {
+                    if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(
+                        enabled.Value!, version, out var normalized, out var versionError))
+                        return Result.Failure<ReleaseDto>(
+                            versionError ?? "Target version does not match the project version policy.",
+                            ErrorKind.Validation);
+                    version = normalized;
+                }
+
+                var release = Release.Create(
+                    name, description, command.ProjectId, version, branch, request.Order);
+                db.Releases.Add(release);
+
+                var orgId = await ReleaseAuthorization.GetOrgIdAsync(db, command.ProjectId, token);
+                _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    command.Actor, "project.release.created", "Release", release.Id.ToString("D"),
+                    orgId, command.ProjectId,
+                    detailsJson: JsonSerializer.Serialize(new
+                    {
+                        newState = release.Status.ToString(),
+                        targetVersion = release.TargetVersion ?? "Unspecified",
+                        targetBranch = release.TargetBranch,
+                        count = release.Order
+                    })));
+                await db.SaveChangesAsync(token);
+                return Result.Ok(ReleaseMapping.ToDto(release, 0));
+            },
+            ct);
     }
 }
 
