@@ -332,9 +332,8 @@ internal static class GitHubLandingMergeExecutor
             "--method", "PUT",
             $"repos/{repository}/pulls/{pullRequestNumber}/merge-async",
             "-f", "sha=" + expectedHeadSha,
-            // Direct async merges must preserve the ReleasePrepare commit as an ancestor.
-            // When a merge queue is configured, GitHub uses the queue administrator's selected method.
-            "-f", "merge_method=merge",
+            // Ordinary GitLand must preserve the repository/queue's configured strategy.
+            // Release PR ancestry is enforced independently by ReleaseVerify and the tag gate.
             "-f", "merge_action=default"
         ];
     }
