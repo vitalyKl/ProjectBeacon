@@ -247,6 +247,21 @@ public class DeleteTaskHandler : ICommandHandler<DeleteTaskCommand, Result>
             null,
             async (db, task, token) =>
             {
+                // Deleting a dependency target also removes dependency rows from other tasks.
+                // Those referencing tasks may be inside a frozen Candidate even when the
+                // deleted task itself is not assigned to a release milestone.
+                var dependentMilestoneIds = await db.TaskDependencies
+                    .Where(dependency => dependency.DependentTaskId == task.Id && dependency.TaskId != task.Id)
+                    .Join(db.Tasks,
+                        dependency => dependency.TaskId,
+                        dependentTask => dependentTask.Id,
+                        (dependency, dependentTask) => dependentTask.MilestoneId)
+                    .ToArrayAsync(token);
+                var dependencyBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                    db, task.ProjectId, new Guid?[] { task.MilestoneId }.Concat(dependentMilestoneIds), token);
+                if (dependencyBlock is not null)
+                    return Result.Failure<bool>(dependencyBlock, ErrorKind.Conflict);
+
                 var sessions = await db.PipelineSessions.IgnoreQueryFilters()
                     .Where(session => session.ProjectId == task.ProjectId && session.TaskId == task.Id)
                     .ToListAsync(token);
