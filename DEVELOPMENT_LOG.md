@@ -1926,3 +1926,25 @@ Implemented a fail-closed terminal outcome:
 2. Complete live GitHub merge-queue acceptance in a disposable repository.
 3. Have a repository administrator verify classic `v*` tag protection and `production` Environment required reviewers.
 4. Complete user-project acceptance for the release workflow and deployment recovery paths.
+
+
+## 2026-11-27 — Fix ReleasePrepare manifest path compile regression
+
+**Implementation commits**
+- `d5dcfbbeebdd4a4771e53e24b0f772b34127b777` — retain the resolved manifest path as a string for both write and hash operations.
+- `13d40a2bb846e755014b01abe45389797b91675d` — canonicalize temp worktree paths in symlink tests so macOS `/tmp` → `/private/tmp` resolution does not mask the intended in-worktree symlink assertions.
+
+### CI diagnosis
+
+- Run [#45954916231](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45954916231) targeted previous head `fe6f3b637c99a4cacdd84019fbd2d651319c7da4`.
+- Build failed consistently on Linux, Windows and macOS with `CS1503` at `ReleasePrepareExecutor.cs:247`: the new tuple `(string? Path, string? Error)` was passed directly to `File.ReadAllBytesAsync`.
+- Fixed by extracting `manifestPathResult.Path` after checking its error, then using the resolved string for both `WriteAllTextAsync` and `ReadAllBytesAsync`.
+- The CLI test step also failed because the solution build had not produced `ProjectBeacon.Cli.Tests.dll`; that was a downstream consequence of the compile failure, not a separate test assertion result.
+- Adjusted the symlink tests to use the canonical physical paths from `AgentTaskWorktree.ResolvePhysicalPath` before calling the helper. This avoids treating macOS' temporary-directory alias as the symlink under test.
+- The current fixes have not yet been CI-validated. The next run must target the post-journal branch head exactly.
+
+### Next
+
+1. Run Linux/Windows/macOS CI on the new exact head and inspect every job, including the Linux 2,762-result TRX gate.
+2. Resolve any remaining compile/test/format issues before considering the branch ready for merge.
+3. Live merge-queue acceptance and publication-protection verification remain outstanding; no production tag, deployment, merge, SaaS Control Plane or billing changes.
