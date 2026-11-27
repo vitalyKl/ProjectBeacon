@@ -2415,3 +2415,20 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Re-run exact-head Linux/Windows/macOS CI after this journal entry.
 2. Confirm normal GitLand retains its prior merge policy and Release Verify/tag gates continue to reject squash/rebase.
 3. Complete the external live queue and publication-protection acceptance once an eligible organization repository and administrator are available.
+
+
+## 2026-11-27 — Tighten Release workflow write-permission regression guard
+
+**Test commit:** 4ee8625e999adac5dc0958482725ad9aaa3d8658
+
+- The existing Release workflow permission test already asserted workflow-level contents:read, client contents:write, image packages:write, scan packages:read, and no packages:write on tests/deploy.
+- It did not reject a future, unrelated write scope on tests/deploy (for example contents:write or id-token:write).
+- Added an exact write-scope matrix assertion: only client may receive contents:write and only image may receive packages:write; tests, scan and deploy must have no write-scoped permissions.
+- No application behavior or .NET test count changed; Linux TRX minimum remains 2,768. The standalone permission test runs in both CI and release workflow before build/release validation.
+- The prior exact-head CI #45977749031 passed on SHA 3fa2dc36a253ddbccde3dddaa545a3a826201cb1. This new Python regression test is not covered by that run; a new exact-head Linux/Windows/macOS run is required after the journal update.
+
+### Next
+
+1. Re-run exact-head CI on the post-journal branch head; confirm the permission contract test and all three platform jobs pass.
+2. Continue static release workflow and UI/RLS acceptance. External merge-queue and production protection settings remain administrator acceptance blockers.
+3. PR #230 remains open and unmerged; no production tag or deployment. SaaS Control Plane and billing remain out of scope.
