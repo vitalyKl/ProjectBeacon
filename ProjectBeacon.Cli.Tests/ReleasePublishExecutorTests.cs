@@ -107,10 +107,37 @@ public sealed class ReleasePublishExecutorTests
     }
 
     [Fact]
-    public void WorkflowPreflight_RequiresSuccessfulGitHubActionsReadBeforeTagPush()
+    public void WorkflowPreflight_RequiresActiveReleaseWorkflowAndActionsReadBeforeTagPush()
     {
-        Assert.Null(ReleasePublishExecutor.ValidateWorkflowPreflight(0, false, "[]", ""));
+        const string activeReleaseWorkflow =
+            """[{"id":123,"name":"Release","path":".github/workflows/release.yml","state":"active"}]""";
+        const string disabledReleaseWorkflow =
+            """[{"id":123,"name":"Release","path":".github/workflows/release.yml","state":"disabled_manually"}]""";
 
+        Assert.Null(ReleasePublishExecutor.ValidateReleaseWorkflowDefinitionPreflight(
+            0, false, activeReleaseWorkflow, ""));
+        Assert.Contains(
+            "not active",
+            ReleasePublishExecutor.ValidateReleaseWorkflowDefinitionPreflight(
+                0, false, disabledReleaseWorkflow, "") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "exactly one",
+            ReleasePublishExecutor.ValidateReleaseWorkflowDefinitionPreflight(
+                0, false, "[]", "") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "invalid workflow list",
+            ReleasePublishExecutor.ValidateReleaseWorkflowDefinitionPreflight(
+                0, false, "{}", "") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "could not list",
+            ReleasePublishExecutor.ValidateReleaseWorkflowDefinitionPreflight(
+                1, false, "[]", "HTTP 403") ?? "",
+            StringComparison.OrdinalIgnoreCase);
+
+        Assert.Null(ReleasePublishExecutor.ValidateWorkflowPreflight(0, false, "[]", ""));
         Assert.Contains(
             "invalid workflow-run list",
             ReleasePublishExecutor.ValidateWorkflowPreflight(0, false, "{}", "") ?? "",
