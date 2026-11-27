@@ -181,6 +181,11 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
                     return Result.Failure<PipelineStateDto>(
                         $"Cannot record verdict in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
 
+                // Keep the task detached: the guarded ExecuteUpdate below is the only
+                // writer for its state. SaveChanges should persist verdict/subtask/session
+                // rows only, not replay a stale tracked TaskItem update.
+                db.Entry(task).State = EntityState.Detached;
+
                 var hasReviewSession = await db.PipelineSessions
                     .AnyAsync(session => session.TaskId == task.Id && session.Role == PipelineRole.Review, token);
                 if (!hasReviewSession)
