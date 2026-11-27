@@ -447,16 +447,28 @@ def validate_tag_pattern(pattern: Any, version: str, tag: str) -> str:
     return sample
 
 
+def require_positive_json_integer(value: Any, label: str) -> int:
+    # bool is a subclass of int in Python; JSON schema revisions must be actual
+    # integer tokens, not true/false or floating-point values such as 1.0.
+    if type(value) is not int or value < 1:
+        fail(f"{label} must be a positive JSON integer")
+    return value
+
+
 def validate_version(policy: dict[str, Any], version: str) -> None:
     scheme = policy.get("scheme")
+    component_count = policy.get("componentCount")
+    if type(component_count) is not int:
+        fail("release manifest policy componentCount must be a JSON integer")
     if scheme == "NumericComponents":
-        count = policy.get("componentCount")
-        if not isinstance(count, int) or count < 1 or count > 8:
+        if component_count < 1 or component_count > 8:
             fail("NumericComponents policy has an invalid componentCount")
-        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version) or len(version.split(".")) != count:
-            fail(f"version {version!r} does not contain exactly {count} numeric components")
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", version) or len(version.split(".")) != component_count:
+            fail(f"version {version!r} does not contain exactly {component_count} numeric components")
         return
     if scheme == "SemVer":
+        if component_count != 3:
+            fail("SemVer policy componentCount must be exactly 3")
         pattern = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
         match = re.fullmatch(pattern, version)
         if match is None:
@@ -487,6 +499,63 @@ def validate_version(policy: dict[str, Any], version: str) -> None:
             fail(f"calendar version {version!r} is not canonical for {value!r}")
         return
     fail(f"unsupported version scheme in release manifest: {scheme!r}")
+
+
+def validate_release_snapshot(
+    snapshot_json: Any,
+    project_id: str,
+    release_id: str,
+    version: str,
+    target_branch: str,
+    version_policy_revision: int,
+    release_revision: int,
+    policy: dict[str, Any],
+) -> None:
+    if not isinstance(snapshot_json, str) or not snapshot_json or len(snapshot_json) > 1_000_000:
+        fail("release manifest snapshotJson must be a non-empty JSON object string within the 1 MB limit")
+    try:
+        snapshot = json.loads(snapshot_json)
+    except json.JSONDecodeError as exc:
+        fail(f"release manifest snapshotJson is invalid JSON: {exc}")
+    if not isinstance(snapshot, dict) or type(snapshot.get("schemaVersion")) is not int or snapshot["schemaVersion"] != 1:
+        fail("release manifest snapshotJson must contain an object with schemaVersion=1")
+
+    try:
+        snapshot_project_id = str(uuid.UUID(str(snapshot.get("projectId"))))
+    except (ValueError, AttributeError):
+        fail("release snapshot projectId must be a valid GUID")
+    if snapshot_project_id != project_id:
+        fail("release snapshot projectId differs from the release manifest")
+
+    snapshot_policy_revision = require_positive_json_integer(
+        snapshot.get("versionPolicyRevision"), "release snapshot versionPolicyRevision"
+    )
+    if snapshot_policy_revision != version_policy_revision:
+        fail("release snapshot versionPolicyRevision differs from the release manifest")
+
+    snapshot_policy = snapshot.get("versionPolicy")
+    if not isinstance(snapshot_policy, dict):
+        fail("release snapshot must contain a versionPolicy object")
+    for key in ("scheme", "componentCount", "calendarFormat", "tagPattern", "allowPrerelease"):
+        if snapshot_policy.get(key) != policy.get(key) or type(snapshot_policy.get(key)) is not type(policy.get(key)):
+            fail(f"release snapshot versionPolicy.{key} differs from the release manifest policy")
+
+    release = snapshot.get("release")
+    if not isinstance(release, dict):
+        fail("release snapshot must contain a release object")
+    try:
+        snapshot_release_id = str(uuid.UUID(str(release.get("releaseId"))))
+    except (ValueError, AttributeError):
+        fail("release snapshot releaseId must be a valid GUID")
+    if snapshot_release_id != release_id:
+        fail("release snapshot releaseId differs from the release manifest")
+    if release.get("targetVersion") != version or release.get("targetBranch") != target_branch:
+        fail("release snapshot target version or branch differs from the release manifest")
+    snapshot_release_revision = require_positive_json_integer(
+        release.get("releaseRevision"), "release snapshot releaseRevision"
+    )
+    if snapshot_release_revision != release_revision:
+        fail("release snapshot releaseRevision differs from the release manifest")
 
 
 def main() -> None:
