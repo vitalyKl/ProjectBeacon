@@ -208,6 +208,42 @@ public sealed class ReleaseEntityTests
         Assert.True(release.PublicationTagPushed);
     }
 
+    [Fact]
+    public void PublicationFailureAfterTag_CanRetryOnlyWithOriginalImmutablePayload()
+    {
+        var (release, deviceId) = CreateCandidateRelease();
+        const string payload = """{"candidate":"immutable","tag":"v1.0.0","endpoint":"https://example.test/version"}""";
+        var firstCommandId = Guid.NewGuid();
+
+        release.BeginPublication(deviceId, firstCommandId, payload);
+        release.RecordPublicationFailure(
+            firstCommandId,
+            "The release workflow failed after the immutable tag was pushed.",
+            tagPushed: true,
+            workflowRunId: 123,
+            workflowRunUrl: "https://github.com/acme/project/actions/runs/123");
+
+        Assert.Equal(ReleasePublicationStatus.FailedAfterTag, release.PublicationStatus);
+        Assert.True(release.PublicationTagPushed);
+        Assert.Equal(123, release.DeploymentWorkflowRunId);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            release.BeginPublication(
+                deviceId,
+                Guid.NewGuid(),
+                """{"candidate":"changed","tag":"v1.0.1","endpoint":"https://example.test/version"}"""));
+
+        var failedRevision = release.PublicationRevision;
+        var retryCommandId = Guid.NewGuid();
+        release.BeginPublication(deviceId, retryCommandId, payload);
+
+        Assert.Equal(ReleasePublicationStatus.Queued, release.PublicationStatus);
+        Assert.True(release.PublicationTagPushed);
+        Assert.Equal(payload, release.PublicationPayloadJson);
+        Assert.Equal(retryCommandId, release.PublicationCommandId);
+        Assert.Equal(failedRevision + 1, release.PublicationRevision);
+    }
+
     private static (Release Release, Guid DeviceId) CreateCandidateRelease()
     {
         var projectId = Guid.NewGuid();
