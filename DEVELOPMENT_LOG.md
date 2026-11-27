@@ -1948,3 +1948,29 @@ Implemented a fail-closed terminal outcome:
 1. Run Linux/Windows/macOS CI on the new exact head and inspect every job, including the Linux 2,762-result TRX gate.
 2. Resolve any remaining compile/test/format issues before considering the branch ready for merge.
 3. Live merge-queue acceptance and publication-protection verification remain outstanding; no production tag, deployment, merge, SaaS Control Plane or billing changes.
+
+
+## 2026-11-27 — Exact-head cross-platform CI passed after ReleasePrepare path hardening
+
+**Run:** [#45955852379](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45955852379)  
+**Validated implementation SHA:** `e02e4d7579c3251e7b6ee5b82c8eaf7fc4611ad9`  
+**Result:** success on Linux, Windows and macOS.
+
+- All three platforms passed restore, build, EF pending-model-change validation, all seven test modules and formatting.
+- Linux authoritative lane passed all seven modules and its strict TRX guard: **2,762 results**, one expected platform-conditional skip, zero failures; both symlink security gates passed.
+- The new Prepare/Verify/Publish handler tests and the ReleasePrepare manifest-path symlink tests are included in this run.
+- This supersedes the prior journal statement that the symlink hardening and updated 2,762-result gate still needed CI validation.
+- The run validates the implementation SHA above. This journal-only commit does not alter application code, but a final run is being triggered on the post-journal PR head so that the latest GitHub revision itself has a green required check.
+
+### Remaining acceptance blockers
+
+1. Live asynchronous GitHub Merge Queue acceptance still needs a separate writable disposable repository with merge queue and required checks configured. Do not run destructive queue scenarios against ProjectBeacon itself.
+2. Classic `v*` tag protection and required reviewers on the `production` Environment remain unverified: current GitHub integration cannot read the relevant settings with sufficient permissions. Tag and deployment publication stay disabled until an administrator verifies them.
+3. Real-project end-to-end acceptance remains outstanding: prepare a release, merge through the selected single landing authority, verify the immutable Candidate, publish the tag, observe the release workflow and prove deployed version/SHA, including failure/recovery paths.
+4. No production tag, deployment or PR merge was performed. SaaS Control Plane and billing were not touched.
+
+### Next
+
+1. Re-run exact-head CI after this journal-only commit.
+2. Continue static review of the publication/deployment workflow and add focused regression tests only for confirmed gaps.
+3. Complete live merge-queue and publication-protection acceptance when the required repository access is available.
