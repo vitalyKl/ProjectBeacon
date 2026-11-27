@@ -2048,3 +2048,39 @@ Implemented a fail-closed terminal outcome:
 2. Obtain an org-owned disposable repository with Merge Queue enabled and Merge method=merge; run pending/enqueued/expiry/removal/direct-merged/queued-merged/closed-PR/drift/post-merge-failure acceptance.
 3. Verify classic v* tag protection and production Environment required reviewers with an administrator.
 4. Complete the release workflow end-to-end in a real project, including Candidate, Publish, deployment proof and failure recovery.
+
+
+## 2026-11-27 — Validate remote annotated-tag identity after concurrent push
+
+**Implementation commits**
+- 3f56a0516068de9e61e4dbe282498366bb25cac1 — verify remote annotated tag object identity during initial, concurrent-push recovery and final checks.
+- a52a1d1a0ecbc99f7fa809695c2fc457bb1de748 — add three ReleasePublishExecutor tag-evidence regression facts.
+- efc1fb9d34b0c527d61a7adf82ba5ed91e0b2957 and 06150e4c04804df643290b4dbf641b23b94de27a — raise both Linux TRX minimums from 2,762 to 2,765 to account for the three new facts.
+
+### Issue and fix
+
+- The tag push path correctly avoided force updates and recovered from a lost push acknowledgement by checking that the remote tag peeled to the Candidate SHA.
+- However, in that concurrent-writer recovery path it did not re-read the remote annotated tag object. A tag with the right target commit but incorrect/missing Release/Candidate annotation could be accepted.
+- Added remote tag verification through a unique temporary local ref under `refs/beacon/release-tag-verification`; it never overwrites the normal local tag ref. The fetched remote object must be an annotated tag with exact tag name, commit target, Release id, Candidate id, Candidate SHA and version identity lines.
+- The published tag object's SHA is compared with the advertised remote tag object SHA. The same identity check now runs after an ambiguous concurrent push and during final remote verification.
+- Identity lines are matched exactly and must occur once; substring matches and duplicate lines are rejected.
+- Temporary refs are deleted after inspection. A cleanup failure cannot rewrite or alter the remote tag; future verification uses a different unique temporary ref.
+
+### Regression tests and gates
+
+- Added three CLI facts: accept exact annotated Candidate tag evidence; reject different target/name and lightweight tags; reject missing, altered, suffixed or duplicate identity lines.
+- Increased CI and release.yml Linux TRX guard to 2,765; both thresholds must stay equal.
+- This code/test/workflow update is newer than CI #45958653131, which tests pre-tag-race head `914756f88fe04336f81614f5a8a63348503c4f16`. A new exact-head run is required after the current journal/PR update.
+
+### Remaining acceptance blockers
+
+- Live Merge Queue acceptance requires a writable org-owned disposable repository. ProjectBeacon is public and owned by a personal GitHub account; the account has no organization memberships. The current repository cannot host a live merge-queue test under GitHub's documented eligibility rules.
+- The CI `merge_group: checks_requested` trigger is now present, but live required-check behavior on an actual queue is not proven until the separate org-owned acceptance repository is available.
+- An administrator must verify Merge Queue method=merge, classic `v*` tag protection and required reviewers for Environment `production`.
+- No production tag, deployment or PR merge has been performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Run exact-head CI on the latest branch head, including the three annotated-tag identity facts and the 2,765 Linux TRX gate.
+2. Complete live queue acceptance on a disposable org-owned repository with method=merge and required CI checks.
+3. Finish publication/deployment end-to-end acceptance and recovery paths once administrator settings are verified.
