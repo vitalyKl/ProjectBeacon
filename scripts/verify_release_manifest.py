@@ -570,8 +570,8 @@ def main() -> None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         fail(f".beacon/release.json is invalid: {exc}")
-    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1:
-        fail("release manifest must be a JSON object with schemaVersion=1")
+    if not isinstance(manifest, dict) or type(manifest.get("schemaVersion")) is not int or manifest["schemaVersion"] != 1:
+        fail("release manifest must be a JSON object with integer schemaVersion=1")
 
     try:
         project_id = str(uuid.UUID(str(manifest.get("projectId"))))
@@ -591,12 +591,29 @@ def main() -> None:
         fail(f"release manifest tagName {tag_name!r} differs from the configured tag pattern {expected_tag!r}")
     if not isinstance(policy, dict):
         fail("release manifest policy must be an object")
-    if manifest.get("versionPolicyRevision", 0) < 1:
-        fail("release manifest versionPolicyRevision must be positive")
-    if not isinstance(manifest.get("targetBranch"), str) or not manifest["targetBranch"]:
+    if type(policy.get("allowPrerelease")) is not bool:
+        fail("release manifest policy allowPrerelease must be a JSON Boolean")
+    version_policy_revision = require_positive_json_integer(
+        manifest.get("versionPolicyRevision"), "release manifest versionPolicyRevision"
+    )
+    release_revision = require_positive_json_integer(
+        manifest.get("releaseRevision"), "release manifest releaseRevision"
+    )
+    target_branch = manifest.get("targetBranch")
+    if not isinstance(target_branch, str) or not target_branch:
         fail("release manifest targetBranch is required")
 
     validate_version(policy, version)
+    validate_release_snapshot(
+        manifest.get("snapshotJson"),
+        project_id,
+        release_id,
+        version,
+        target_branch,
+        version_policy_revision,
+        release_revision,
+        policy,
+    )
     sources = manifest.get("sources")
     if not isinstance(sources, list) or not sources or len(sources) > 16:
         fail("release manifest must contain 1-16 configured version sources")
