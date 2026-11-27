@@ -1025,3 +1025,13 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 - Администратор должен подтвердить Merge Queue method=merge, classic tag protection `v*` и required reviewers Environment `production`.
 - После этого остаётся end-to-end user-project acceptance: ReleasePrepare → PR merge → immutable Candidate → Publish/tag → Actions workflow → deployed version/SHA, включая recovery/failure paths.
 - Не создавать production tag/deployment и не вливать PR #230 до выполнения acceptance blockers. SaaS Control Plane и billing не затрагивать.
+
+
+## Дополнение — required checks для GitHub Merge Queue (27 ноября 2026)
+
+- По документации GitHub merge queue требует, чтобы CI слушал отдельное событие `merge_group` с типом `checks_requested`. Обычных `pull_request` и `push` событий недостаточно: без merge-group check GitHub ожидает обязательный статус и не может завершить элемент очереди.
+- В implementation branch `feat/release-management` добавлено событие `merge_group: types: [checks_requested]` в `.github/workflows/ci.yml`. Оно запускает ту же полную Linux/Windows/macOS матрицу и публикует те же имена required checks для синтетической merge-group ветки.
+- Этот workflow change ещё не покрыт завершённым exact-head CI; run #45957896644 проверяет предыдущий head и не включает событие merge_group. Новый запуск необходим.
+- Дополнительное ограничение: GitHub указывает, что Merge Queue доступна публичным репозиториям, принадлежащим организациям, либо частным репозиториям организаций на GitHub Enterprise Cloud. ProjectBeacon сейчас public, owner type User; merge queue в этом репозитории недоступна по текущим условиям продукта. Для live acceptance нужен отдельный org-owned disposable repository.
+- Merge Queue administrator settings включают отдельный параметр Merge method. Release Management требует метод merge, потому что VerifyLanding закреплён за точным исходным ReleasePrepare SHA. Squash/rebase переписывают SHA и не проходят этот серверный барьер.
+- Следующие external acceptance blockers: доступ к writable org-owned disposable repository с merge queue; подтверждение Merge method=merge; проверка classic tag protection `v*` и required reviewers Environment `production`.
