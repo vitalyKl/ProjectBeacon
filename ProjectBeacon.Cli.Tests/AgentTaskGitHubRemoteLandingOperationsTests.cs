@@ -57,6 +57,39 @@ public sealed class AgentTaskGitHubRemoteLandingOperationsTests
                 persistedStatus, currentAsyncStatus, queueEntryState));
     }
 
+    [Fact]
+    public void ExpiredPendingAsyncRequestFailsOnlyAfter404AndAnEmptyLiveQueueEntry()
+    {
+        var acceptedAt = new DateTime(2026, 11, 25, 8, 0, 0, DateTimeKind.Utc);
+        var expiry = acceptedAt.AddHours(24);
+
+        Assert.True(AgentTaskGitHubRemoteLandingOperations.ShouldFailExpiredPendingRequest(
+            "pending", requestNotFound: true, queueEntryState: null, acceptedAt, expiry));
+        Assert.False(AgentTaskGitHubRemoteLandingOperations.ShouldFailExpiredPendingRequest(
+            "pending", requestNotFound: true, queueEntryState: null, acceptedAt, expiry.AddTicks(-1)));
+        Assert.False(AgentTaskGitHubRemoteLandingOperations.ShouldFailExpiredPendingRequest(
+            "pending", requestNotFound: false, queueEntryState: null, acceptedAt, expiry.AddHours(1)));
+        Assert.False(AgentTaskGitHubRemoteLandingOperations.ShouldFailExpiredPendingRequest(
+            "pending", requestNotFound: true, queueEntryState: "QUEUED", acceptedAt, expiry.AddHours(1)));
+        Assert.False(AgentTaskGitHubRemoteLandingOperations.ShouldFailExpiredPendingRequest(
+            "enqueued", requestNotFound: true, queueEntryState: null, acceptedAt, expiry.AddHours(1)));
+        Assert.False(AgentTaskGitHubRemoteLandingOperations.ShouldFailExpiredPendingRequest(
+            "pending", requestNotFound: true, queueEntryState: null, acceptedAtUtc: null, expiry.AddHours(1)));
+    }
+
+    [Theory]
+    [InlineData("gh: HTTP 404: Not Found", true)]
+    [InlineData("HTTP 404 Not Found", true)]
+    [InlineData("HTTP 403: Resource not accessible by integration", false)]
+    [InlineData("HTTP 429: API rate limit exceeded", false)]
+    [InlineData("connection timed out", false)]
+    [InlineData("", false)]
+    public void AsyncMergeRequestLookup_OnlyClassifiesExplicitHttp404AsNotFound(string standardError, bool expected)
+    {
+        Assert.Equal(expected,
+            AgentTaskGitHubRemoteLandingOperations.IsGitHubApiNotFoundResponse(standardError));
+    }
+
     [Theory]
     [InlineData("OPEN", "GitHubAsyncMergeFailed")]
     [InlineData("CLOSED", "GitHubPullRequestClosedWithoutMerge")]
