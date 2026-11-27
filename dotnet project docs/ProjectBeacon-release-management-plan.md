@@ -185,3 +185,11 @@
 - Это важно, потому что сама отправка тега запускает release workflow; отсутствие доступа к наблюдению после push не должно превращаться в штатный сценарий.
 - ReleasePublishExecutor выполняет этот preflight до EnsureImmutableTagAsync. При ошибке workflow-readability новый тег этим вызовом не создаётся.
 - Добавлен регрессионный тест строгой проверки preflight-ответа; CI и release.yml TRX floor подняты синхронно до 2,773.
+
+
+### Pre-publication active-workflow and failure-evidence checks — 27 November 2026
+
+- Publisher preflight now explicitly lists workflows including disabled ones and requires exactly one active .github/workflows/release.yml; it also checks that the current credential can read that workflow's run list.
+- A valid empty prior-run list is permitted only after the workflow definition has been proven active. Missing, disabled, malformed or unreadable workflow state aborts before tag creation.
+- Failures known to occur before the tag-push attempt return a payload-bound completion result with tagPushed=false. Exceptions once tag creation is entered remain conservative because the remote push acknowledgement may be ambiguous.
+- The server merges this result with any previously stored tag-pushed flag, so a failed retry cannot clear evidence from an earlier attempt.
