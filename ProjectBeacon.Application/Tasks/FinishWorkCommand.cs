@@ -90,11 +90,10 @@ public class FinishWorkHandler
 
             if (attempt == 1)
             {
-                // Refresh the compare-and-swap baseline after acquiring the project lock.
+                // Refresh the entity snapshot after the project lock, but deliberately keep
+                // the original request's compare-and-swap baseline. A rival may have committed
+                // after the handler's initial read but before this lock was acquired.
                 task = live;
-                expectedStatus = live.Status;
-                expectedRevision = live.StateRevision;
-                expectedContentRevision = live.ContentRevision;
             }
             else
             {
