@@ -78,6 +78,30 @@ internal static class ReleasePublishExecutor
             if (origin.Error is not null)
                 return Fail(origin.Error);
 
+            // Preflight GitHub workflow observability before the first possible tag push.
+            // A successful git push can trigger production deployment; never create the tag
+            // when this workstation cannot authenticate and read the exact release workflow.
+            var ghPath = WorkstationProbe.Which(
+                "gh", NativeCommandRunner.BuildSafePath(Environment.GetEnvironmentVariable("PATH"), repositoryRoot));
+            if (ghPath is null)
+                return Fail("GitHub CLI is not installed. Install and authenticate gh before publishing; the release tag was not pushed by this command.");
+
+            var auth = await AgentTaskGitOperations.RunGitHubCliAsync(
+                ghPath, repositoryRoot, ct, "auth", "status", "--hostname", "github.com");
+            if (auth.ExitCode != 0 || auth.TimedOut)
+                return Fail("GitHub CLI is not authenticated for workflow observation. Authenticate gh before publishing; the release tag was not pushed by this command.");
+
+            var workflowAccess = await AgentTaskGitOperations.RunGitHubCliAsync(
+                ghPath, repositoryRoot, ct,
+                "run", "list", "--repo", origin.Repository!,
+                "--workflow", "release.yml", "--limit", "1",
+                "--json", "databaseId,headSha,event,status,conclusion,headBranch,url");
+            var workflowAccessError = ValidateWorkflowPreflight(
+                workflowAccess.ExitCode, workflowAccess.TimedOut, workflowAccess.StdOut, workflowAccess.StdErr);
+            if (workflowAccessError is not null)
+                return Fail("GitHub Actions access to release.yml could not be verified before publication. "
+                    + workflowAccessError + " The release tag was not pushed by this command.");
+
             var candidate = await VerifyCandidateCommitAsync(
                 repositoryRoot, filters, request.CandidateSha, request.CandidateTreeSha, ct);
             if (candidate.Error is not null)
@@ -90,22 +114,6 @@ internal static class ReleasePublishExecutor
             {
                 var failure = ResultJson(request, tag.TagPushed, null, null, null, null, null, tag.Error);
                 return (false, failure, tag.Error);
-            }
-
-            var ghPath = WorkstationProbe.Which(
-                "gh", NativeCommandRunner.BuildSafePath(Environment.GetEnvironmentVariable("PATH"), repositoryRoot));
-            if (ghPath is null)
-            {
-                const string message = "The release tag exists, but GitHub CLI is not installed; workflow observation cannot continue.";
-                return (false, ResultJson(request, tag.TagPushed, null, null, null, null, null, message), message);
-            }
-
-            var auth = await AgentTaskGitOperations.RunGitHubCliAsync(
-                ghPath, repositoryRoot, ct, "auth", "status", "--hostname", "github.com");
-            if (auth.ExitCode != 0 || auth.TimedOut)
-            {
-                const string message = "The release tag exists, but GitHub CLI is not authenticated for workflow observation.";
-                return (false, ResultJson(request, tag.TagPushed, null, null, null, null, null, message), message);
             }
 
             var workflow = await ObserveReleaseWorkflowAsync(
@@ -531,6 +539,18 @@ internal static class ReleasePublishExecutor
             result[parts[1]] = parts[0].ToLowerInvariant();
         }
         return new RemoteTagMap(result, null);
+    }
+
+    internal static string? ValidateWorkflowPreflight(
+        int exitCode, bool timedOut, string stdout, string stderr)
+    {
+        if (timedOut)
+            return "GitHub CLI timed out while checking Actions read access.";
+        if (exitCode != 0)
+            return "GitHub CLI could not list release workflow runs. Check Actions read permission and workflow availability. "
+                + Clip(stderr);
+        var parsed = ParseWorkflowRuns(stdout);
+        return parsed.Error;
     }
 
     private sealed record WorkflowPoll(bool Success, WorkflowRun? Run, string? Error);
