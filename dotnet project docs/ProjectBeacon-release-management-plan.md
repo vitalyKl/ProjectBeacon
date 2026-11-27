@@ -1421,3 +1421,27 @@ CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94a
 - После merge feature branch не отстаёт от main. В implementation journal результат записан в commit 104bde53dbbef9825c1905b11a54126d1e37abff.
 - Предыдущий CI #45982946580 проверял до-merge SHA 24efb8d, поэтому не валидирует текущую вершину. Требуется новый exact-head CI после обновления журнала.
 
+
+
+## Дополнение — восстановление ресурсов Release Management и аудит публикации (27 ноября 2026)
+
+В PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230) после merge main в feature-ветку обнаружена неполная локализационная интеграция: при разрешении конфликтов было восстановлено только три ключа ошибок релиза, а ещё 105 ключей Release Management отсутствовали во всех пяти ресурсных файлах.
+
+Исправления:
+- Сравнение текущих пяти `.resx` с feature-parent до merge `b34f72682913cf597cdfe2fc61c024d15d2dd5fa` обнаружило одинаковый набор из 105 отсутствующих ключей: Version Policy, Release/Roadmap, Prepare/Verify/Publish, GitHub Merge состояния и Task Version Impact.
+- Все 105 ключей восстановлены из feature-parent во всех пяти культурах: neutral English, German, Japanese, Russian, Chinese. Значения, которые уже изменил последний main locale audit, сохранены.
+- Теперь каждый ресурс содержит 1 345 ключей; множества keys во всех пяти культурах совпадают, missing/orphan keys = 0.
+- bUnit проверки сообщений GitHub merge и Task Version Impact теперь сравнивают UI с соответствующим `IStringLocalizer<Web>`, а не с английскими литералами.
+
+Отдельно исправлен провал Application теста Publish:
+- PublishReleaseHandler отправлял в AuditEvent метаданные Candidate и рабочей станции, которые не входили в allowlist.
+- Разрешены только структурированные candidateId/workstationId GUID, candidateSha Git SHA, tagName по safe Git tag policy и integer publicationRevision.
+- Необязательный deployment endpoint hostname убран из audit payload; произвольный текст по-прежнему запрещён.
+- Добавлены две Domain regression facts: допустимые данные и отклонение malformed identity/SHA/tag/revision.
+
+CI после этих изменений требует минимум 2 771 Linux TRX результата; ci.yml и release.yml guard blocks синхронизированы. Run #45983775039 фиксировал старый провал до этих исправлений и не является валидацией новых изменений. Нужен новый exact-head CI на implementation ветке.
+
+Оставшиеся условия не изменились:
+- Live Merge Queue acceptance возможна только в отдельном writable org-owned disposable repository. ProjectBeacon public и принадлежит персональному аккаунту; подключённый аккаунт не состоит в организациях.
+- Queue Merge method=merge, classic tag protection `v*`, production Environment required reviewers требуют проверки администратора.
+- PR #230 не вливать и production tag/deploy не создавать до завершения проверок. SaaS Control Plane/billing вне scope.
