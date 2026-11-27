@@ -163,6 +163,17 @@ public class UpdateProjectHandler : ICommandHandler<UpdateProjectCommand, Result
                         return Result.Failure<ProjectDto>("Project name is required.");
                 }
 
+                var nameChanged = name is not null
+                    && !string.Equals(project.Name, name, StringComparison.Ordinal);
+                if (nameChanged
+                    && await db.Releases.AnyAsync(release => release.ProjectId == project.Id
+                        && release.PreparationStatus != ReleasePreparationStatus.NotStarted
+                        && !(release.Status == ReleaseStatus.Cancelled
+                            && release.PreparationStatus == ReleasePreparationStatus.Failed), token))
+                    return Result.Failure<ProjectDto>(
+                        "Project name is part of the immutable Candidate snapshot and cannot change after ReleasePrepare starts.",
+                        ErrorKind.Conflict);
+
                 var descriptionChanged = command.Request.Description is not null
                     && !string.Equals(project.Description, command.Request.Description, StringComparison.Ordinal);
                 if (descriptionChanged && command.Request.ExpectedRevision != project.Revision)
