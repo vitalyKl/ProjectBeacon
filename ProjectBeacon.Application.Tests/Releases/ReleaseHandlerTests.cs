@@ -248,6 +248,16 @@ public sealed class ReleaseHandlerTests : IDisposable
             _db, _projectId, [milestone.Id], TestContext.Current.CancellationToken);
         Assert.NotNull(prepared);
         Assert.Contains("Frozen scope", prepared, StringComparison.Ordinal);
+
+        var detach = await new SetMilestoneReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new SetMilestoneReleaseCommand(
+                new SetMilestoneReleaseRequest(milestone.Id, _projectId, null, milestone.Revision),
+                OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.False(detach.Success);
+        Assert.Equal(ErrorKind.Conflict, detach.Kind);
+        await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(release.Id, milestone.ReleaseId);
     }
 
     [Fact]
