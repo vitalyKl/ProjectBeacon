@@ -2852,3 +2852,26 @@ The next intermediate run on `2e04b6c` reached all platform test suites. Linux A
 ### Current branch head before this journal entry
 
 `ffa15f768eac40dae7b12276ca979a3a0948cb9e`
+
+
+## 2026-11-27 — Restore milestone authorization semantics and make Windows transcript test deterministic
+
+### CI findings on prior head `8ff31b6`
+
+- Linux API: `P2AuthorizationHttpTests.MilestoneMutations_RequireProjectMembershipAndRespectProjectScopedRoutes` returned 404 instead of the documented 403 for an unauthorized read of an existing milestone.
+- Linux, Windows and macOS Application: `IgnoreQueryFiltersAllowlistTests` still expected the old milestone-handler count of 9 after the implementation had been reduced to 3/4 reviewed lookups.
+- Windows CLI: `NativeRuntimeDoesNotSummarizeALoneCheckpointAgain` read the transcript as soon as the in-memory turn status became Ended; the final durable write could still be in flight, causing a transient Windows file-sharing IOException.
+
+### Corrections
+
+- `GetMilestoneHandler` uses one explicitly keyed lookup by milestone id and optional route ProjectId before performing project membership authorization. This preserves 403 for an existing resource and 404 for an id outside the route project.
+- Project-scoped Milestone mutation handlers now authorize the supplied route ProjectId before the tenant-filtered milestone lookup. Mismatched route project IDs still return 404 after authorization; unauthorized users receive 403 before resource lookup.
+- Legacy unscoped Milestone mutation routes resolve only the owning ProjectId of the supplied milestone id, immediately authorize membership, then take the project lock and continue through the tenant-filtered lookup.
+- Reviewed allowlist entry for `ProjectBeacon.Application/Milestones/MilestoneHandlers.cs` is now exactly 5, with the rationale describing the three explicit project/milestone lookup paths plus the legacy-id lookup. The remaining mutation queries stay tenant-filtered.
+- The Windows transcript test now disposes the runtime before reading the persisted JSON. `DisposeAsync` waits for the active turn task and final persistence, avoiding sleeps/retry loops and making the assertion deterministic.
+
+### Validation
+
+- No new test fact was added; the Linux TRX floor remains 2,772 and CI/release guard blocks remain identical.
+- New exact-head Linux/Windows/macOS CI is required after this commit. The failed prior run is superseded only when all jobs on the latest head pass.
+- PR #230 stays open and unmerged. No production tag/deployment. SaaS Control Plane and billing remain out of scope.
