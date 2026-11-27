@@ -1657,3 +1657,12 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Для CLI TRX-каталога shell шага зафиксирован как Bash: mkdir -p больше не зависит от alias поведения PowerShell на Windows.
 - TRX failure summarizer использует PowerShell Core; в текущем macOS 26 runner image присутствует PowerShell 7.6.4.
 - Follow-up commit: 88c15b5d561b7b539a6d5b6cf1878480121bec62.
+
+### Release manifest ↔ Candidate snapshot integrity — 28 ноября 2026
+
+- Tag-time release validator теперь требует целочисленные положительные versionPolicyRevision и releaseRevision, integer schemaVersion=1 и JSON Boolean allowPrerelease; Python bool/float не принимаются как JSON integer.
+- snapshotJson проверяется как ограниченный JSON object с schemaVersion=1. Cross-check связывает snapshot projectId, versionPolicyRevision, releaseId, targetVersion, targetBranch, releaseRevision и ключевые поля versionPolicy с верхним уровнем release manifest.
+- Это использует фактический контракт ReleasePrepare: manifest получает releaseRevision и snapshotJson из одного immutable Candidate snapshot.
+- Добавлено пять Python regression tests на valid snapshot, revision drift, boolean schema version, неверный project ID и строгий integer parsing.
+- Source: 03e34991a95c0b2764784edf6b1cdf56335863ad; tests: 30be3e4ab7a558c397ddf64563bf422b81190921; import fix: a7217fbdc3706a8873f8a98003fdb335efc58ba2.
+- Full exact-head CI ещё не выполнен; production tags/deployments и PR merge запрещены до закрытия внешних acceptance.
