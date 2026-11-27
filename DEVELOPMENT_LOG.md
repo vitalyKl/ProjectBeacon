@@ -25,8 +25,8 @@ This log is maintained in the repository and updated in the same branch as imple
 | GitSync queue lifecycle | PR #228 is already in main. Pending GitSync commands have lifecycle/expiry/cancellation handling. | AutoSync must avoid queue flooding and preserve the existing cancellation contract. |
 | AutoSync | Existing `feat/git-autosync` branch is identical to main. Current main tree has no dedicated periodic AutoSync loop or the referenced `claude/prompt-git-autosync.md` file. | Implement as an actual safe, bounded background behavior; do not treat a prompt or branch name as completion. |
 | Git tags | GitSync fetch uses `--no-tags`. | Define and implement tag sync separately from working-tree fast-forward. |
-| Version policy | The implementation branch now has project-scoped VersionPolicy and Release entities; current main base is `0.7.5.9`. | Keep all changes isolated in this feature branch; confirm CI and migrations before merge. |
-| Version workflow | Release workflow and configured version schemes are being reconciled as part of S3/S4; current repository version is `0.7.5.9`. | Do not allow tag/deploy publication until the workflow validates the configured scheme and source projections. |
+| Version policy | The implementation branch now has project-scoped VersionPolicy and Release entities. Initial implementation was based on `0.7.5.9`; current `main` and feature branch version are `0.7.5.10`. | Keep all changes isolated in this feature branch; CI and EF model checks are green on the latest verified head. |
+| Version workflow | Release workflow and configured version schemes were reconciled in S3/S4; current repository version is `0.7.5.10`. | Do not allow tag/deploy publication until GitHub-side tag protection and Environment production safeguards are confirmed. |
 | Landing authority | PR #194's original contract remains the local GitLand executor, but this feature branch adds a server-authorized GitHub async merge path for validated remote PRs. | GitHub is authoritative for a remote merge; the pinned workstation executes the request and AutoSync reconciles only after MERGED proof. No bypass of repository rules or competing local merge authority. |
 | GitHub protection | Tag rulesets and production environment reviewers have not yet been verified. | Do not assume dangerous publication is externally protected. Verify before S3. |
 
@@ -46,10 +46,10 @@ This log is maintained in the repository and updated in the same branch as imple
 
 ## Next actions
 
-1. Record the exact-head CI result and run one final matrix after the journal/plan corrections below.
-2. Keep the first production publish blocked until the repository owner verifies release-tag protections and Environment production reviewers, deployment refs and secrets in GitHub Settings.
-3. Once those external safeguards are confirmed, complete the first-publish acceptance review using a dedicated release candidate; do not create a production tag from this implementation PR.
-4. Keep PR #230 open until code checks and the external production safeguards are both accepted.
+1. Keep production publication disabled until the repository owner verifies release-tag update/delete protection, branch/ruleset required checks, and Environment production reviewers, self-review policy, deployment refs and four SSH secrets.
+2. Validate first publication and GitHub Merge Queue behavior in a writable organization-owned disposable repository; do not use a production tag or the implementation PR for this acceptance test.
+3. Finish the S6 independent-project acceptance fixture (including a non-Directory.Build.props version source such as package.json) and record its end-to-end result.
+4. Keep PR #230 open and unmerged until the external safeguards and the disposable-repository acceptance checks are complete.
 
 ## Blockers and decisions
 
@@ -3013,3 +3013,33 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Repository rulesets were empty on the inspected endpoint; branch protection read returned 403 for the connected integration. Legacy tag protection and Environment `production` settings remain unverified, not presumed absent.
 - Before first production publish, the repository owner must verify tag update/delete protections, production Environment required reviewers/self-review policy and deployment refs, and confirm the four production SSH secrets are scoped to that Environment.
 - PR #230 remains open, Ready for review and unmerged. No production tag or deployment was created.
+
+
+## 2026-11-27 — Exact PR-head CI green after release-safety and journal corrections
+
+### Validation
+
+- Exact PR head before this journal-only update: 895ca4dfa9128a4e5d37be55f225660dc1bf2135.
+- GitHub Actions run #46024858852 completed success on Linux, Windows and macOS.
+- All seven suites passed on each platform: API, Application, CLI, Domain, Infrastructure, Web and Worker.
+- Build, EF model check and formatting passed on all platforms. Linux also passed the release-workflow permission test, release-manifest tag-policy test and TRX guard (MIN_TOTAL = 2773).
+- The previous exact code head 0c1d749610fc48acbd8355bd2619dcc5c8430b42 was also fully green in run #46022091769. The commits from that SHA to 895ca4d only changed DEVELOPMENT_LOG.md and the release-management plan; no application, workflow or test source changed.
+- Current repository and feature branch version both read 0.7.5.10 from Directory.Build.props.
+
+### Canonical plan and execution log
+
+- The full requirements plan remains in the dedicated docs/release-management-plan branch. Its production preflight and failure-evidence addendum has been updated separately from implementation.
+- DEVELOPMENT_LOG.md now records the validated GitHub async merge authority and the production safeguards blocker without retaining the obsolete claim that a manual external PR merge is still required.
+- The current implementation-branch commit created by this journal update requires one final CI run on the resulting exact PR head.
+
+### Remaining blockers
+
+- GitHub-side tag protection, branch/ruleset protection and Environment production reviewers / self-review / deployment refs / secrets remain unverified through the connected integration. This is a hard blocker before the first production publish.
+- Acceptance in a writable organization-owned disposable repository is still needed for actual GitHub Merge Queue behavior and first-publish workflow observation.
+- S6 still needs an independent project fixture proving a non-Directory.Build.props version source (for example package.json) works end to end.
+
+### PR state
+
+- PR #230 remains open, Ready for review, mergeable and unmerged.
+- No release tag or production deployment was created.
+- SaaS Control Plane, billing and operator-console work remain outside this branch.
