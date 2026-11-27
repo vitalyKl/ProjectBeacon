@@ -54,7 +54,10 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         project.SetVersionPolicyJson(ProjectBeacon.Domain.Entities.Projects.ProjectVersionPolicyCatalog.Serialize(
             new ProjectBeacon.Domain.Entities.Projects.ProjectVersionPolicy(
-                "NumericComponents", 4, null, "v{version}", false, [], ReleaseManagementEnabled: true)));
+                "NumericComponents", 4, null, "v{version}", false,
+                [new ProjectBeacon.Domain.Entities.Projects.ProjectVersionSourcePolicy(
+                    "Directory.Build.props", "Xml", "//Version")],
+                ReleaseManagementEnabled: true)));
         task.SetVersionImpact("minor", "Adds an optional API capability without breaking existing clients.");
         task.ReviewVersionImpact(
             "Confirmed", "The change is backward-compatible and the impact is correctly classified.", Guid.NewGuid());
