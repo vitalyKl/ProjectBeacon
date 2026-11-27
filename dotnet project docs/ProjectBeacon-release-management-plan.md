@@ -1653,3 +1653,7 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Linux PostgreSQL lane, Release workflow mirror и TRX floor не менялись.
 - Commits: 2f6de15dd4ddc2dad5e069c5df4769ea0063f425 и 29739645d478c5e55c1acd70359c1c2487c7a083.
 - Exact-head CI для новой матрицы и release manifest symlink guard ещё требуется; предыдущий run относится к более раннему SHA.
+
+- Для CLI TRX-каталога shell шага зафиксирован как Bash: mkdir -p больше не зависит от alias поведения PowerShell на Windows.
+- TRX failure summarizer использует PowerShell Core; в текущем macOS 26 runner image присутствует PowerShell 7.6.4.
+- Follow-up commit: 88c15b5d561b7b539a6d5b6cf1878480121bec62.
