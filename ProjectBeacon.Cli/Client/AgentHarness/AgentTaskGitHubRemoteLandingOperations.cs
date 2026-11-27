@@ -187,6 +187,25 @@ internal static class AgentTaskGitHubRemoteLandingOperations
                         return await BuildEnqueuedStatusReportAsync(
                             ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId, ct);
                     }
+
+                    // The async UUID is only considered expired when GitHub explicitly
+                    // returns 404, its 24-hour acceptance window elapsed, and GraphQL
+                    // confirms that the exact still-open PR has no merge-queue entry.
+                    // Network/auth/rate-limit failures must never be converted to a merge failure.
+                    if (ShouldFailExpiredPendingRequest(
+                            target.MergeRequestStatus,
+                            asyncState.RequestNotFound,
+                            expiredRequestQueue.EntryState,
+                            target.MergeRequestAcceptedAtUtc,
+                            DateTime.UtcNow))
+                    {
+                        return await BuildQueueFailureAsync(
+                            ghPath, repositoryRoot, projectId, repository, open[0], target, landingAttemptId,
+                            expectedPullRequestState: "OPEN",
+                            failureCode: "GitHubAsyncMergeFailed",
+                            reason: "GitHub's 24-hour pending async merge request expired before the pull request entered the merge queue. A new Preview/Execute can be requested.",
+                            ct: ct);
+                    }
                 }
 
                 var queueAcknowledged = HasConfirmedMergeQueueEntry(
@@ -435,7 +454,11 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             statusRequest);
     }
 
-    private sealed record AsyncMergeState(string? Status, string? MergeCommitSha, string? StatusMessage);
+    private sealed record AsyncMergeState(
+        string? Status,
+        string? MergeCommitSha,
+        string? StatusMessage,
+        bool RequestNotFound = false);
 
     internal sealed record MergeQueueEntryState(string? PullRequestState, string? EntryState, int? Position, string? Error);
 
@@ -493,6 +516,24 @@ internal static class AgentTaskGitHubRemoteLandingOperations
         string.Equals(persistedStatus, "pending", StringComparison.Ordinal)
         && currentAsyncStatus is null
         && !string.IsNullOrWhiteSpace(queueEntryState);
+
+    internal static bool ShouldFailExpiredPendingRequest(
+        string? persistedStatus,
+        bool requestNotFound,
+        string? queueEntryState,
+        DateTime? acceptedAtUtc,
+        DateTime nowUtc) =>
+        string.Equals(persistedStatus, "pending", StringComparison.Ordinal)
+        && requestNotFound
+        && queueEntryState is null
+        && acceptedAtUtc is { } accepted
+        && accepted != default
+        && nowUtc >= accepted.AddHours(24);
+
+    internal static bool IsGitHubApiNotFoundResponse(string? standardError) =>
+        !string.IsNullOrWhiteSpace(standardError)
+        && (standardError.Contains("HTTP 404", StringComparison.OrdinalIgnoreCase)
+            || standardError.Contains("404 Not Found", StringComparison.OrdinalIgnoreCase));
 
     internal static bool HasAcceptedAsyncMerge(
         bool legacyQueuedMarker,
@@ -602,9 +643,15 @@ internal static class AgentTaskGitHubRemoteLandingOperations
             ghPath, workingDirectory, ct,
             "api", $"repos/{repository}/pulls/{pullRequestNumber}/merge-async/{parsed:D}");
         if (result.ExitCode != 0 || result.TimedOut)
-            return new AsyncMergeState(null, null,
-                "GitHub async merge request is not currently readable; waiting for the PR merge state. " +
-                AgentTaskGitOperations.Clip(result.StdErr.Trim()));
+        {
+            var requestNotFound = !result.TimedOut
+                && IsGitHubApiNotFoundResponse(result.StdErr);
+            var message = requestNotFound
+                ? "GitHub's async merge request UUID has expired or is no longer available. Verifying the live PR merge-queue entry."
+                : "GitHub async merge request is not currently readable; waiting for the PR merge state. " +
+                    AgentTaskGitOperations.Clip(result.StdErr.Trim());
+            return new AsyncMergeState(null, null, message, requestNotFound);
+        }
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(result.StdOut);
