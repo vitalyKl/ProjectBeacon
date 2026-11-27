@@ -1375,3 +1375,30 @@ CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94a
 - Три новых ключа включены в существующую проверку `UiNotificationResources_AreAvailableInEverySupportedCulture`; LocalizationParityTests проверяет наличие ключей в satellite assemblies всех поддерживаемых языков. Новых test cases и изменения TRX floor нет.
 - Реализация: resource commits `beeb442d`, `4ed9f47e`, `a5aaf49b`, `39093054`, `0efcc485`; Roadmap UI `14f6a09f`; localization test `803e655a`; implementation journal `a3ac90d3`.
 - Предыдущий CI #45977749031 был зелёным до новых permission/localization changes. Нужен новый exact-head CI на последней feature-ветке.
+
+
+## Дополнение — восстановление Candidate при Publish и настройка версии после Published (27 ноября 2026)
+
+### Критический дефект Candidate → Publish
+
+- В EF mapping `ReleaseConfiguration` поле `Release.CandidateSnapshot` явно исключено из модели. Immutable snapshot хранится отдельно в `ReleaseCandidateSnapshots`.
+- `PublishReleaseHandler` уже загружал отдельную запись snapshot, но перед вызовом `Release.BeginPublication` не прикреплял её к повторно загруженному Release. Доменный метод проверял `CandidateSnapshot != null`, поэтому нормальный production Publish всегда отклонялся после EF reload.
+- Тот же разрыв был в `ReleasePublishCompletion`: completion загружал Candidate row отдельно, но не прикреплял его перед `Release.CompletePublication`. Даже после фактического tag/deploy evidence результат отклонялся как FailedAfterTag.
+- Добавлен доменный `AttachCandidateSnapshot`, который восстанавливает только точный immutable snapshot, проверяя ProjectId, ReleaseId, CandidateId, pinned workstation, revision Candidate и target version/branch. Метод не изменяет бизнес-состояние и revision.
+- Publish handler и completion handler теперь вызывают его после загрузки отдельного Candidate row и до соответствующего domain transition.
+- Добавлен Application integration test, который проходит через независимые DbContexts: сохранение Candidate, повторная загрузка и постановка Publish, ещё одна загрузка и workstation completion, затем проверка Published и точных tag/version/SHA. Негативный snapshot с другим CandidateId должен быть отклонён.
+- Commits: domain `f764da26`, Publish handler `26ab2c44`, completion `d55e45ab`, integration tests `58761cde` и `4afe9620`.
+
+### Изменение version policy после опубликованного релиза
+
+- SetProjectVersionPolicyHandler ранее продолжал считать Published Release активным, потому что PreparationStatus остаётся Candidate после публикации. Это навсегда блокировало изменение policy и отключение Release Management после полного завершения релиза.
+- Проверка active Prepare/Verify теперь исключает Published и Cancelled releases. Непубликованные InProgress/Candidate и неотменённые failed Prepare по-прежнему блокируют изменение.
+- Существующий Application test расширен: после публикации immutable Candidate и подтверждения deploy разрешается изменить tag pattern и отключить Release Management; authoritative OfficialVersion сохраняется.
+- Commits: handler `c5d591a3`, regression test `4285f6fc`.
+
+### Validation
+
+- Последний предыдущий зелёный full CI [#45977749031](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45977749031) проверял SHA `3fa2dc36` и не содержит этих исправлений.
+- CI #45981186013 проверял pre-fix SHA `a3ac90d3`; он также не валидирует Candidate rehydration и Published-policy regression.
+- Нужен новый exact-head Linux/Windows/macOS CI после обновления implementation journal. До этого не считать Publish path проверенным.
+- PR #230 остаётся open/unmerged; production tags/deployments не запускались. SaaS Control Plane и billing не затрагиваются.
