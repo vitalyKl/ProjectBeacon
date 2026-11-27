@@ -506,6 +506,25 @@ public sealed class ReleaseHandlerTests : IDisposable
                 item => item.Id == release.Id, TestContext.Current.CancellationToken);
             Assert.Null(reloaded.CandidateSnapshot);
             Assert.Equal(ReleaseStatus.Candidate, reloaded.Status);
+            var mismatchedSnapshot = ReleaseCandidateSnapshot.Create(
+                _projectId,
+                release.Id,
+                Guid.NewGuid(),
+                device.Id,
+                version,
+                tagName,
+                "main",
+                new string('1', 40),
+                new string('2', 40),
+                candidateSha,
+                new string('b', 40),
+                project.VersionPolicyRevision,
+                reloaded.Revision - 1,
+                new string('c', 64),
+                """{"files":[],"checks":[]}""",
+                deployedAt.AddMinutes(-2));
+            Assert.Throws<InvalidOperationException>(() => reloaded.AttachCandidateSnapshot(mismatchedSnapshot));
+            Assert.Null(reloaded.CandidateSnapshot);
         }
 
         var queued = await new PublishReleaseHandler(
@@ -548,9 +567,9 @@ public sealed class ReleaseHandlerTests : IDisposable
                 completionDb,
                 command,
                 success: true,
-                resultJson,
+                resultJson: resultJson,
                 error: null,
-                TestContext.Current.CancellationToken);
+                ct: TestContext.Current.CancellationToken);
             await completionDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
