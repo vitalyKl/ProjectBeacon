@@ -21,7 +21,7 @@ internal static class ReleasePublishExecutor
     private static readonly TimeSpan WorkflowTimeout = TimeSpan.FromMinutes(45);
     private static readonly TimeSpan WorkflowPollInterval = TimeSpan.FromSeconds(15);
 
-    private sealed record PublishRequest(
+    internal sealed record PublishRequest(
         Guid ProjectId,
         Guid ReleaseId,
         Guid CandidateId,
@@ -51,32 +51,36 @@ internal static class ReleasePublishExecutor
         if (!TryReadRequest(payloadJson, out var request, out var payloadError))
             return Fail(payloadError ?? "Release publication payload is invalid.");
         if (request.ProjectId != projectId)
-            return Fail("Release publication project id does not match the authenticated workstation command.");
+            return FailBeforeTag(request,
+                "Release publication project id does not match the authenticated workstation command.");
 
         try
         {
             var projectRoot = AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(localRoot));
             var rootResult = await GitValue(projectRoot, ct, [], "rev-parse", "--show-toplevel");
             if (rootResult.Error is not null)
-                return Fail("The configured project runtime is not inside a Git repository. " + rootResult.Error);
+                return FailBeforeTag(request,
+                    "The configured project runtime is not inside a Git repository. " + rootResult.Error);
             var repositoryRoot = AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(rootResult.Value!));
             if (!Within(repositoryRoot, projectRoot))
-                return Fail("The project runtime root escapes its Git repository.");
+                return FailBeforeTag(request, "The project runtime root escapes its Git repository.");
             if (GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
-                return Fail("Release publication is refused while an agent session is active in this repository.");
+                return FailBeforeTag(request,
+                    "Release publication is refused while an agent session is active in this repository.");
 
             using var repositoryGate = await GitRepositoryOperationGate.AcquireAsync(repositoryRoot, ct);
             if (GitRepositoryOperationGate.HasActiveSessions(repositoryRoot))
-                return Fail("Release publication is refused while an agent session is active in this repository.");
+                return FailBeforeTag(request,
+                    "Release publication is refused while an agent session is active in this repository.");
 
             var filtersResult = await Git(repositoryRoot, ct, [], "config", "--name-only", "--get-regexp", "^filter\\.");
             if (filtersResult.TimedOut || filtersResult.ExitCode is not (0 or 1))
-                return Fail("Could not inspect Git filter configuration safely.");
+                return FailBeforeTag(request, "Could not inspect Git filter configuration safely.");
             var filters = AgentSessionWorktree.ParseFilterDriverNames(filtersResult.StdOut);
 
             var origin = await ReadOriginAsync(repositoryRoot, filters, ct);
             if (origin.Error is not null)
-                return Fail(origin.Error);
+                return FailBeforeTag(request, origin.Error);
 
             // Preflight GitHub workflow observability before the first possible tag push.
             // A successful git push can trigger production deployment; never create the tag
@@ -84,12 +88,14 @@ internal static class ReleasePublishExecutor
             var ghPath = WorkstationProbe.Which(
                 "gh", NativeCommandRunner.BuildSafePath(Environment.GetEnvironmentVariable("PATH"), repositoryRoot));
             if (ghPath is null)
-                return Fail("GitHub CLI is not installed. Install and authenticate gh before publishing; the release tag was not pushed by this command.");
+                return FailBeforeTag(request,
+                    "GitHub CLI is not installed. Install and authenticate gh before publishing; no release tag was pushed by this command.");
 
             var auth = await AgentTaskGitOperations.RunGitHubCliAsync(
                 ghPath, repositoryRoot, ct, "auth", "status", "--hostname", "github.com");
             if (auth.ExitCode != 0 || auth.TimedOut)
-                return Fail("GitHub CLI is not authenticated for workflow observation. Authenticate gh before publishing; the release tag was not pushed by this command.");
+                return FailBeforeTag(request,
+                    "GitHub CLI is not authenticated for workflow observation. Authenticate gh before publishing; no release tag was pushed by this command.");
 
             var workflowAccess = await AgentTaskGitOperations.RunGitHubCliAsync(
                 ghPath, repositoryRoot, ct,
@@ -99,13 +105,14 @@ internal static class ReleasePublishExecutor
             var workflowAccessError = ValidateWorkflowPreflight(
                 workflowAccess.ExitCode, workflowAccess.TimedOut, workflowAccess.StdOut, workflowAccess.StdErr);
             if (workflowAccessError is not null)
-                return Fail("GitHub Actions access to release.yml could not be verified before publication. "
-                    + workflowAccessError + " The release tag was not pushed by this command.");
+                return FailBeforeTag(request,
+                    "GitHub Actions access to release.yml could not be verified before publication. "
+                    + workflowAccessError + " No release tag was pushed by this command.");
 
             var candidate = await VerifyCandidateCommitAsync(
                 repositoryRoot, filters, request.CandidateSha, request.CandidateTreeSha, ct);
             if (candidate.Error is not null)
-                return Fail(candidate.Error);
+                return FailBeforeTag(request, candidate.Error);
 
             var tagMessage = BuildTagMessage(request);
             var tag = await EnsureImmutableTagAsync(
@@ -691,5 +698,9 @@ internal static class ReleasePublishExecutor
     private static long Integer(JsonElement obj, string key) =>
         obj.TryGetProperty(key, out var value) && value.TryGetInt64(out var number) ? number : 0;
     private static string Clip(string? value) => string.IsNullOrWhiteSpace(value) ? "No diagnostic details returned." : value.Length > 1200 ? value[..1200] : value;
+    internal static (bool Ok, string? Result, string? Error) FailBeforeTag(
+        PublishRequest request, string error) =>
+        (false, ResultJson(request, tagPushed: false, null, null, null, null, null, error), error);
+
     private static (bool Ok, string? Result, string? Error) Fail(string error) => (false, null, error);
 }
