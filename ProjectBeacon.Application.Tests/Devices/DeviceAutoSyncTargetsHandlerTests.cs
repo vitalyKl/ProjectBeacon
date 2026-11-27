@@ -125,6 +125,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
         string queuedSourceSha;
         string queuedCandidateTree;
         string queuedMergeRequestId;
+        DateTime queuedMergeAcceptedAtUtc;
         const string localRoot = "/workspace/beacon-managed-landing";
 
         using (TenantScope.EnterUnscoped())
@@ -220,7 +221,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             queuedAttempt.MarkExecutePending();
             queuedMergeRequestId = Guid.NewGuid().ToString("D");
             queuedAttempt.MarkGitHubMergeQueued(queuedMergeRequestId, "pending");
-            var queuedMergeAcceptedAtUtc = queuedAttempt.UpdatedAt;
+            queuedMergeAcceptedAtUtc = queuedAttempt.UpdatedAt;
             _db.LandingAttempts.Add(queuedAttempt);
 
             // An external/manual merge without a Beacon LandingAttempt is not eligible
