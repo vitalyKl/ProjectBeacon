@@ -1477,3 +1477,16 @@ CI после этих изменений требует минимум 2 771 Li
 - Новых test facts не добавлено; CI и Release Linux TRX floor остаются 2 771.
 - Implementation branch: `feat/release-management`; commits `0c47493b`, `7f0f970f`, `32470c63`, `cb2c1d3f`. Полный exact-head CI ещё требуется.
 - Merge Queue live acceptance и настройки GitHub production publication остаются отдельными внешними blockers; production tag/deploy и PR merge не запускать.
+
+
+### Дополнение — структурированные audit evidence публикации и correction CI (27 ноября 2026)
+
+- В completion handler публикации убраны из audit details произвольные тексты ошибок и workflow URL. Добавлен единый `PublicationAuditDetails`, который пишет Candidate id, `tagPushed`, короткий `resultCode` и, когда имеется, положительный workflowRunId.
+- Успешное завершение записывает Candidate id, `tagPushed=true`, targetVersion, tagName, candidateSha, deployedSha и workflowRunId. URL и free-form error в audit events не попадают.
+- Audit allowlist валидирует Candidate/workstation GUID, Git SHA длиной 40/64 символа, безопасное имя тега и положительный integer workflow run ID. Новые отрицательные случаи покрывают malformed deployed SHA и нулевой workflow ID.
+- Fresh-DbContext Publish/Completion integration test теперь читает созданный `project.release.published` AuditEvent и проверяет все ожидаемые значения, отсутствие workflowRunUrl и свободного поля error.
+- Последние commits: code `0c47493b8c7b1f77ab56d19d25fa263c9b1fa481`, `7f0f970f5c04ce42e334f6feabde57c5b3aadb34`; tests `32470c633fe1cc4a6d887e5890ba14311b1aae98`, `cb2c1d3fbb809b456720f933b1a59815937813f0`. Два последних test commits расширяют существующие facts, не добавляя новых TRX результатов; минимум 2 771 остаётся достаточным.
+- CI #45987044512 проверял промежуточный SHA `ce4f2a4c6de79af9458342d50d68db3fb74b1efe` и выявил `CS0118` в bUnit тестах: короткое имя Web разрешалось в namespace. Исправлено полным именем `global::ProjectBeacon.Web.Resources.Web` в `IStringLocalizer<T>`; Web assembly предоставляет InternalsVisibleTo тестовой сборке.
+- Тестовые commits correction: `142fcc19081caa6135b94556fd649bbe47086726`, `0d72f310cacb92619f4435652cc1f24caad6600a`. Промежуточный run не включает эти изменения.
+- Implementation branch после correction нуждается в новом exact-head Linux/Windows/macOS CI. Не считать более ранние успешные runs проверкой текущего head.
+- Journal commit implementation branch: `b49aa5ebf4b037940122626a647696a870cdea88`. PR #230 остаётся open/unmerged.
