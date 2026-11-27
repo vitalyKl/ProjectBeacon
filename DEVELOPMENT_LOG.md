@@ -2668,3 +2668,33 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 - PR #230 remains open, unmerged and mergeable; do not merge until exact-head CI and external acceptance requirements pass.
 - Live Merge Queue acceptance still requires an eligible org-owned disposable repository. Queue method=merge, classic `v*` tag protection and `production` Environment reviewers remain administrator verification items.
 - No production tag/deployment; SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Scope ReleasePublish audit helper to the correct completion class
+
+**CI diagnosis:** Run [#45987491865](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45987491865) on SHA `16abf8e891f315af63b14d3546da040e2e9bbd18` found a compile error on macOS and Linux:
+
+- `CS0103: PublicationAuditDetails does not exist in the current context` at four ReleasePublishCompletion call sites.
+- The helper had been inserted before the first `AddAudit` method in the file, which belonged to `ReleasePrepareCompletion`, not `ReleasePublishCompletion`. The same-file placement made the helper inaccessible to the publisher.
+
+**Fix:**
+- Moved `PublicationAuditDetails` into `ReleasePublishCompletion` immediately before that class's own `AddAudit` helper.
+- Confirmed all four call sites and the helper declaration are inside the same class; no duplicate/misplaced declaration remains.
+- The remaining API/Application/CLI/Infrastructure/Web/Worker test-launch failures on macOS and Linux were downstream of the failed solution Build (the test assemblies were not produced), not separate test assertion results.
+- Windows completed Build without failures on the previous head, but this does not validate the corrected helper.
+
+**Correction commit:** `8d343b437ea06096ecedae5bb29854223f3e05ee`.
+
+### Validation
+
+- Run #45987491865 is a known failed pre-fix run on SHA `16abf8e891f315af63b14d3546da040e2e9bbd18`; do not treat it as current validation.
+- Current branch contains the helper-scope correction. A new full Linux/Windows/macOS run is required on the post-journal head.
+- CI and Release Linux TRX floors remain 2,771; their complete guard blocks remain synchronized.
+- No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Trigger exact-head CI after this journal update.
+2. Verify macOS/Linux/Windows Build and the fresh-context Publish completion audit integration test.
+3. Resolve any further test or formatting failures before considering merge readiness.
+4. Keep external live Merge Queue and publication-protection acceptance blockers open until an org-owned disposable repository and administrator verification are available.
