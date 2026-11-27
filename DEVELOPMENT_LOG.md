@@ -2962,3 +2962,28 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Run the full Linux/Windows/macOS matrix on this exact head before accepting the preflight change.
 - PR #230 remains open and unmerged. No release tag or deployment was created.
 - The external production Environment and tag protection settings remain unverified through the connected GitHub integration; see the production safeguards update in the release-management plan. They remain a blocker before the first production publish.
+
+
+## 2026-11-27 — Make publication preflight prove the workflow is active and preserve pre-tag evidence
+
+### Additional preflight hardening
+
+- A valid empty gh run list response alone does not distinguish an active workflow with no prior runs from a disabled/missing workflow.
+- Before a tag can be pushed, the publisher now calls gh workflow list --all --repo <origin> --json id,name,path,state and requires exactly one .github/workflows/release.yml with a positive workflow id and state == active.
+- It then calls gh run list --workflow release.yml and validates a well-formed response. Both definition and run-read checks must succeed before EnsureImmutableTagAsync.
+- Unit coverage in the existing workflow-preflight fact now includes active, disabled, missing, malformed, forbidden and timed-out cases.
+
+### Preserve exact publication failure state
+
+- FailBeforeTag creates a payload-bound publication result with explicit tagPushed=false.
+- Every known failure after the immutable command payload has been validated but before tag creation uses this result, including missing runtime root, unavailable Git/remote, missing/unauthenticated GitHub CLI, missing/disabled workflow, Actions read denial and invalid Candidate commit/tree.
+- The executor also tracks whether EnsureImmutableTagAsync has been entered. Unexpected exceptions before that boundary return explicit negative evidence; exceptions after entering the ambiguous tag operation remain conservative and do not claim that no tag was pushed.
+- Added a regression fact proving that the structured pre-tag failure JSON contains the exact Release identity and a Boolean false tagPushed value. The server completion still ORs this with any prior known tag-pushed state, so a failed retry cannot erase an earlier publication attempt.
+
+### Validation state
+
+- Branch head at this journal entry: 17e629bc14c18db77d3599c161fa01120b319523.
+- The CI run #46021125789 is for an earlier SHA (516b779) and cannot validate the active-workflow definition check or the explicit pre-tag failure result.
+- Linux TRX floor remains 2,773; CI and release workflow guard blocks are identical. The disabled/missing workflow cases extend an existing Fact, so no additional TRX result was introduced.
+- Run a fresh full Linux/Windows/macOS matrix on the post-journal SHA before accepting this work.
+- PR #230 remains open and unmerged. No release tag or production deployment was created. External tag protection and Environment production settings remain unverified and block first publish.
