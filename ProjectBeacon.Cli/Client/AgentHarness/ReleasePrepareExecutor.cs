@@ -295,7 +295,7 @@ internal static class ReleasePrepareExecutor
             return Fail("Remote target branch SHA could not be verified.");
         var ancestor = await Git(repositoryRoot, ct, filters, "merge-base", "--is-ancestor", preparedCommit, candidateSha.Value!);
         if (!Succeeded(ancestor))
-            return Fail("ReleasePrepare commit is not contained in the remote target branch. This release PR must land with a merge-commit strategy that preserves the original Beacon-Release commit; squash and rebase rewrite that commit and are not supported. Configure the GitHub merge queue to use the merge method, then retry verification.");
+            return Fail("ReleasePrepare commit is not contained in the remote target branch. This release PR must be merged with a merge commit; squash and rebase rewrite the original Beacon-Release commit and are not supported. If a merge queue is enabled, configure its Merge method as merge. Without a queue, use the repository's merge-commit strategy, then retry verification.");
 
         var candidateTree = await GitValue(repositoryRoot, ct, filters, "rev-parse", "--verify", candidateSha.Value + "^{tree}");
         if (candidateTree.Error is not null || !AgentTaskWorktree.IsGitSha(candidateTree.Value!))
@@ -423,7 +423,7 @@ internal static class ReleasePrepareExecutor
                 + "Release revision: " + releaseRevision + Environment.NewLine + Environment.NewLine
                 + "This PR contains only configured version projection files and .beacon/release.json." + Environment.NewLine
                 + "Required merge method: create a merge commit. Do not squash or rebase this PR; ReleasePrepare must remain in target-branch ancestry." + Environment.NewLine
-                + "For a merge queue, configure its Merge method to merge. Merging does not create a tag or deploy production; Beacon verifies the merged SHA before marking Candidate.";
+                + "For a merge queue, configure its Merge method to merge. Without a queue, the repository's direct merge strategy must create a merge commit. Merging does not create a tag or deploy production; Beacon verifies the merged SHA before marking Candidate.";
             var created = await AgentTaskGitOperations.RunGitHubCliAsync(
                 ghPath, worktree, ct, "pr", "create", "--repo", repository,
                 "--head", head, "--base", targetBranch, "--title", "Release " + version, "--body", body);
