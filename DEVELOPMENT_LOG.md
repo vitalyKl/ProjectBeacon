@@ -2501,3 +2501,13 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Run exact-head CI and resolve any compile, test, EF or formatting issues.
 2. Verify the new end-to-end fresh-context Publish/Completion integration test passes.
 3. Continue the remaining external Merge Queue and publication protection acceptance only when an eligible org-owned disposable repository and administrator access are available.
+
+
+### Follow-up — synchronized CI result floor for fresh-context Publish test
+
+- Added one new Application integration fact, `PublishAndCompletion_RehydrateCandidateSnapshotAcrossFreshDbContexts`, covering both queue and completion through fresh DbContexts.
+- Raised the authoritative Linux TRX minimum from 2,768 to 2,769 in both `.github/workflows/ci.yml` and `.github/workflows/release.yml`.
+- Current thresholds are both 2,769 and their complete TRX guard blocks are byte-for-byte identical.
+- Workflow commits: `57bca5d7b4a134b18b681280a203bfceef426066` and `2962247979515cee3d4379d16dc79eb98156e2e8`.
+- These workflow commits are newer than the previous journal entry and require exact-head CI.
+
