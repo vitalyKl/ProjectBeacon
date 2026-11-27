@@ -751,6 +751,76 @@ public sealed class McpApiToolsTests
 
 
     [Fact]
+    public async Task VersionCheck_ProjectsIndependentPackageJsonSourceThroughMcpTool()
+    {
+        var root = TempRoot();
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "package.json"),
+                """
+                {
+                  "name": "beacon-release-policy-proof",
+                  "version": "2.4.1",
+                  "private": true
+                }
+                """);
+
+            var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+            var env = McpEnvironment.Of(
+                ("BEACON_PROJECT_ID", projectId.ToString("D")),
+                ("BEACON_WORKSPACE_ROOT", root));
+            var policy = new JsonObject
+            {
+                ["scheme"] = "SemVer",
+                ["componentCount"] = 3,
+                ["calendarFormat"] = null,
+                ["tagPattern"] = "release-{version}",
+                ["allowPrerelease"] = false,
+                ["releaseManagementEnabled"] = true,
+                ["sources"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["path"] = "package.json",
+                        ["format"] = "Json",
+                        ["selector"] = "/version"
+                    }
+                },
+                ["officialVersion"] = "2.4.1",
+                ["revision"] = 7
+            };
+            using var http = new HttpClient(new ProblemResponseHandler(
+                HttpStatusCode.OK, policy.ToJsonString()))
+            {
+                BaseAddress = new Uri("http://beacon.test/")
+            };
+            var api = new BeaconApiClient(http, env);
+
+            var result = await McpApiTools.CallAsync(
+                McpToolNames.VersionCheck,
+                new JsonObject { ["projectId"] = projectId.ToString("D") },
+                api, env, TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsError, result.Text);
+            var json = JsonNode.Parse(result.Text)!;
+            Assert.Equal("in_sync", json["status"]!.GetValue<string>());
+            Assert.Equal(7, json["policyRevision"]!.GetValue<int>());
+            Assert.Equal("release-2.4.1", json["tagName"]!.GetValue<string>());
+            Assert.False(json["hasProjectionDrift"]!.GetValue<bool>());
+            Assert.Equal("package.json", json["sources"]![0]!["path"]!.GetValue<string>());
+            Assert.Equal("Json", json["sources"]![0]!["format"]!.GetValue<string>());
+            Assert.Equal("2.4.1", json["sources"]![0]!["projectedVersion"]!.GetValue<string>());
+            Assert.Equal("in_sync", json["sources"]![0]!["status"]!.GetValue<string>());
+            Assert.Equal("not_checked_by_version_check", json["tagVerification"]!.GetValue<string>());
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task VersionImpact_UsesPinnedPipelineTaskAndExpectedRevision()
     {
         var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
