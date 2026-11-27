@@ -30,7 +30,11 @@
 
     <MudText Typo="Typo.subtitle2" Class="mt-6">2. @L["CreateProjectStepDevice"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["RuntimeDeviceHint"]</MudText>
-    @if (_devices.Count == 0)
+    @if (_devicesLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mt-2">@_devicesLoadErrorMessage</MudAlert>
+    }
+    else if (_devices.Count == 0)
     {
         <MudAlert Severity="Severity.Info" Class="mt-2">
             @L["NoDeviceForProject"]
@@ -81,6 +85,7 @@
     private string _localRoot = string.Empty;
     private bool _initOnDevice;
     private List<DaemonDeviceDto> _devices = [];
+    private string? _devicesLoadErrorMessage;
 
     private DaemonDeviceDto? SelectedDevice => _devices.FirstOrDefault(d => d.Id == _deviceId);
 
@@ -91,7 +96,14 @@
             _userId = id;
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
-        _devices = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _devicesLoadErrorMessage = Notifications.FormatFailure(listed, L["Workstations"].Value, L["Load"].Value);
+            return;
+        }
+
+        _devicesLoadErrorMessage = null;
+        _devices = listed.Value!.ToList();
         var online = _devices.FirstOrDefault(d => d.Online);
         _initOnDevice = online is not null;
         if (online is not null)
@@ -192,7 +204,7 @@
                     var finished = await WaitAsync(queued.Value!.Id);
                     if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
                     {
-                        _error = Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.InternalError, L["Initialize"].Value, new { ProjectId = project.Value.Id, DeviceId = deviceId, CommandId = queued.Value!.Id });
+                        _error ??= Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.InternalError, L["Initialize"].Value, new { ProjectId = project.Value.Id, DeviceId = deviceId, CommandId = queued.Value!.Id });
                         return;
                     }
                 }
@@ -213,7 +225,10 @@
         {
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
             if (!got.Success)
+            {
+                _error = Notifications.FormatFailure(got, L["Workstations"].Value, L["Read"].Value, new { CommandId = commandId });
                 return null;
+            }
             if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
             await Task.Delay(500);

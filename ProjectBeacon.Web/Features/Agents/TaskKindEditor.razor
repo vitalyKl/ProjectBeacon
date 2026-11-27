@@ -13,6 +13,10 @@
     <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["TaskKindsLead"]</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["TaskKindModelsScopeHint"]</MudText>
     <div class="beacon-form">
+        @if (_loadErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_loadErrorMessage</MudAlert>
+        }
         <MudSelect T="Guid?" Value="_kindId" ValueChanged="SelectKind" Label="@L["TaskKinds"]" Variant="Variant.Outlined" Margin="Margin.Dense">
             <MudSelectItem Value="@((Guid?)null)">@L["TaskKindNew"]</MudSelectItem>
             @foreach (var kind in _kinds)
@@ -79,6 +83,7 @@
     private Guid? _worker;
     private List<PhaseEdit> _phases = [new()];
     private bool _busy;
+    private string? _loadErrorMessage;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -90,7 +95,14 @@
     private async Task Reload()
     {
         var listed = await ListKinds.HandleAsync(new ListTaskKindsCommand(UserId));
-        _kinds = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _loadErrorMessage = Notifications.FormatFailure(listed, L["Agents"].Value, L["Load"].Value);
+            return;
+        }
+
+        _loadErrorMessage = null;
+        _kinds = listed.Value!.ToList();
         var selected = _kinds.FirstOrDefault(k => k.Id == _kindId) ?? _kinds.FirstOrDefault(k => k.IsBuiltIn);
         if (selected is not null)
             Copy(selected);

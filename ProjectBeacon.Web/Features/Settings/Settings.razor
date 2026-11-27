@@ -53,6 +53,14 @@
         <MudTextField @bind-Value="_currentPassword" Label="@L["CurrentPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" />
         <MudTextField @bind-Value="_newPassword" Label="@L["NewPassword"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SavePassword" Disabled="_busy">@L["ChangePassword"]</MudButton>
+        @if (_chatModelsLoadErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_chatModelsLoadErrorMessage</MudAlert>
+        }
+        @if (_chatModelLoadErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_chatModelLoadErrorMessage</MudAlert>
+        }
         <MudSelect T="Guid?" @bind-Value="_chatModelId" Label="@L["ChatModel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-4" Clearable="true">
             <MudSelectItem Value="@((Guid?)null)">@L["Unbound"]</MudSelectItem>
             @foreach (var backend in _chatModels)
@@ -94,6 +102,8 @@
 
 @code {
     private bool _busy;
+    private string? _chatModelsLoadErrorMessage;
+    private string? _chatModelLoadErrorMessage;
     private string _timeZone = string.Empty;
     private string _systemTimeZone = "UTC";
     private readonly List<string> _timeZones = TimeZoneInfo.GetSystemTimeZones()
@@ -226,13 +236,26 @@
         if (_userId == Guid.Empty)
             return;
         var registry = await GetRegistry.HandleAsync(new GetModelRegistryCommand(_userId));
-        if (!registry.Success)
-            Notifications.Failure(registry, L["Settings"].Value, L["Load"].Value);
-        _chatModels = registry.Success ? registry.Value!.Backends.ToList() : [];
+        if (registry.Success)
+        {
+            _chatModels = registry.Value!.Backends.ToList();
+            _chatModelsLoadErrorMessage = null;
+        }
+        else
+        {
+            _chatModelsLoadErrorMessage = Notifications.FormatFailure(registry, L["Settings"].Value, L["Load"].Value);
+        }
+
         var current = await GetChatModel.HandleAsync(new GetChatModelCommand(_userId));
-        if (!current.Success)
-            Notifications.Failure(current, L["Settings"].Value, L["Load"].Value);
-        _chatModelId = current.Success ? current.Value : null;
+        if (current.Success)
+        {
+            _chatModelId = current.Value;
+            _chatModelLoadErrorMessage = null;
+        }
+        else
+        {
+            _chatModelLoadErrorMessage = Notifications.FormatFailure(current, L["Settings"].Value, L["Load"].Value);
+        }
     }
 
     private async Task SaveChatModel()

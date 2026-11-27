@@ -21,21 +21,29 @@
     </MudButton>
 </PageHeader>
 
-@if (_project is null)
+@if (_projectLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_projectLoadErrorMessage" />
+}
+else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
 {
+    @if (_reportsLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_reportsLoadErrorMessage</MudAlert>
+    }
     @if (_loading)
     {
         <LoadingState />
     }
-    else if (_reports.Count == 0)
+    else if (_reports.Count == 0 && _reportsLoadErrorMessage is null)
     {
         <EmptyState>@L["NoReports"]</EmptyState>
     }
-    else
+    else if (_reports.Count > 0)
     {
         <MudTable Items="_reports" Hover="true" Class="mt-4" Dense="true" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
@@ -73,11 +81,20 @@ else
     private ReportDto? _open;
     private bool _busy;
     private bool _loading = true;
+    private string? _projectLoadErrorMessage;
+    private string? _reportsLoadErrorMessage;
     private static readonly JsonSerializerOptions SnapshotJson = new() { PropertyNameCaseInsensitive = true };
 
     protected override async Task OnInitializedAsync()
     {
         var current = await CurrentProject.HandleAsync(ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User));
+        if (!current.Success)
+        {
+            _projectLoadErrorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+            _loading = false;
+            return;
+        }
+
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -88,7 +105,14 @@ else
         if (_project is null)
             return;
         var listed = await ListReports.HandleAsync(new ListReportsRequest(_project.Id));
-        _reports = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _reportsLoadErrorMessage = Notifications.FormatFailure(listed, L["Reports"].Value, L["Load"].Value);
+            return;
+        }
+
+        _reportsLoadErrorMessage = null;
+        _reports = listed.Value!.ToList();
     }
 
     private async Task Generate()
