@@ -1183,3 +1183,26 @@ Implementation journal: `DEVELOPMENT_LOG.md`, commit `cc89faa0d3d0c078bad27711fb
 Предыдущий exact-head CI #45962729055 был зелёным на SHA `841dd90bbd1e5375558acb20d2b0515c828876d4` (Linux/Windows/macOS, 2 767 Linux TRX результатов), но не включает изменение permissions. Run #45971210327 проверяет более поздний journal head `cc89faa0d3d0c078bad27711fb4dfc5d11628f81`, также до permission change; он не подтверждает эту правку. Требуется новый exact-head CI после обновления журнала.
 
 PR #230 остаётся open/unmerged. Production tags/deployments не запускались. SaaS Control Plane и billing вне scope.
+
+
+---
+
+## Дополнение — fail-closed классификация результата tag push (27 ноября 2026)
+
+В `ReleasePublishExecutor` обнаружена опасная ветка: после неуспешного/прерванного `git push` повторный `ls-remote` мог завершиться ошибкой или вернуть некорректный список, но исполнитель возвращал `tagPushed=false`. Сервер принимает точный typed false как доказательство `FailedBeforeTag`, после чего Candidate можно было отменить, хотя тег мог фактически появиться.
+
+Исправление в implementation branch `feat/release-management`:
+
+- Добавлен helper `MayHavePublishedTag`: failed remote inspection или malformed listing всегда означает «тег мог быть опубликован». False допустим только когда успешный корректный список доказывает отсутствие тега Candidate либо другой target SHA.
+- Первичный `ls-remote` failure и malformed output теперь также дают `tagPushed=true`; повторная попытка возможна только с тем же immutable Candidate.
+- Существующий remote tag, который нельзя fetch/verify, консервативно считается потенциально опубликованным.
+- После неуспешного push follow-up lookup, который сам не завершился или дал malformed listing, больше не приводит к FailedBeforeTag. При подтверждённом Candidate SHA продолжается проверка annotated tag object; при доказанном отсутствии/другом target допустим FailedBeforeTag.
+- Если remote tag указывает на Candidate, но annotated object отличается от ожидаемого, Candidate также нельзя отменить: тег с этим target/name мог быть создан.
+- Добавлен CLI regression fact для failed inspection, malformed listing, Candidate target, доказанного отсутствия и конфликтующего target.
+- CI и release.yml TRX floors синхронизированы на 2 768; полные guard blocks идентичны.
+
+Implementation commits: `8f9fece3675fedee0bb9b94e13a2454eef843316`, `d099ccedcc74c0c765f984196597e14b2408ce4c`, `efd835e1eed944b8b6f9c9b102a7b158b022c3df`, `3ebaec14f7af24612a8f10bdf0f16b4bce9446fe`, `03fc6bbd933803a73452d8eab812ac5f6361ea07`.
+
+Предыдущий точный зелёный CI #45962729055 проверял SHA `841dd90bbd1e5375558acb20d2b0515c828876d4`, не содержит permission hardening и новый tag-push test. Run #45971667573 проверяет SHA `59752b2379457389ffe2b722f5764830011915bf`, содержит least-privilege permissions, но не содержит новый ambiguous-push fix и ещё выполняет тесты. Требуется новый exact-head Linux/Windows/macOS CI после актуального journal commit.
+
+PR #230 остаётся open/unmerged. Live Merge Queue требует org-owned disposable repository; защиты `v*` и Environment `production` требуют admin verification. Не запускать production tag/deploy до завершения acceptance. SaaS Control Plane и billing не трогать.
