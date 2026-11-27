@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 import tomllib
 import unittest
+from pathlib import Path
 from contextlib import redirect_stderr
 from io import StringIO
 from unittest.mock import patch
@@ -14,6 +16,7 @@ from verify_release_manifest import (
     fail,
     is_safe_git_tag_name,
     read_pointer,
+    safe_manifest_path,
     read_regex_version,
     read_toml_version,
     read_xml_version,
@@ -40,6 +43,48 @@ class ReleaseManifestSafetyTests(unittest.TestCase):
 
         self.assertIn("expected invalid test input", stderr.getvalue())
         self.assertNotIn("::error::", stderr.getvalue())
+
+
+class ManifestPathSafetyTests(unittest.TestCase):
+    def test_accepts_regular_manifest_inside_regular_beacon_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            beacon_dir = root / ".beacon"
+            beacon_dir.mkdir()
+            manifest = beacon_dir / "release.json"
+            manifest.write_text("{}", encoding="utf-8")
+
+            self.assertEqual(manifest, safe_manifest_path(root))
+
+    def test_rejects_beacon_directory_symlink_even_when_target_contains_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "checkout"
+            root.mkdir()
+            outside = Path(temporary) / "outside"
+            outside.mkdir()
+            (outside / "release.json").write_text("{}", encoding="utf-8")
+            (root / ".beacon").symlink_to(outside, target_is_directory=True)
+
+            stderr = StringIO()
+            with redirect_stderr(stderr), self.assertRaises(SystemExit):
+                safe_manifest_path(root)
+
+            self.assertIn("regular .beacon directory", stderr.getvalue())
+
+    def test_rejects_release_manifest_file_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "checkout"
+            beacon_dir = root / ".beacon"
+            beacon_dir.mkdir(parents=True)
+            outside_manifest = Path(temporary) / "release.json"
+            outside_manifest.write_text("{}", encoding="utf-8")
+            (beacon_dir / "release.json").symlink_to(outside_manifest)
+
+            stderr = StringIO()
+            with redirect_stderr(stderr), self.assertRaises(SystemExit):
+                safe_manifest_path(root)
+
+            self.assertIn("regular .beacon/release.json file", stderr.getvalue())
 
 
 class VersionSourceParityTests(unittest.TestCase):
