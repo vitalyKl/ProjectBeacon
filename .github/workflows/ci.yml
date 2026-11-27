@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: [main]
     types: [opened, reopened, ready_for_review]
+  # Required checks must also run for the synthetic merge-group branch;
+  # without this event, GitHub's merge queue waits forever for CI status.
+  merge_group:
+    types: [checks_requested]
   # Run the full matrix on demand from Actions -> CI -> Run workflow.
   workflow_dispatch:
 
