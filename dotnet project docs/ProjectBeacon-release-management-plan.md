@@ -925,3 +925,25 @@ Source head до журналирования: `6efd63f9982dec21cf6d99789af31647
 2. Администратор должен проверить классическую tag protection `v*` и required reviewers для GitHub Environment `production`. Подключённая интеграция не позволяет подтвердить эти параметры.
 3. Провести полный user-project acceptance Release Management: проектные настройки, роли/RLS, UI ошибок, локализация, Candidate/Publish/recovery.
 4. PR #230 пока остаётся open/unmerged. Не создавать production tag и не запускать deploy до выполнения пунктов 1–2. SaaS Control Plane и billing не затрагиваются.
+
+
+## Дополнение — parity JSON Pointer по RFC 6901 (27 ноября 2026)
+
+В implementation branch `feat/release-management`, PR [#230](https://github.com/vitalyKl/ProjectBeacon/pull/230), обнаружено расхождение: .NET policy validator уже ограничивал escape-последовательности JSON Pointer, но Python release gate оставался permissive и использовал `str.isdigit()` для array indexes.
+
+Исправлено:
+
+- Оба слоя поддерживают пустой pointer `""`, обозначающий корень JSON-документа. В ProjectVersionPolicy он разрешён только для формата Json.
+- Сегменты pointer строго декодируют только `~0` и `~1`; любой другой/trailing `~` отклоняется.
+- Индексы массивов — только ASCII decimal, `0` или число без ведущего нуля; пустые, signed, Unicode и out-of-range indexes отклоняются.
+- Добавлены одинаковые Domain/Python regression tests на root pointer, escaped slash/tilde object keys, malformed escapes, leading zero и Unicode indexes.
+
+Source/test head до последнего journal commit: `74486e8517136165e2705b948cb6e2e50895a0e7`; journal commit в implementation branch: `d24a550cebfa4cb3b0fdf200c04205d4bcacd388`. Новый CI на post-journal head обязателен. Последний ранее зелёный CI [#45899056564](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45899056564) проверял `e87f4e6f` и не покрывает JSON Pointer changes.
+
+### Состояние ветки относительно main
+
+- `main` продвинулся до `ed4dace38357f5062478ba3322148ab352d916ce` (понятные UI-ошибки, версия 0.7.5.10).
+- `feat/release-management` отстаёт на один commit. PR #230 сейчас reported as not mergeable; main changes overlap with UI/resource files Release Management.
+- Нельзя перезаписывать UI/resource files целиком. Требуется контролируемый three-way merge последнего main commit в feature branch после проверки текущего exact-head CI.
+
+Остаток без изменений: live async GitHub merge-queue acceptance в disposable repository; administrator verification classic tag protection `v*` и required reviewers Environment `production`; user-project acceptance (RLS, roles, errors, locales, Candidate/Publish/recovery). Production tag/deployment не запускать. SaaS Control Plane и billing вне scope.
