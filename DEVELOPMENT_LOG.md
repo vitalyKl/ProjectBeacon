@@ -1804,3 +1804,24 @@ Implemented a fail-closed terminal outcome:
 2. Resolve the one-commit divergence from `main` with a real three-way merge and rerun CI.
 3. Finish a controlled live merge-queue exercise in a disposable GitHub repository with required checks configured.
 4. Have an administrator verify classic tag protection and production Environment reviewers before any publication test.
+
+
+## 2026-11-27 — Integrate main UI error handling and version 0.7.5.10
+
+**Merged upstream main commit:** `ed4dace38357f5062478ba3322148ab352d916ce`  
+**Previous feature head:** `c4888617ae82777bc3987004057c123594a10a8c`
+
+### Integration
+
+- Integrated the latest `main` commit as a two-parent merge, keeping the release-management branch as the first parent and the upstream main commit as the second parent.
+- Brought across all 16 upstream paths. Fourteen non-overlapping files are taken from the upstream commit unchanged; the two overlapping files were merged deliberately:
+  - `ProjectManage.razor`: retained Version Policy and AutoSync settings and incorporated the project-description-history error state.
+  - `Roadmap.razor`: retained Releases, Candidates, Hotfix and milestone-release association UI while incorporating project-load, Roadmap-load and milestone-history error states. Failed refreshes preserve the last successfully loaded collections; release-list failures are visible rather than silently clearing release data.
+- Updated the application version through the upstream `Directory.Build.props` change to **0.7.5.10**.
+- Kept the documentation and implementation branches separate. No SaaS Control Plane, billing, production tag or deployment work was included.
+
+### Validation and remaining work
+
+- The integration is recorded as a true two-parent merge commit; both parent SHAs remain visible in Git history.
+- The owner reports CI green. The merged integration head still requires a fresh exact-head CI result before it is treated as validated.
+- Live async GitHub merge-queue acceptance and administrator verification of classic `v*` tag protection and `production` Environment reviewers remain outstanding. PR #230 stays open and unmerged.

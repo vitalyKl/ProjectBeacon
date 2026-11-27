@@ -26,11 +26,15 @@
     {
         <MudAlert Severity="Severity.Warning" Class="mb-3">@L["InviteSent"] @_inviteUrl</MudAlert>
     }
-    @if (_members.Count == 0)
+    @if (_membersLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_membersLoadErrorMessage</MudAlert>
+    }
+    @if (_membersLoadErrorMessage is null && _members.Count == 0)
     {
         <MudAlert Severity="Severity.Info">@L["NoMembersYet"]</MudAlert>
     }
-    else
+    else if (_members.Count > 0)
     {
         <MudTable Items="_members" Dense="true" Hover="true" Class="mb-3">
             <HeaderContent>
@@ -44,6 +48,10 @@
                 <MudTd DataLabel="@L["Role"]">@ChromeLabels.Role(L, context.Role)</MudTd>
             </RowTemplate>
         </MudTable>
+    }
+    @if (_invitesLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_invitesLoadErrorMessage</MudAlert>
     }
     @if (_invites.Count > 0)
     {
@@ -83,6 +91,8 @@
     private MemberRole _inviteRole = MemberRole.Member;
     private string? _inviteUrl;
     private Guid? _loadedFor;
+    private string? _membersLoadErrorMessage;
+    private string? _invitesLoadErrorMessage;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -97,9 +107,26 @@
         if (ProjectId is not { } projectId || UserId == Guid.Empty)
             return;
         var listed = await ListMembers.HandleAsync(new GetProjectMembersCommand(new GetProjectMembersRequest(projectId)));
-        _members = listed.Success ? listed.Value!.ToList() : [];
+        if (listed.Success)
+        {
+            _members = listed.Value!.ToList();
+            _membersLoadErrorMessage = null;
+        }
+        else
+        {
+            _membersLoadErrorMessage = Notifications.FormatFailure(listed, L["Projects"].Value, L["Load"].Value);
+        }
+
         var invites = await ListInvites.HandleAsync(new ListInvitesRequest(projectId, Actor));
-        _invites = invites.Success ? invites.Value!.ToList() : [];
+        if (invites.Success)
+        {
+            _invites = invites.Value!.ToList();
+            _invitesLoadErrorMessage = null;
+        }
+        else
+        {
+            _invitesLoadErrorMessage = Notifications.FormatFailure(invites, L["Projects"].Value, L["Load"].Value);
+        }
     }
 
     private async Task SendInvite()

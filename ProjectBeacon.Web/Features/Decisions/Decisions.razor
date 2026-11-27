@@ -23,7 +23,11 @@
 <PageTitle>@L["Decisions"]</PageTitle>
 <PageHeader Title="@L["Decisions"]" />
 
-@if (_project is null)
+@if (_projectLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_projectLoadErrorMessage" />
+}
+else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
@@ -37,15 +41,19 @@ else
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" OnClick="Add">@L["Create"]</MudButton>
     </MudPaper>
 
+    @if (_decisionsLoadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_decisionsLoadErrorMessage</MudAlert>
+    }
     @if (_loading)
     {
         <LoadingState />
     }
-    else if (_decisions.Count == 0)
+    else if (_decisions.Count == 0 && _decisionsLoadErrorMessage is null)
     {
         <EmptyState>@L["NoDecisions"]</EmptyState>
     }
-    else
+    else if (_decisions.Count > 0)
     {
         <MudTable Items="_decisions" Hover="true" Dense="true" Class="mt-4" Breakpoint="Breakpoint.Sm">
             <HeaderContent>
@@ -109,7 +117,11 @@ else
                 }
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
                     <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_selectedHistory.Count})")">
-                        @if (_selectedHistory.Count == 0)
+                        @if (_selectedHistoryErrorMessage is not null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">@_selectedHistoryErrorMessage</MudAlert>
+                        }
+                        @if (_selectedHistory.Count == 0 && _selectedHistoryErrorMessage is null)
                         {
                             <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
                         }
@@ -176,9 +188,12 @@ else
     private string _consequences = string.Empty;
     private DecisionDto? _selected;
     private List<ContentVersionDto> _selectedHistory = [];
+    private string? _selectedHistoryErrorMessage;
     private DecisionDto? _superseding;
     private Guid? _replacementId;
     private bool _loading = true;
+    private string? _projectLoadErrorMessage;
+    private string? _decisionsLoadErrorMessage;
     private bool _busy;
     private bool _detailOpen;
     private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
@@ -187,6 +202,13 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+        {
+            _projectLoadErrorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+            _loading = false;
+            return;
+        }
+
         _project = current.Value;
         await Reload();
         _loading = false;
@@ -200,7 +222,14 @@ else
             return;
         }
         var listed = await ListDecisions.HandleAsync(_project.Id);
-        _decisions = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _decisionsLoadErrorMessage = Notifications.FormatFailure(listed, L["Decisions"].Value, L["Load"].Value);
+            return;
+        }
+
+        _decisionsLoadErrorMessage = null;
+        _decisions = listed.Value!.ToList();
         if (_selected is not null)
             _selected = _decisions.FirstOrDefault(d => d.Id == _selected.Id);
     }
@@ -256,14 +285,22 @@ else
         if (_project is null || _selected is null)
         {
             _selectedHistory = [];
+            _selectedHistoryErrorMessage = null;
             return;
         }
 
         var history = await ContentVersions.HandleAsync(
             _project.Id, ContentTargetKind.Decision, _selected.Id, _actor, 50);
-        _selectedHistory = history.Success ? history.Value!.ToList() : [];
-        if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history, L["Decisions"].Value, L["Load"].Value), Severity.Warning);
+        if (history.Success)
+        {
+            _selectedHistory = history.Value!.ToList();
+            _selectedHistoryErrorMessage = null;
+        }
+        else
+        {
+            _selectedHistory = [];
+            _selectedHistoryErrorMessage = Notifications.FormatFailure(history, L["Decisions"].Value, L["Load"].Value);
+        }
     }
 
     private async Task RestoreSelectedVersion(ContentVersionDto version)

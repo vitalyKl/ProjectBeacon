@@ -22,11 +22,15 @@
         </MudStack>
     </div>
 </MudPaper>
-@if (_labels.Count == 0)
+@if (_loadErrorMessage is not null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_loadErrorMessage</MudAlert>
+}
+@if (_loadErrorMessage is null && _labels.Count == 0)
 {
     <MudAlert Severity="Severity.Info">@L["NoLabelsYet"]</MudAlert>
 }
-else
+else if (_labels.Count > 0)
 {
     <MudTable Items="_labels" Dense="true" Hover="true">
         <HeaderContent>
@@ -55,6 +59,7 @@ else
     private string _labelPrefix = string.Empty;
     private Guid? _editingLabelId;
     private Guid? _loadedFor;
+    private string? _loadErrorMessage;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -69,7 +74,14 @@ else
         if (ProjectId is not { } projectId)
             return;
         var listed = await ListLabels.HandleAsync(new ListLabelsRequest(projectId));
-        _labels = listed.Success ? listed.Value!.ToList() : [];
+        if (!listed.Success)
+        {
+            _loadErrorMessage = Notifications.FormatFailure(listed, L["Projects"].Value, L["Load"].Value);
+            return;
+        }
+
+        _loadErrorMessage = null;
+        _labels = listed.Value!.ToList();
     }
 
     private void StartLabelEdit(LabelDto label)

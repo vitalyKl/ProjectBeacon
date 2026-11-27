@@ -52,17 +52,26 @@
 {
     <LoadingState />
 }
+else if (_projectLoadErrorMessage is not null)
+{
+    <ErrorState Message="@_projectLoadErrorMessage" />
+}
 else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
     else if (_milestones.Count == 0 && _deletedMilestones.Count == 0 && !_showCreateForm
-        && (!_releaseManagementEnabled || _releases.Count == 0) && !_showCreateReleaseForm)
+        && (!_releaseManagementEnabled || _releases.Count == 0) && !_showCreateReleaseForm
+        && _loadErrorMessage is null)
 {
     <EmptyState>@L["NoMilestones"]</EmptyState>
 }
 else
 {
+    @if (_loadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_loadErrorMessage</MudAlert>
+    }
     @if (_releaseManagementEnabled)
     {
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -442,7 +451,11 @@ else
                 }
                 <MudExpansionPanels Elevation="0" Outlined="true" Class="mt-3">
                     <MudExpansionPanel Text="@($"{L["ContentHistory"]} ({_milestoneHistory.Count})")">
-                        @if (_milestoneHistory.Count == 0)
+                        @if (_milestoneHistoryErrorMessage is not null)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true">@_milestoneHistoryErrorMessage</MudAlert>
+                        }
+                        @if (_milestoneHistory.Count == 0 && _milestoneHistoryErrorMessage is null)
                         {
                             <MudText Typo="Typo.caption">@L["NoHistory"]</MudText>
                         }
@@ -478,10 +491,13 @@ else
     private ActorContext _actor = ActorContext.Anonymous;
     private bool _loading = true;
     private bool _busy;
+    private string? _projectLoadErrorMessage;
+    private string? _loadErrorMessage;
     private bool _showCreateForm;
     private Guid? _editingId;
     private MilestoneDto? _open;
     private List<ContentVersionDto> _milestoneHistory = [];
+    private string? _milestoneHistoryErrorMessage;
     private bool _detailOpen;
     private readonly DialogOptions _dialogOptions = new() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
     private string? _editName;
@@ -510,6 +526,13 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
+        if (!current.Success)
+        {
+            _projectLoadErrorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+            _loading = false;
+            return;
+        }
+
         _project = current.Value;
         if (_project is not null)
         {
@@ -533,32 +556,40 @@ else
             return;
         }
 
+        var loadErrors = new List<string>();
+
         var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(
             new ListProjectMilestonesRequest(_project.Id), _actor));
-        if (!milestones.Success)
-            Notifications.Failure(milestones, L["Roadmap"].Value, L["Load"].Value);
-        _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        if (milestones.Success)
+            _milestones = milestones.Value!.ToList();
+        else
+            loadErrors.Add(Notifications.FormatFailure(milestones, L["Roadmap"].Value, L["Load"].Value));
+
         var deleted = await ListDeletedContentTargets.HandleAsync(_project.Id, _actor);
-        _deletedMilestones = deleted.Success
-            ? deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.Milestone).ToList()
-            : [];
-        if (!deleted.Success)
-            Notifications.Add(Notifications.FormatFailure(deleted, L["Roadmap"].Value, L["Delete"].Value), Severity.Warning);
+        if (deleted.Success)
+            _deletedMilestones = deleted.Value!.Where(item => item.TargetKind == ContentTargetKind.Milestone).ToList();
+        else
+            loadErrors.Add(Notifications.FormatFailure(deleted, L["Roadmap"].Value, L["Load"].Value));
+
         var tasks = await ListTasks.HandleAsync(new ListProjectTasksCommand(new ListProjectTasksRequest(_project.Id)));
-        if (!tasks.Success)
-            Notifications.Failure(tasks, L["Roadmap"].Value, L["Load"].Value);
-        _tasks = tasks.Success ? tasks.Value!.ToList() : [];
+        if (tasks.Success)
+            _tasks = tasks.Value!.ToList();
+        else
+            loadErrors.Add(Notifications.FormatFailure(tasks, L["Roadmap"].Value, L["Load"].Value));
 
         if (_releaseManagementEnabled)
         {
             var releases = await ListProjectReleases.HandleAsync(new ListProjectReleasesCommand(
                 new ListProjectReleasesRequest(_project.Id), _actor));
-            _releases = releases.Success ? releases.Value!.ToList() : [];
-            if (!releases.Success)
-                Notifications.Failure(releases, L["Roadmap"].Value, L["Load"].Value);
+            if (releases.Success)
+                _releases = releases.Value!.ToList();
+            else
+                loadErrors.Add(Notifications.FormatFailure(releases, L["Roadmap"].Value, L["Load"].Value));
         }
         else
             _releases = [];
+
+        _loadErrorMessage = loadErrors.Count == 0 ? null : string.Join(Environment.NewLine, loadErrors);
     }
 
     private void ShowCreateHotfixTask(ReleaseDto release)
@@ -1038,14 +1069,22 @@ else
         if (_project is null)
         {
             _milestoneHistory = [];
+            _milestoneHistoryErrorMessage = null;
             return;
         }
 
         var history = await ContentVersions.HandleAsync(
             _project.Id, ContentTargetKind.Milestone, milestoneId, _actor, 50);
-        _milestoneHistory = history.Success ? history.Value!.ToList() : [];
-        if (!history.Success)
-            Notifications.Add(Notifications.FormatFailure(history, L["Roadmap"].Value, L["Load"].Value), Severity.Warning);
+        if (history.Success)
+        {
+            _milestoneHistory = history.Value!.ToList();
+            _milestoneHistoryErrorMessage = null;
+        }
+        else
+        {
+            _milestoneHistory = [];
+            _milestoneHistoryErrorMessage = Notifications.FormatFailure(history, L["Roadmap"].Value, L["Load"].Value);
+        }
     }
 
     private async Task RestoreMilestoneVersion(ContentVersionDto version)

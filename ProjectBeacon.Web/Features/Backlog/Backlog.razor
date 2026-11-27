@@ -36,13 +36,23 @@ else if (_error)
     {
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
     }
-    else if (_tasks.Count == 0)
-{
-    <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoTasks"]</MudAlert>
-}
-else
-{
-    <MudTable Items="_tasks" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Class="mt-4">
+    else
+    {
+        @if (_labelsLoadErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_labelsLoadErrorMessage</MudAlert>
+        }
+        @if (_milestonesLoadErrorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@_milestonesLoadErrorMessage</MudAlert>
+        }
+        @if (_tasks.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-4">@L["NoTasks"]</MudAlert>
+        }
+        else
+        {
+            <MudTable Items="_tasks" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Class="mt-4">
         <HeaderContent>
             <MudTh>@L["Title"]</MudTh>
             <MudTh>@L["Status"]</MudTh>
@@ -79,7 +89,9 @@ else
                     aria-label="@L["DeleteTask"].Value" />
             </MudTd>
         </RowTemplate>
-    </MudTable>
+            </MudTable>
+        }
+    }
 }
 
 @code {
@@ -91,11 +103,21 @@ else
     private bool _loading = true;
     private bool _error;
     private string? _errorMessage;
+    private string? _labelsLoadErrorMessage;
+    private string? _milestonesLoadErrorMessage;
 
     protected override async Task OnInitializedAsync()
     {
         _actorContext = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actorContext);
+        if (!current.Success)
+        {
+            _error = true;
+            _errorMessage = Notifications.FormatFailure(current, L["Backlog"].Value, L["Load"].Value);
+            _loading = false;
+            return;
+        }
+
         _project = current.Value;
         await LoadTasks();
         _loading = false;
@@ -105,7 +127,6 @@ else
     {
         if (_project is null)
         {
-            _tasks = [];
             return;
         }
 
@@ -120,10 +141,28 @@ else
 
         _error = false;
         _tasks = listed.Value!.ToList();
+
         var labels = await ListLabels.HandleAsync(new ListLabelsRequest(_project.Id));
-        _labels = labels.Success ? labels.Value!.ToList() : [];
+        if (labels.Success)
+        {
+            _labels = labels.Value!.ToList();
+            _labelsLoadErrorMessage = null;
+        }
+        else
+        {
+            _labelsLoadErrorMessage = Notifications.FormatFailure(labels, L["Projects"].Value, L["Load"].Value);
+        }
+
         var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id), _actorContext));
-        _milestones = milestones.Success ? milestones.Value!.ToList() : [];
+        if (milestones.Success)
+        {
+            _milestones = milestones.Value!.ToList();
+            _milestonesLoadErrorMessage = null;
+        }
+        else
+        {
+            _milestonesLoadErrorMessage = Notifications.FormatFailure(milestones, L["Roadmap"].Value, L["Load"].Value);
+        }
     }
 
     private void NavigateToTask(Guid taskId) => Navigation.NavigateTo($"/task/{taskId}");

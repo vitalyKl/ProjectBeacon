@@ -36,11 +36,15 @@
         <MudTextField @bind-Value="_apiKey" Label="@L["AgentProviderApiKey"]" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2" HelperText="@L["AgentProviderApiKeyHint"]" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="Save" Disabled="_busy || _userId == Guid.Empty">@L["Save"]</MudButton>
     </div>
-    @if (_rows.Count == 0)
+    @if (_loadErrorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_loadErrorMessage</MudAlert>
+    }
+    @if (_rows.Count == 0 && _loadErrorMessage is null)
     {
         <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">@L["NoAgentProviderConnections"]</MudText>
     }
-    else
+    else if (_rows.Count > 0)
     {
         <MudList T="string" Dense="true" Class="mt-3">
             @foreach (var row in _rows)
@@ -78,6 +82,7 @@
     private string _apiKey = string.Empty;
     private bool _custom;
     private bool _busy;
+    private string? _loadErrorMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -132,8 +137,13 @@
     {
         var listed = await ListConnections.HandleAsync(new ListAgentProviderConnectionsCommand(_userId));
         if (!listed.Success)
-            Notifications.Failure(listed, L["Connections"].Value, L["Load"].Value);
-        _rows = listed.Success ? listed.Value!.ToList() : [];
+        {
+            _loadErrorMessage = Notifications.FormatFailure(listed, L["Connections"].Value, L["Load"].Value);
+            return;
+        }
+
+        _loadErrorMessage = null;
+        _rows = listed.Value!.ToList();
     }
 
     private async Task Save()
