@@ -163,6 +163,10 @@ public sealed class PublishReleaseHandler
                 command.ProjectId, command.Actor.UserId);
             try
             {
+                // CandidateSnapshot is persisted as a separate immutable evidence row, not
+                // an EF navigation. Reattach the exact row loaded above before invoking
+                // domain transitions that validate Candidate identity.
+                release.AttachCandidateSnapshot(candidate);
                 release.BeginPublication(device.Id, row.Id, sanitized.Value!);
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
