@@ -143,7 +143,7 @@ public class DeleteLabelHandler
 
     public async Task<Result> HandleAsync(DeleteLabelRequest request, CancellationToken ct = default)
     {
-        return await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+        var result = await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
             _dbFactory,
             request.ProjectId,
             [],
@@ -169,5 +169,8 @@ public class DeleteLabelHandler
                 return Result.Ok(true);
             },
             ct);
-    }
-}
+
+        return result.Success
+            ? Result.Ok()
+            : Result.Failure(result.Error ?? "Label delete conflict.", result.Kind);
+    }}
