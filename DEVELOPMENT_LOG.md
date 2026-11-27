@@ -2882,3 +2882,10 @@ The next intermediate run on `2e04b6c` reached all platform test suites. Linux A
 - `DeleteProjectHandler` now explicitly checks Release history across the tenant filter before allowing project deletion. The query is restricted by the exact requested `ProjectId`.
 - Updated `docs/ignore-query-filters.allowlist` for `ProjectBeacon.Application/Projects/ProjectHandlers.cs` from 11 to 12, with a rationale covering the Release-history guard. This is the final count correction after the Candidate-scope changes.
 - The in-flight CI run #46001290569 validates the preceding SHA `75390c3`; its allowlist assertion is expected to reflect the preceding manifest count. Require a fresh run on the latest head for final acceptance.
+
+
+### Final static reconciliation before the latest CI attempt
+
+- A last repository-wide check against `docs/ignore-query-filters.allowlist` found that the pipeline lifecycle handler had one remaining bypass, not two, after the launch lookup was moved back to tenant-filtered queries. The manifest is now corrected from 2 to 1.
+- Counts rechecked on the branch: MilestoneHandlers 5; ProjectHandlers 12; TaskLifecycleHandlers 6; PipelineLifecycleHandlers 1; PipelineControlHandlers 1; PipelineReviewHandlers 1; DeviceRemoteLandingReconciliationHandler 27; WorkstationCommandHandlers 10. Each matches its reviewed manifest entry.
+- Run #46001290569 was cancelled after subsequent pushes and is not an acceptance result. Run the full matrix again on the latest branch head.
