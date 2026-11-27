@@ -3229,3 +3229,5 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 ### Validation status
 
 - Exact source/test blobs were re-read from GitHub after commit. Full dotnet test and exact-head CI still require the documented manual workflow dispatch; neither is claimed green for the current branch.
+
+- Added a positive control for the same writer path: canonical array index /versions/0 still updates the selected JSON string to the requested version. Test commit: 63c9a21e39fedec59e36f5fae8b6cfdc9a382a38.
