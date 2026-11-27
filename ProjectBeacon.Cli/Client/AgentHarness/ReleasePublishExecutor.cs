@@ -260,11 +260,19 @@ internal static class ReleasePublishExecutor
     internal static bool MayHavePublishedTag(
         bool remoteInspectionSucceeded,
         bool remoteListingWellFormed,
-        string? observedTargetSha,
-        string candidateSha) =>
-        !remoteInspectionSucceeded
-        || !remoteListingWellFormed
-        || string.Equals(observedTargetSha, candidateSha, StringComparison.OrdinalIgnoreCase);
+        bool tagReferencePresent,
+        bool peeledReferencePresent,
+        string? peeledTargetSha,
+        string candidateSha)
+    {
+        if (!remoteInspectionSucceeded || !remoteListingWellFormed)
+            return true;
+        if (!tagReferencePresent && !peeledReferencePresent)
+            return false;
+        if (!tagReferencePresent || !peeledReferencePresent)
+            return true;
+        return string.Equals(peeledTargetSha, candidateSha, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static async Task<TagEvidence> EnsureImmutableTagAsync(
         string root, string[] filters, string originUrl, PublishRequest request,
@@ -308,22 +316,29 @@ internal static class ReleasePublishExecutor
         {
             // The server may have created the tag while the previous acknowledgement was lost.
             // Compare both the annotated object SHA and peeled commit; never force-update either side.
-            var remoteSha = remoteEntries.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var peeled)
-                ? peeled
-                : remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-            var remoteTagObjectSha = remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-            if (!string.Equals(remoteSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase)
+            var tagReferencePresent = remoteEntries.ShaByRef.TryGetValue(
+                "refs/tags/" + request.TagName, out var remoteTagObjectSha);
+            var peeledReferencePresent = remoteEntries.ShaByRef.TryGetValue(
+                "refs/tags/" + request.TagName + "^{}", out var remotePeeledSha);
+            var remoteTargetMatches = peeledReferencePresent
+                ? string.Equals(remotePeeledSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase)
+                : tagReferencePresent
+                    && string.Equals(remoteTagObjectSha, localTag.TagObjectSha, StringComparison.OrdinalIgnoreCase);
+            if (!remoteTargetMatches
+                || !tagReferencePresent
                 || !string.Equals(remoteTagObjectSha, localTag.TagObjectSha, StringComparison.OrdinalIgnoreCase))
                 return new TagEvidence(false,
-                    MayHavePublishedTag(true, true, remoteSha, request.CandidateSha),
+                    MayHavePublishedTag(true, true, tagReferencePresent, peeledReferencePresent,
+                        remotePeeledSha, request.CandidateSha),
                     "The remote tag object or target differs from the locally verified immutable Candidate. Refusing to move it.");
         }
 
         if (localTag.Exists && !localTag.Valid)
             return new TagEvidence(false, hasRemote, "The local annotated tag does not contain the expected Release/Candidate identity.");
 
-        var tagPushed = hasRemote
-            && remoteEntries.ShaByRef.Values.Any(value => string.Equals(value, request.CandidateSha, StringComparison.OrdinalIgnoreCase));
+        // Reaching this point with hasRemote=true means the remote annotated tag
+        // has been fetched or matched to the exact locally verified Candidate object.
+        var tagPushed = hasRemote;
         if (!localTag.Exists)
         {
             var create = await Git(root, ct, filters, "tag", "-a", request.TagName,
@@ -361,10 +376,11 @@ internal static class ReleasePublishExecutor
                     return new TagEvidence(false, true,
                         "The tag push outcome is ambiguous and the remote tag could not be conclusively inspected. Treating the tag as potentially published; retry only with the same immutable Candidate. "
                         + (after.Error ?? Clip(afterFailedPush.StdErr)));
-                var afterSha = after.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var peeled)
-                    ? peeled
-                    : after.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-                if (!MayHavePublishedTag(true, true, afterSha, request.CandidateSha))
+                var tagReferencePresent = after.ShaByRef.ContainsKey("refs/tags/" + request.TagName);
+                var peeledReferencePresent = after.ShaByRef.TryGetValue(
+                    "refs/tags/" + request.TagName + "^{}", out var afterPeeledSha);
+                if (!MayHavePublishedTag(true, true, tagReferencePresent,
+                    peeledReferencePresent, afterPeeledSha, request.CandidateSha))
                     return new TagEvidence(false, false,
                         "The push failed and a successful remote inspection confirms that the Candidate tag was not published. "
                         + Clip(push.StdErr));
@@ -394,14 +410,17 @@ internal static class ReleasePublishExecutor
         var verify = ParseLsRemote(remoteVerify.StdOut);
         if (verify.Error is not null)
             return new TagEvidence(false, tagPushed, "Could not safely interpret the final remote tag evidence: " + verify.Error);
-        var remoteTarget = verify.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var finalPeeled)
-            ? finalPeeled
-            : verify.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-        if (!string.Equals(remoteTarget, request.CandidateSha, StringComparison.OrdinalIgnoreCase))
-            return new TagEvidence(false, tagPushed, "The remote release tag does not resolve to the exact immutable Candidate SHA.");
+        var finalTagReferencePresent = verify.ShaByRef.ContainsKey("refs/tags/" + request.TagName);
+        var finalPeeledReferencePresent = verify.ShaByRef.TryGetValue(
+            "refs/tags/" + request.TagName + "^{}", out var finalPeeledSha);
+        if (!MayHavePublishedTag(true, true, finalTagReferencePresent,
+            finalPeeledReferencePresent, finalPeeledSha, request.CandidateSha))
+            return new TagEvidence(false, tagPushed,
+                "The remote release tag is absent or resolves to a different commit than the immutable Candidate.");
         var finalEvidence = await ReadRemoteTagEvidenceAsync(root, filters, originUrl, request, ct);
         var finalObjectSha = verify.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-        if (!finalEvidence.Valid
+        if (!finalTagReferencePresent
+            || !finalEvidence.Valid
             || !string.Equals(finalEvidence.TagObjectSha, finalObjectSha, StringComparison.OrdinalIgnoreCase))
             return new TagEvidence(false, tagPushed,
                 finalEvidence.Error ?? "The remote annotated tag object changed during final verification.");
