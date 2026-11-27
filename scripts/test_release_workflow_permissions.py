@@ -113,5 +113,34 @@ class ReleaseWorkflowPermissionTests(unittest.TestCase):
             r"(?m)^  merge_group:\s*\n    types: \[checks_requested\]$",
         )
 
+
+
+    def test_ci_does_not_receive_repository_secrets(self) -> None:
+        # CI executes arbitrary PR and task-branch code; it must not receive repository secrets.
+        self.assertNotRegex(
+            "\n".join(self.ci_lines),
+            r"\$\{\{\s*secrets\.",
+        )
+
+    def test_production_ssh_secrets_are_scoped_to_the_reviewable_deploy_job(self) -> None:
+        jobs = ("tests", "client", "image", "scan", "deploy")
+        deploy = _mapping_block(self.release_lines, "deploy", 2)
+        self.assertIsNotNone(deploy)
+        deploy_text = "\n".join(deploy or [])
+        self.assertIn("    environment: production", deploy_text)
+        self.assertIn("    needs: [tests, image, scan, client]", deploy_text)
+
+        all_refs = [line.strip() for line in self.release_lines if "secrets.PRODUCTION_" in line]
+        deploy_refs = [line.strip() for line in (deploy or []) if "secrets.PRODUCTION_" in line]
+        self.assertTrue(all_refs, "Production SSH secret references are missing.")
+        self.assertEqual(all_refs, deploy_refs)
+
+        for name in jobs[:-1]:
+            job = _mapping_block(self.release_lines, name, 2)
+            self.assertIsNotNone(job)
+            job_text = "\n".join(job or [])
+            self.assertNotIn("secrets.PRODUCTION_", job_text)
+            self.assertNotIn("environment: production", job_text)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
