@@ -1307,3 +1307,33 @@ Implementation находится в `feat/release-management`, PR #230.
 - Live Merge Queue acceptance остаётся невозможной в текущем личном публичном ProjectBeacon repo. Нужен writable org-owned disposable repo; в нём администратор должен включить очередь, выставить Merge method=merge и настроить required checks.
 - Владелец репозитория также должен проверить classic tag protection `v*` и required reviewers GitHub Environment `production`.
 - До завершения этих условий не создавать production tag, не запускать deploy и не вливать PR #230. SaaS Control Plane и billing не затрагивать.
+
+
+---
+
+## Дополнение — cross-platform CI подтвердил защиту публикации (27 ноября 2026)
+
+Полный exact-head CI [#45974881947](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45974881947) успешно проверил implementation SHA `500c2e872239c9807920fc94ae67c66095164ab1`.
+
+- Linux, Windows и macOS: Restore, Build, EF model check, все семь test modules и formatting — success.
+- Linux TRX: 2 768 результатов, один ожидаемый platform-conditional skip, ноль failures; symlink gates Passed.
+- Linux permission contract test прошёл: workflow-level contents read; только image job имеет packages write; scan получает packages read; client имеет contents write для GitHub Release assets; tests/deploy не получают packages write.
+- `ci.yml` и `release.yml` используют одинаковые TRX guard blocks с порогом 2 768. CI подписан на `merge_group: checks_requested`.
+
+В проверенный head входят:
+- fail-closed remote tag handling при неоднозначном push и неполном `ls-remote`;
+- проверка annotated tag object SHA и peeled Candidate SHA отдельно;
+- temporary verification refs, byte-exact Release/Candidate/version identity lines и rejection CR/trailing whitespace/duplicates;
+- публикационный retry только с неизменным Candidate/tag/version/deployment endpoint после потенциальной публикации тега;
+- completion proof принимается только при точном совпадении queued Publish identity.
+
+Implementation journal записывает полный результат в commit `46c02964e859eace48a01f4dbc7070a17a00083e`. Этот journal-only commit изменяет текущий PR head и требует отдельного exact-head CI.
+
+### Acceptance blockers без изменений
+
+1. Live Merge Queue acceptance требует writable org-owned disposable repository. ProjectBeacon является public repo с owner type User, а подключённый аккаунт не имеет organization memberships; у него нет подходящего тестового репозитория.
+2. На тестовой очереди администратор должен выставить Merge method=merge и required CI checks, затем проверить pending/enqueued, expiry UUID с/без queue entry, removal, direct/queued completion, closed PR, head/base drift и post-merge check failure.
+3. Администратор должен подтвердить classic tag protection `v*` и required reviewers Environment `production`.
+4. Нужна реальная end-to-end приёмка ReleasePrepare → merge commit → immutable Candidate → Publish/tag → release workflow → deployed version/SHA, включая failure/retry paths.
+
+PR #230 остаётся open/unmerged. Production tag/deployment не создавались. SaaS Control Plane и billing вне scope.
