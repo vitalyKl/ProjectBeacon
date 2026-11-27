@@ -234,30 +234,54 @@ jobs:
       - name: Test — API
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.API.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Application
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Application.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — CLI
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu"
+        run: |
+          mkdir -p TestResults/ProjectBeacon.Cli.Tests
+          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
       - name: Test — Domain
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Domain.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Infrastructure
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Infrastructure.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Web
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Web.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Worker
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build -p:TestingPlatformCaptureOutput=false
+        run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
+      - name: Report failed test details from TRX
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -Path TestResults -Filter '*.trx' -Recurse -File -ErrorAction SilentlyContinue)
+          $failureCount = 0
+          foreach ($file in $files) {
+            [xml]$document = Get-Content -LiteralPath $file.FullName -Raw
+            $results = $document.SelectNodes("//*[local-name()='UnitTestResult' and @outcome='Failed']")
+            foreach ($result in $results) {
+              $failureCount++
+              $name = $result.GetAttribute('testName')
+              Write-Host "::group::FAILED TEST: $name ($($file.FullName))"
+              $message = $result.SelectSingleNode(".//*[local-name()='Message']")
+              $stack = $result.SelectSingleNode(".//*[local-name()='StackTrace']")
+              if ($message -and $message.InnerText) { Write-Output "Message:`n$($message.InnerText)" }
+              if ($stack -and $stack.InnerText) { Write-Output "StackTrace:`n$($stack.InnerText)" }
+              Write-Host "::endgroup::"
+            }
+          }
+          if ($failureCount -eq 0) { Write-Host "No failed tests found in TRX reports." }
+
       - name: Verify formatting
         run: dotnet format ProjectBeacon.sln --verify-no-changes --exclude-diagnostics xUnit1051
