@@ -65,7 +65,7 @@ public sealed class TaskDetailRenderTests : BUnitRenderBase
 
         var cut = Bunit.RenderComponent<Features.Tasks.TaskDetail>(
             builder => builder.Add(component => component.TaskId, task.Id));
-        var localizer = Bunit.Services.GetRequiredService<IStringLocalizer<Web>>();
+        var localizer = Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>();
 
         Assert.Contains("task-version-impact", cut.Markup);
         Assert.Contains(localizer["TaskVersionImpactTitle"].Value, cut.Markup);
