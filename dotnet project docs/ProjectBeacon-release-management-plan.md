@@ -1637,3 +1637,11 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Python release manifest parser приведён к RFC 6901: пустой root pointer, строгие ~0/~1 escapes и ASCII decimal array indexes. Roadmap release-load failures отделены от успешного empty state и покрыты Web tests.
 - Exact PR head 1532a507ba698bd82c81070828c03a99fc6e427a, run #46030846976: Linux, Windows и macOS success; все семь suites, build, EF model check и formatting успешны. Linux release security scripts and TRX guard also passed.
 - Остались только внешние acceptance: live async merge / Merge Queue и first-publish observation в writable disposable repository, подтверждение владельцем tag/branch protection и Environment production reviewers/self-review/deployment refs/four SSH secrets. Пока это не сделано, PR не сливать и production tag/deployment не создавать.
+
+### Дополнительная проверка manifest path — 28 ноября 2026
+
+- При повторной проверке release CI обнаружено, что проверка только конечного файла .beacon/release.json не отвергала symlink родительского каталога .beacon.
+- Реализация в feat/release-management теперь требует обычный .beacon каталог непосредственно в корне checkout и обычный release.json непосредственно внутри него; после проверки оба пути разрешаются и их родительские директории сверяются.
+- Добавлены Python regression tests на штатный manifest, symlink каталога .beacon с валидным на вид целевым файлом и symlink самого release.json.
+- Код: f31531d73a9ab132a14f05be1eec4e504667379f; тесты: 51fc6bbff88ab70fd0a2f45203254ec201af59d0.
+- Новый head ещё требует полного exact-head CI. Никаких production tags/deployments или merge не выполнялось.
