@@ -1035,3 +1035,23 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 - Дополнительное ограничение: GitHub указывает, что Merge Queue доступна публичным репозиториям, принадлежащим организациям, либо частным репозиториям организаций на GitHub Enterprise Cloud. ProjectBeacon сейчас public, owner type User; merge queue в этом репозитории недоступна по текущим условиям продукта. Для live acceptance нужен отдельный org-owned disposable repository.
 - Merge Queue administrator settings включают отдельный параметр Merge method. Release Management требует метод merge, потому что VerifyLanding закреплён за точным исходным ReleasePrepare SHA. Squash/rebase переписывают SHA и не проходят этот серверный барьер.
 - Следующие external acceptance blockers: доступ к writable org-owned disposable repository с merge queue; подтверждение Merge method=merge; проверка classic tag protection `v*` и required reviewers Environment `production`.
+
+
+## Дополнение — проверка immutable annotated tag при конкурентном push (27 ноября 2026)
+
+В implementation branch feat/release-management обнаружена гонка в обработке потерянного подтверждения Git push:
+
+- Предыдущая ветка восстановления проверяла только peeled commit SHA удалённого тега. Если другой writer одновременно создавал одноимённый annotated/lightweight tag на том же Candidate SHA, но с неправильной или отсутствующей Release/Candidate metadata, локальный executor мог принять только совпадение commit SHA.
+- Теперь в ветке восстановления Beacon fetch-ит удалённый тег во временный локальный ref refs/beacon/release-tag-verification/<release>/<nonce>; обычный локальный tag ref не перезаписывается.
+- Проверяются тип annotated tag, tag name, object target, peeled commit SHA и точные однократные строки ProjectBeacon-Release, ProjectBeacon-Candidate, ProjectBeacon-Candidate-SHA и ProjectBeacon-Version.
+- SHA самого annotated tag object сверяется с SHA, опубликованным в git ls-remote, как при восстановлении после спорного push, так и при финальной проверке.
+- Три regression facts проверяют точное совпадение metadata, отказ от lightweight/другого target/tag name, отказ от пропущенных/изменённых/дублирующихся identity lines.
+- CI и release.yml Linux TRX threshold синхронно повышены до 2 765.
+
+Кодовые commits:
+- 3f56a0516068de9e61e4dbe282498366bb25cac1 — удалённая tag identity verification.
+- a52a1d1a0ecbc99f7fa809695c2fc457bb1de748 — regression facts.
+- efc1fb9d34b0c527d61a7adf82ba5ed91e0b2957, 06150e4c04804df643290b4dbf641b23b94de27a — TRX guard 2 765.
+- e5ec37cda058b584c638a42cfe241acd6f8806fe — implementation journal.
+
+Последний проверенный green CI #45955852379 относится к более раннему implementation head e02e4d75. Новые изменения требуют отдельного exact-head CI. Production tag/deployment не выполнялся; live Merge Queue test, администраторская проверка tag protection v* и Environment production reviewers остаются блокерами. Для live queue acceptance нужен отдельный writable org-owned disposable repository.
