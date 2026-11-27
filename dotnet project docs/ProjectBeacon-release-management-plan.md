@@ -1674,3 +1674,11 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Добавлены три регрессионных теста на bool/float/string/отсутствующий componentCount, SemVer component-count drift и не-Boolean allowPrerelease.
 - Implementation: 6816b7d458d93ff0cf763c28d3962ec78f160c3e; tests: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077.
 - Exact-head CI остаётся обязательным; merge/production publish не выполнялись.NaN
+
+### JSON Pointer array-index write parity — 28 ноября 2026
+
+- ReleasePrepare writer приведён к той же строгой семантике array indexes, что и C# reader / Python release gate: только ASCII decimal, без leading zero (кроме "0"), без знака и без Unicode цифр.
+- Для intermediate и final сегментов используется общая проверка индекса до изменения JsonArray.
+- Добавлен тест: "00", "+0" и Arabic-Indic digit отклоняются, исходный файл остаётся неизменным.
+- Implementation: 0192fc29fa4ace5f260cd8b3549c32acccf6bf55; tests: 5f1eb5dc89fc56a8cc4285ea17c2ee12b0e8bf10.
+- Full dotnet/CI validation ещё не выполнена.
