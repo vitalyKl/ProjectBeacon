@@ -2759,3 +2759,39 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Confirm Linux, Windows and macOS CI on the current exact PR head; verify the seven-module suite, 2,771 Linux TRX floor, EF model check and formatting.
 2. Continue checking release lifecycle operations for mutations that need the same project lock, especially cancellation/deletion paths that can race Prepare.
 3. Keep PR #230 open until exact-head CI and external GitHub publication/merge-queue acceptance requirements are complete.
+
+
+## 2026-11-27 — Final Candidate-scope and repository-operation serialization pass
+
+### Additional write paths closed
+
+The full-path review found more writes outside ordinary task CRUD. These are now serialized with the same project-row lock and transaction as ReleasePrepare:
+
+- Device remote-landing reconciliation now takes the project lock before task/proof checks and holds it through proof persistence and `Task.ClosePipeline`.
+- Label deletion takes the project lock, enumerates affected tasks and checks their milestone membership before clearing `Task.LabelId`.
+- Project deletion takes the project lock and is rejected when any Release history remains, preventing cascaded deletion of a Candidate's parent and its audit history.
+- `EnqueueCommandHandler` now rejects new GitLand commands while any repository operation or pipeline session is active. The check is performed after device, project-membership and runtime authorization, inside the transaction that inserts the command. This closes the queue race in which GitLand could be submitted after ReleasePrepare had passed its preflight.
+- Existing GitLand Request/Execute/Revert flows use this central enqueue boundary; no separate queue-side bypass is left in those handlers.
+
+### Follow-up correctness fixes
+
+- `RecordReviewVerdictHandler` detaches the TaskItem before its guarded SQL update. This keeps the guarded ExecuteUpdate as the sole Task state writer and prevents SaveChanges from replaying a stale tracked state.
+- `DeleteLabelHandler` explicitly converts the generic coordinator result to the non-generic Result contract.
+- The Device remote-landing wrapper was corrected to one execution-strategy/transaction closure.
+- The project deletion error text now describes permanent deletion only; no unsupported archive/retirement action is implied.
+- The task-update regression request was checked against the current command record signature.
+
+### Regression coverage
+
+- `PreparedReleaseFreezesItsMilestoneTaskScope` now covers reassignment, task edit, checklist insertion and label deletion after preparation begins.
+- `PreparedReleaseFreezesMilestoneMetadataDeletionAndLifecycleChanges` covers Milestone update/delete/close/reopen and persisted-state invariance.
+- `GitLandExecute_RequiresCurrentServerPinnedPolicyRevision` now also proves that an active `ReleasePrepare` command blocks a new GitLand enqueue, then verifies the existing stale/current policy revision checks after the preparation command is removed.
+- One new xUnit Fact was added in this pass; the total Linux TRX floor is therefore 2,772. The CI and release-workflow guard blocks are kept identical.
+
+### Current state
+
+- Branch: `feat/release-management`.
+- PR: #230; still open, Ready for review, and unmerged.
+- Pre-journal branch head: `6e02692cb58f78884294b31300e03f80a44dd7a2`.
+- The earlier green runs validate older commits only. Trigger and verify the full Linux, Windows and macOS CI at the post-journal head before treating the branch as ready to merge.
+- Do not create a production tag or deployment from this branch. SaaS Control Plane, billing and unrelated work remain out of scope.
