@@ -1402,3 +1402,12 @@ CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94a
 - CI #45981186013 проверял pre-fix SHA `a3ac90d3`; он также не валидирует Candidate rehydration и Published-policy regression.
 - Нужен новый exact-head Linux/Windows/macOS CI после обновления implementation journal. До этого не считать Publish path проверенным.
 - PR #230 остаётся open/unmerged; production tags/deployments не запускались. SaaS Control Plane и billing не затрагиваются.
+
+
+### Follow-up — synchronized TRX floor for Candidate rehydration integration test
+
+- The fresh-DbContext Publish/Completion integration test adds one .NET test fact.
+- Raised the required Linux test-result floor to 2,769 in both `ci.yml` and `release.yml`.
+- Verified that both thresholds are 2,769 and their complete TRX guard blocks are byte-for-byte identical.
+- Workflow commits: `57bca5d7b4a134b18b681280a203bfceef426066`, `2962247979515cee3d4379d16dc79eb98156e2e8`; implementation journal: `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548`.
+- The latest previous CI predates the rehydration fix and this gate update; a new exact-head run is required.
