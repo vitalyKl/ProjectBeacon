@@ -84,6 +84,37 @@ def git(*args: str) -> str:
     return completed.stdout.strip()
 
 
+def safe_manifest_path(root: Path) -> Path:
+    """Resolve the release manifest without traversing a repository-controlled symlink."""
+    try:
+        resolved_root = root.resolve(strict=True)
+    except OSError as exc:
+        fail(f"release workflow checkout root is unavailable: {exc}")
+
+    beacon_dir = resolved_root / ".beacon"
+    if beacon_dir.is_symlink() or not beacon_dir.is_dir():
+        fail("tagged commit does not contain a regular .beacon directory")
+
+    try:
+        resolved_beacon_dir = beacon_dir.resolve(strict=True)
+    except OSError as exc:
+        fail(f"release manifest directory is unavailable: {exc}")
+    if resolved_beacon_dir.parent != resolved_root:
+        fail(".beacon directory resolves outside the checked-out repository")
+
+    manifest = beacon_dir / "release.json"
+    if manifest.is_symlink() or not manifest.is_file():
+        fail("tagged commit does not contain a regular .beacon/release.json file")
+
+    try:
+        resolved_manifest = manifest.resolve(strict=True)
+    except OSError as exc:
+        fail(f"release manifest file is unavailable: {exc}")
+    if resolved_manifest.parent != resolved_beacon_dir:
+        fail(".beacon/release.json resolves outside the regular .beacon directory")
+    return resolved_manifest
+
+
 def safe_relative_path(raw: Any) -> Path:
     if not isinstance(raw, str) or not raw or len(raw) > 500:
         fail("release manifest contains an invalid source path")
@@ -462,13 +493,12 @@ def main() -> None:
     tag = os.environ.get("GITHUB_REF_NAME", "")
     if not is_safe_git_tag_name(tag):
         fail("release workflow must be triggered by a safe, non-empty Git tag")
-    if not MANIFEST.is_file() or MANIFEST.is_symlink():
-        fail("tagged commit does not contain a regular .beacon/release.json file")
-    if MANIFEST.stat().st_size > MAX_MANIFEST_BYTES:
+    manifest_path = safe_manifest_path(ROOT)
+    if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
         fail(".beacon/release.json exceeds the size limit")
 
     try:
-        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         fail(f".beacon/release.json is invalid: {exc}")
     if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1:
