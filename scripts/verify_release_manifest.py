@@ -456,6 +456,8 @@ def require_positive_json_integer(value: Any, label: str) -> int:
 
 
 def validate_version(policy: dict[str, Any], version: str) -> None:
+    if type(policy.get("allowPrerelease")) is not bool:
+        fail("release manifest policy allowPrerelease must be a JSON Boolean")
     scheme = policy.get("scheme")
     component_count = policy.get("componentCount")
     if type(component_count) is not int:
@@ -591,8 +593,6 @@ def main() -> None:
         fail(f"release manifest tagName {tag_name!r} differs from the configured tag pattern {expected_tag!r}")
     if not isinstance(policy, dict):
         fail("release manifest policy must be an object")
-    if type(policy.get("allowPrerelease")) is not bool:
-        fail("release manifest policy allowPrerelease must be a JSON Boolean")
     version_policy_revision = require_positive_json_integer(
         manifest.get("versionPolicyRevision"), "release manifest versionPolicyRevision"
     )
