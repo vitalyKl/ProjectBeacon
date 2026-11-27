@@ -1221,3 +1221,16 @@ PR #230 остаётся open/unmerged. Live Merge Queue требует org-owne
 Implementation commits: `36ee76e2891b54377e6be5c42c808cf60ad52ce1`, `3c06b5700a41f3f3c4bbde843224504ef0ddf0fc`. Test commits: `a0b0ed13f74e29f48427db0bb7355205f07d403c`, `d285d2bf1722a94f0187e806d7723ec53554b4ae`. Journal commit: `65471ad201f8cd387a2fc5794ff6bdad4b43b552`.
 
 Ранее запущенный CI #45972484561 проверяет предыдущий head `f1986015703297ad9c6c6f71aecc5198660d9868`, без follow-up по полной паре refs и последнего journal commit. Нужен новый exact-head CI на post-journal ветке.
+
+
+### Follow-up — аудит всех отрицательных результатов tag push
+
+- Проверены все места, где `EnsureImmutableTagAsync` возвращает `TagPushed=false`.
+- False остаётся допустимым только для локального invalid tag при успешном remote listing, доказывающем отсутствие refs; ошибки создания local annotated tag до remote push; либо неуспешного push, после которого успешный корректный listing доказывает отсутствие обоих refs или другой peeled target.
+- Ошибки начального remote lookup, malformed output, невозможность fetch уже существующего remote tag, failed/malformed post-push lookup, неполная пара tag/peeled refs, совпавший Candidate target с непроверенной annotation и ошибки final verification оставляют `TagPushed=true`/сохранённое true.
+- Если peeled ref отсутствует, публикация может быть подтверждена только после fetch и проверки самого annotated tag object: его object SHA обязан совпасть с remote-advertised tag-object SHA, а содержимое доказывает точный Candidate commit и Release/Candidate identity. Tag-object SHA никогда не сравнивается напрямую с commit SHA Candidate.
+- Это закрывает последний найденный путь, при котором отсутствие remote evidence могло ошибочно разблокировать `FailedBeforeTag`.
+
+Exact-head CI [#45973251379](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45973251379) проверяет полный code/test/workflow head `65471ad201f8cd387a2fc5794ff6bdad4b43b552`, включая 2 768-result guard. На момент записи запуск ещё выполняется. Он предшествует journal-only commit этой записи; нельзя считать его success до завершения всех jobs. Новый exact-head run требуется после актуального журнала.
+
+Journal commit implementation branch: `d9a0eb767e586a89a4577da112b0e2b0b7239a9f`. PR #230 остаётся open/unmerged; production tag/deploy не выполняются. SaaS Control Plane и billing не затрагиваются.
