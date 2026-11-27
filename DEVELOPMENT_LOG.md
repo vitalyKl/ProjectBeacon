@@ -2605,3 +2605,33 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 - Updated the two bUnit test files to use the fully qualified marker type `global::ProjectBeacon.Web.Resources.Web`.
 - Test commits: `142fcc19081caa6135b94556fd649bbe47086726`, `0d72f310cacb92619f4435652cc1f24caad6600a`.
 - The run #45987044512 targets the preceding head `ce4f2a4c6de79af9458342d50d68db3fb74b1efe`, so it predates this type-qualification fix. The latest PR head `0d72f310cacb92619f4435652cc1f24caad6600a` requires a new exact-head CI run.
+
+
+## 2026-11-27 — Sanitize ReleasePublishCompletion audit events
+
+### Defect found during post-fix review
+
+- The first allowlist correction unblocked the queued Publish audit event, but the fresh-context publish integration also creates completion audit events.
+- Completion still attempted to put free-form `error` and `workflowRunUrl` values in append-only audit details, plus fields `tagPushed` and `workflowRunId` that were not yet allowlisted. The success path also used non-contract field names `version` and `deployedCommitSha`.
+- Left unchanged, the integration could pass the queued publish and then fail when the daemon completion wrote a success/failure audit record.
+
+### Fix
+
+- Failure audit records now contain only `candidateId`, boolean `tagPushed`, a stable machine `resultCode`, and `workflowRunId` only when a positive id exists. Raw error strings remain on the Release publication diagnostic fields and are not copied into the security audit log.
+- Successful publication audit records now use the established structured keys: `candidateId`, `tagPushed`, `targetVersion`, `tagName`, `candidateSha`, `deployedSha` and `workflowRunId`. The full Actions URL is omitted from audit details; it remains on the Release publication record.
+- Added `tagPushed` and `workflowRunId` to the allowlist. `workflowRunId` must be a positive integer; `deployedSha` receives the same strict 40/64-hex validation as `candidateSha`.
+- Extended the existing Domain audit test for accepted/invalid publication metadata.
+- Extended the existing fresh-DbContext Application integration test to assert the persisted Published audit record contains exact Candidate/version/tag/deployed SHA/run id and excludes `workflowRunUrl` and free-form `error`.
+- No additional test facts were added; CI and release.yml TRX floors remain 2,771.
+
+**Implementation/test commits**
+- `0c47493b8c7b1f77ab56d19d25fa263c9b1fa481` — sanitize ReleasePublishCompletion audit fields.
+- `7f0f970f5c04ce42e334f6feabde57c5b3aadb34` — validate workflow run id and deployed SHA in audit metadata.
+- `32470c633fe1cc4a6d887e5890ba14311b1aae98` — extend audit metadata regression assertions.
+- `cb2c1d3fbb809b456720f933b1a59815937813f0` — assert exact sanitized audit evidence in the fresh-DbContext Publish integration test.
+
+### Validation state
+
+- CI #45983775039 is the pre-fix failure on `104bde53dbbef9825c1905b11a54126d1e37abff`; its audit failure was the first missing allowlisted key and did not exercise the later completion audit path.
+- Current code and tests are newer than that run. A new exact-head Linux/Windows/macOS CI is required.
+- No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
