@@ -5,7 +5,7 @@ using ProjectBeacon.Cli.Client.AgentHarness;
 public sealed class GitHubLandingMergeExecutorTests
 {
     [Fact]
-    public void MergeApiArguments_PinTheExactHeadAndRequestAnAncestryPreservingDirectMerge()
+    public void MergeApiArguments_PinTheExactHeadAndPreserveRepositoryMergeStrategy()
     {
         const string repository = "acme/project-beacon";
         const int pullRequestNumber = 42;
@@ -21,10 +21,10 @@ public sealed class GitHubLandingMergeExecutorTests
                 "--method", "PUT",
                 "repos/acme/project-beacon/pulls/42/merge-async",
                 "-f", "sha=" + expectedHeadSha,
-                "-f", "merge_method=merge",
                 "-f", "merge_action=default"
             },
             arguments);
+        Assert.DoesNotContain("merge_method", arguments);
         Assert.DoesNotContain("bypass_rules", arguments);
         Assert.DoesNotContain("--admin", arguments);
         Assert.DoesNotContain("--force", arguments);
