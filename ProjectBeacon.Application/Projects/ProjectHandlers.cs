@@ -278,7 +278,7 @@ public class DeleteProjectHandler : ICommandHandler<DeleteProjectCommand, Result
                     .AnyAsync(release => release.ProjectId == command.ProjectId, token);
                 if (hasReleaseHistory)
                     return Result.Failure<bool>(
-                        "This project contains release history and cannot be deleted. Preserve the releases and retire the project instead.",
+                        "This project contains release history and cannot be permanently deleted.",
                         ErrorKind.Conflict);
 
                 var taskIds = db.Tasks.IgnoreQueryFilters()
