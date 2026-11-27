@@ -1206,3 +1206,18 @@ Implementation commits: `8f9fece3675fedee0bb9b94e13a2454eef843316`, `d099ccedcc7
 Предыдущий точный зелёный CI #45962729055 проверял SHA `841dd90bbd1e5375558acb20d2b0515c828876d4`, не содержит permission hardening и новый tag-push test. Run #45971667573 проверяет SHA `59752b2379457389ffe2b722f5764830011915bf`, содержит least-privilege permissions, но не содержит новый ambiguous-push fix и ещё выполняет тесты. Требуется новый exact-head Linux/Windows/macOS CI после актуального journal commit.
 
 PR #230 остаётся open/unmerged. Live Merge Queue требует org-owned disposable repository; защиты `v*` и Environment `production` требуют admin verification. Не запускать production tag/deploy до завершения acceptance. SaaS Control Plane и billing не трогать.
+
+
+### Follow-up — полная проверка пары annotated-tag refs
+
+- Для annotated Git tag Git возвращает tag-object ref `refs/tags/<name>` и peeled commit ref `refs/tags/<name>^{}`. SHA самого tag object не является SHA Candidate commit.
+- Предыдущий helper использовал tag-object SHA как fallback для отсутствующего peeled ref. Это могло ошибочно принять неполный remote listing за доказательство отсутствия Candidate tag.
+- `MayHavePublishedTag` теперь получает отдельные признаки наличия обоих refs. Failed/malformed listing, отсутствие только одного ref или peeled target, равный Candidate SHA, означают «тег мог быть опубликован».
+- False допустим только для успешного корректного listing, где оба refs отсутствуют, либо присутствуют оба refs и peeled commit однозначно отличается от Candidate.
+- Если peeled ref отсутствует, но tag-object ref совпадает с уже локально проверенным annotated tag object SHA, existing-tag path может подтвердить target по локально проверенному object. Если object SHA не совпадает или tag ref отсутствует, состояние остаётся неопределённым/потенциально опубликованным.
+- После неоднозначного push неполная пара refs приводит к fetch в уникальный verification ref и проверке fetched annotated object. Финальная проверка использует ту же классификацию; SHA tag object больше никогда не сравнивается напрямую с SHA commit.
+- Регрессионная проверка расширена случаями отсутствующего tag ref, отсутствующего peeled ref и отсутствующего peeled target. Новых test facts нет; Linux TRX floor остаётся 2 768.
+
+Implementation commits: `36ee76e2891b54377e6be5c42c808cf60ad52ce1`, `3c06b5700a41f3f3c4bbde843224504ef0ddf0fc`. Test commits: `a0b0ed13f74e29f48427db0bb7355205f07d403c`, `d285d2bf1722a94f0187e806d7723ec53554b4ae`. Journal commit: `65471ad201f8cd387a2fc5794ff6bdad4b43b552`.
+
+Ранее запущенный CI #45972484561 проверяет предыдущий head `f1986015703297ad9c6c6f71aecc5198660d9868`, без follow-up по полной паре refs и последнего journal commit. Нужен новый exact-head CI на post-journal ветке.
