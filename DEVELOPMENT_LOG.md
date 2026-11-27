@@ -1842,3 +1842,15 @@ Implemented a fail-closed terminal outcome:
 - Added Web test coverage for a failed initial release load, a successful empty release list, and another Roadmap load failure.
 - This is a UI-state fix only; release candidate, tag and deployment behavior is unchanged.
 - The previous CI run (#45949826652) is green on the exact pre-fix head `fbd5d7d84a9e4aef6a0c66664316b0a280eb6d0b`; this new commit requires another exact-head CI run.
+
+
+## 2026-11-27 — Exact-head CI verification
+
+**Run:** [#45949826652](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45949826652)  
+**Validated SHA:** `fbd5d7d84a9e4aef6a0c66664316b0a280eb6d0b`  
+**Result:** success on Linux, Windows and macOS.
+
+- Linux: release-manifest policy tests, restore, build, EF pending-model-change check, all seven test modules, TRX guards and formatting passed. The EF diagnostic step was correctly skipped because there were no pending model changes.
+- Windows and macOS: restore, build, EF pending-model-change check, all seven test modules and formatting passed.
+- This run validates the integration of main and the first Roadmap failure-state fix. It predates the subsequent empty-state regression fix and its new tests in commit `c9981c12fb37a05e5bc950c17f53f2ca67919974`; the new head requires another CI run.
+- The repository's CI intentionally excludes PR `synchronize`. No PR merge is permitted on the basis of the earlier run alone.
