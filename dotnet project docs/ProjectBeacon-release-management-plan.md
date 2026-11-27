@@ -1234,3 +1234,30 @@ Implementation commits: `36ee76e2891b54377e6be5c42c808cf60ad52ce1`, `3c06b5700a4
 Exact-head CI [#45973251379](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45973251379) проверяет полный code/test/workflow head `65471ad201f8cd387a2fc5794ff6bdad4b43b552`, включая 2 768-result guard. На момент записи запуск ещё выполняется. Он предшествует journal-only commit этой записи; нельзя считать его success до завершения всех jobs. Новый exact-head run требуется после актуального журнала.
 
 Journal commit implementation branch: `d9a0eb767e586a89a4577da112b0e2b0b7239a9f`. PR #230 остаётся open/unmerged; production tag/deploy не выполняются. SaaS Control Plane и billing не затрагиваются.
+
+
+---
+
+## Дополнение — автоматический тест Least Privilege для Release workflow (27 ноября 2026)
+
+Добавлен standard-library Python unittest `scripts/test_release_workflow_permissions.py`. Он закрепляет минимальные GitHub Actions permissions и наличие merge-group trigger:
+
+- Workflow-level permissions должны быть ровно `contents: read`.
+- Единственный job с `packages: write` — `image`.
+- `client` получает только `contents: write` для GitHub Release assets.
+- `image` получает `contents: read, packages: write`; `scan` — `contents: read, packages: read`.
+- `tests` и `deploy` не получают `packages: write`.
+- `ci.yml` должен содержать `merge_group: types: [checks_requested]`.
+
+Тест запускается в авторитетном Linux job обычного CI и повторно в tag-triggered `release.yml` перед release manifest validation. Это защищает не только PR CI, но и будущую tag publication цепочку от возврата чрезмерных permissions.
+
+Implementation commits:
+- `342e5f3b3d6c9737fd3d970dcce945864fb1014a` — добавить контрактный тест.
+- `555cb8c4b92367197b7560f8170c4095f62da064` и `efd558a5b3a3123f3f7b7ab8cd0efc8b7e48905e` — исправить regex/newline assertion для merge_group.
+- `097d1d6a154d111291603194792478919975c5e3` — включить тест в CI.
+- `3b0722d8103bfa6bf66385643c6a7192a16845a7` — включить тест в release workflow.
+- Журнал implementation branch: `DEVELOPMENT_LOG.md`, commit `500c2e872239c9807920fc94ae67c66095164ab1`.
+
+TRX threshold остаётся 2 768: Python permission test не добавляет .NET test result. CI/release.yml TRX blocks должны оставаться одинаковыми.
+
+Тест и workflow steps новее последнего green CI #45962729055 и не проверены тем run. Run #45973571011 относится к более раннему SHA `d9a0eb767e586a89a4577da112b0e2b0b7239a9f`, не содержит permission test. Требуется новый exact-head Linux/Windows/macOS CI на post-journal PR head. Tag/deploy не запускать до завершения внешнего acceptance. SaaS Control Plane и billing вне scope.
