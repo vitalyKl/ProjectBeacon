@@ -1974,3 +1974,33 @@ Implemented a fail-closed terminal outcome:
 1. Re-run exact-head CI after this journal-only commit.
 2. Continue static review of the publication/deployment workflow and add focused regression tests only for confirmed gaps.
 3. Complete live merge-queue and publication-protection acceptance when the required repository access is available.
+
+
+## 2026-11-27 — Require ancestry-preserving merge strategy for release PRs
+
+**Implementation commits**
+- 1ad4fdddc082de8b3b7b3ed884226ca1c6d714be — request merge_method=merge for direct GitHub async merges while retaining merge_action=default for queue selection.
+- 2b765b00d811db207c42f82a0f76df723a1b4db8 — assert the exact merge method in the async merge request regression test.
+- 78b216b4c43c50fe129360b56c86c4c7597ab091 — document the required merge method in generated Release PRs and give a specific VerifyLanding failure for squash/rebase strategies.
+- 08eebcc7a769ad9a2a23a74139f0f923d0bfc13a — clarify the release workflow's fail-closed diagnostic when the original preparation commit/trailer is absent.
+
+### Why this is required
+
+- ReleasePrepare persists the exact source commit and Beacon-Release: <releaseId> trailer. VerifyLanding requires that commit to be an ancestor of the remote target branch; the tag workflow independently locates the preparation commit and validates its trailer and changed-path scope.
+- A local Git integration check confirmed that a merge commit preserves the original ReleasePrepare SHA in ancestry and git log -1 HEAD -- .beacon/release.json locates the original preparation commit. A squash commit creates a new one-parent commit and the original ReleasePrepare SHA is not an ancestor. Rebase similarly rewrites commit SHA identity.
+- GitHub repository metadata currently allows merge commits, rebase and squash. The connected integration cannot read the branch protection / merge queue settings needed to see which merge method is configured for main.
+- GitHub's asynchronous merge API accepts merge_method for direct merges; merge queues use their administrator-selected merge method. Therefore the request now explicitly asks for merge commits on the direct path, while the generated Release PR warns that any merge queue must be configured with its Merge method set to merge.
+- VerifyLanding still independently checks ancestry and fails closed if the original ReleasePrepare commit is absent. The tag workflow also refuses to accept a squash/rebase rewrite without the original trailer; no tag or deployment is performed.
+
+### Validation state
+
+- The preceding exact-head CI #45955852379 passed on implementation SHA e02e4d7579c3251e7b6ee5b82c8eaf7fc4611ad9.
+- The merge-strategy changes above are newer than that successful run and require a fresh exact-head Linux/Windows/macOS CI run.
+- Live merge-queue acceptance remains blocked on administrator access to configure/verify the queue Merge method. Do not merge a Release PR through a queue until it is confirmed to use merge.
+- No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Re-run the full cross-platform CI on the current head after this journal entry.
+2. Verify that the repository's merge queue uses the merge method and complete the live queue acceptance in a disposable repository.
+3. Continue release workflow end-to-end acceptance for Candidate, Publish, deployment verification and failure recovery.
