@@ -158,6 +158,48 @@ public sealed class ProjectVersionPolicyCatalogTests
     }
 
     [Fact]
+    public void ExtractJsonPointer_SupportsRootAndEscapedObjectKeys()
+    {
+        var policy = new ProjectVersionPolicy("NumericComponents", 4, null, "v{version}", false, []);
+        var root = new ProjectVersionSourcePolicy("version.json", "Json", "");
+        var escaped = new ProjectVersionSourcePolicy("package.json", "Json", "/a~1b/m~0n");
+
+        Assert.True(ProjectVersionPolicyCatalog.Validate(policy with { Sources = [root, escaped] }, out var policyError), policyError);
+        Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, root, """"0.7.5.8"""", out var rootVersion, out var rootError), rootError);
+        Assert.Equal("0.7.5.8", rootVersion);
+        Assert.True(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, escaped, """{"a/b":{"m~n":"0.7.5.8"}}""", out var escapedVersion, out var escapedError), escapedError);
+        Assert.Equal("0.7.5.8", escapedVersion);
+    }
+
+    [Theory]
+    [InlineData("/version~")]
+    [InlineData("/version~2name")]
+    [InlineData("/version~~0")]
+    public void Validate_RejectsInvalidJsonPointerEscapeSequences(string selector)
+    {
+        var policy = new ProjectVersionPolicy(
+            "NumericComponents", 4, null, "v{version}", false,
+            [new ProjectVersionSourcePolicy("package.json", "Json", selector)]);
+
+        Assert.False(ProjectVersionPolicyCatalog.Validate(policy, out _));
+    }
+
+    [Theory]
+    [InlineData("/versions/00")]
+    [InlineData("/versions/٠")]
+    [InlineData("/versions/1")]
+    public void ExtractJsonPointer_RejectsInvalidOrOutOfRangeArrayIndexes(string selector)
+    {
+        var policy = new ProjectVersionPolicy("NumericComponents", 4, null, "v{version}", false, []);
+        var source = new ProjectVersionSourcePolicy("package.json", "Json", selector);
+
+        Assert.False(ProjectVersionPolicyCatalog.TryExtractVersion(
+            policy, source, """{"versions":["0.7.5.8"]}""", out _, out _));
+    }
+
+    [Fact]
     public void ProjectOfficialVersion_CanOnlyBeInitializedOnceOutsideReleaseFlow()
     {
         var project = Project.Create("Versioned project", null, Guid.NewGuid());
