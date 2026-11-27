@@ -103,7 +103,7 @@
     <value>模板</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>保存使用模型的方式。模型列表仍属于此账户。</value>
+    <value>工作站配置：设置 AgentProvider 模式以及 Planner/Actor/Review 角色的默认模型绑定。当任务阶段没有单独配置模型时，会使用这些角色模型作为后备；下方任务类型中为阶段配置的模型优先。</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>新建模板</value>
@@ -223,7 +223,7 @@
     <value>任务类型</value>
   </data>
 <data name="TaskKindsLead" xml:space="preserve">
-    <value>类型决定工作如何完成。决策模型负责规划和复查。工作模型处理短片段，例如一张截图。</value>
+    <value>任务工作流模板会复制到每个新任务。决策模型和工作模型分别为常规阶段和扇出阶段提供默认值；阶段级模型会覆盖这些默认值。阶段模型优先于工作站角色绑定。</value>
   </data>
 <data name="TaskKindNew" xml:space="preserve">
     <value>新建类型</value>
@@ -241,13 +241,13 @@
     <value>决策模型</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>规划工作并阅读片段复查。</value>
+    <value>用于未拆分为并行子任务的阶段的默认模型。若阶段单独配置了模型，则以阶段配置为准。</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>工作模型</value>
   </data>
 <data name="WorkerModelHint" xml:space="preserve">
-    <value>阶段被拆成子任务时使用。留空则使用决策模型。</value>
+    <value>用于拆分为并行子任务的阶段的默认模型。若未设置，则使用决策模型；阶段级模型仍具有更高优先级。</value>
   </data>
 <data name="PhaseTitle" xml:space="preserve">
     <value>阶段</value>
@@ -388,7 +388,7 @@
     <value>العربية</value>
   </data>
 <data name="Lang_hi" xml:space="preserve">
-    <value>हिन्दī</value>
+    <value>हिन्दी</value>
   </data>
 <data name="Lang_th" xml:space="preserve">
     <value>ไทย</value>
@@ -1009,7 +1009,7 @@
     <value>流水线</value>
   </data>
 <data name="PipelineNotStarted" xml:space="preserve">
-    <value>流水线尚未开始。</value>
+    <value>此任务尚未启动。启动任务后将创建其 Planner 会话并开始执行。</value>
   </data>
 <data name="StagePlanning" xml:space="preserve">
     <value>规划</value>
@@ -1727,8 +1727,7 @@
     <value>工作站</value>
   </data>
 <data name="FolderExample" xml:space="preserve">
-    <value>C:\\work\
-orthstar</value>
+    <value>C:\work\northstar</value>
   </data>
 <data name="ChatNeedsFolder" xml:space="preserve">
     <value>聊天前请在仪表板上附加项目文件夹。</value>
@@ -2025,7 +2024,7 @@ orthstar</value>
     <value>极高</value>
   </data>
 <data name="ChatModelReady" xml:space="preserve">
-    <value>模型就絢： {0}</value>
+    <value>模型已就绪：{0}</value>
   </data>
 <data name="ChatModelSwitching" xml:space="preserve">
     <value>正在切换模型： {0}</value>
@@ -2181,7 +2180,7 @@ orthstar</value>
     <value>更新守护进程</value>
   </data>
   <data name="UpdateDaemonConfirm" xml:space="preserve">
-    <value>要更新此工作站上的 Beacon 客户端吗？</value>
+    <value>要安装工作站客户端版本 {0} 吗？守护进程将自动重启。</value>
   </data>
   <data name="UpdateDaemonNow" xml:space="preserve">
     <value>立即更新</value>
@@ -3282,15 +3281,6 @@ orthstar</value>
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>合并可能已经进入目标分支，但合并后验证失败或无法确认。请求 revert 前请先检查目标分支。</value>
   </data>
-  <data name="LandingReasonGitHubMergePending" xml:space="preserve">
-    <value>GitHub 已接受异步合并请求，正在处理中，尚未确认进入合并队列。Beacon 确认合并提交和合并后检查之前，任务会保持未完成状态。</value>
-  </data>
-  <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
-    <value>GitHub 已将 PR 加入合并队列，正在等待 GitHub 完成合并。Beacon 确认合并提交和合并后检查之前，任务会保持未完成状态。</value>
-  </data>
-  <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
-    <value>GitHub 拒绝了异步合并请求。请检查合并队列失败原因，完成所需更改后重新请求 landing 预览。</value>
-  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>合并尝试返回了界面无法识别的原因。请检查工作站日志，并向支持人员提供下面的诊断 ID。</value>
   </data>
@@ -3366,132 +3356,209 @@ orthstar</value>
   <data name="Recover" xml:space="preserve">
     <value>恢复</value>
   </data>
-<data name="ProjectAutoSyncLabel" xml:space="preserve"><value>自动同步远程仓库</value></data>
-<data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon 会定期获取此项目的上游更新，并且仅在工作区干净且空闲时执行 fast-forward。现有本地修改、历史分叉、Detached HEAD 和正在运行的代理会话均会保留。不会强制覆盖或删除现有本地标签。</value></data>
-<data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>请连接运行支持 AutoSync 的 Beacon 客户端的工作站以启用此设置。</value></data>
-<data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>项目版本策略</value></data>
-<data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon 保存项目的权威版本，并将其与配置的仓库清单文件进行核对。仓库文件只是投影；普通任务中的代理不能发布或更改正式版本。</value></data>
-<data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>无法加载版本策略。</value></data>
-<data name="OfficialProjectVersion" xml:space="preserve"><value>正式版本</value></data>
-<data name="VersionNotInitialized" xml:space="preserve"><value>尚未初始化</value></data>
-<data name="VersionScheme" xml:space="preserve"><value>版本方案</value></data>
-<data name="VersionSchemeNumeric" xml:space="preserve"><value>数字组件</value></data>
-<data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
-<data name="VersionSchemeCalendar" xml:space="preserve"><value>日历版本</value></data>
-<data name="VersionComponentCount" xml:space="preserve"><value>数字组件数量</value></data>
-<data name="VersionCalendarFormat" xml:space="preserve"><value>日历格式</value></data>
-<data name="VersionTagPattern" xml:space="preserve"><value>Git 标签模式</value></data>
-<data name="VersionTagPatternHelp" xml:space="preserve"><value>必须且只能包含一个 {version} 占位符，例如 v{version}。</value></data>
-<data name="VersionAllowPrerelease" xml:space="preserve"><value>允许 SemVer 预发布版本</value></data>
-<data name="VersionManifestSources" xml:space="preserve"><value>版本清单来源</value></data>
-<data name="VersionManifestSourcesHelp" xml:space="preserve"><value>每行一个来源：path|Format|selector。例如：Directory.Build.props|Xml|//Version；package.json|Json|/version；pyproject.toml|Toml|project.version。Regex 使用命名组 (?&lt;version>...) 或第一个捕获组。</value></data>
-<data name="InitialOfficialVersion" xml:space="preserve"><value>初始化正式版本</value></data>
-<data name="InitialOfficialVersionHelp" xml:space="preserve"><value>此值只能初始化一次。之后更改正式版本必须通过 ReleasePrepare 工作流。</value></data>
-<data name="SaveVersionPolicy" xml:space="preserve"><value>保存版本策略</value></data>
-<data name="VersionSourceLineInvalid" xml:space="preserve"><value>每个来源必须采用 path|Format|selector 格式。</value></data>
-<data name="ProjectVersionScheme" xml:space="preserve"><value>版本方案</value></data>
-<data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>语义化版本 (SemVer)</value></data>
-<data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>数字组件</value></data>
-<data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>日历版本</value></data>
-<data name="ProjectVersionComponentCount" xml:space="preserve"><value>数字组件数量（1–8）</value></data>
-<data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>日历格式（.NET 不变区域性日期格式）</value></data>
-<data name="ProjectVersionCalendarFormatHelp" xml:space="preserve"><value>必需令牌：yyyy、MM、dd；可选令牌：HH、mm、ss。支持的分隔符：. - / _ 空格 : T Z。示例：yyyy.MM.dd、yyyyMMdd、yyyy-MM-ddTHH:mm:ssZ。</value></data>
-<data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git 标签模板</value></data>
-<data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>必须且只能包含一个 {version} 占位符，例如 v{version}。</value></data>
-<data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>允许 SemVer 预发布版本</value></data>
-<data name="ProjectOfficialVersion" xml:space="preserve"><value>项目正式版本（以 Beacon 为权威来源）</value></data>
-<data name="ProjectVersionInitialVersion" xml:space="preserve"><value>初始正式版本</value></data>
-<data name="ProjectVersionSources" xml:space="preserve"><value>版本文件投影</value></data>
-<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>每行一个来源：相对路径|Xml、Json、Toml 或 Regex|选择器。XML 仅支持绝对元素路径和后代路径，例如 /Project/PropertyGroup/Version 或 //Version。JSON 使用 JSON Pointer；TOML 使用点分隔键路径，结果必须是字符串或整数。Regex 仅支持 .NET/Python 的通用子集：必须且只能有一个捕获组（(?&lt;version&gt;...) 或第 1 组），并且只允许非捕获组和前瞻。支持的转义包括 \d、\D、\s、\S、\t、\r、\n、\f、\v、\A 和 \z；命名反向引用 \k&lt;version&gt; 必须位于命名捕获组之后。不支持后顾、内联选项、\w/\W/\b/\B、Unicode 类别、数字反向引用以及嵌套/相减字符类。准备 Candidate 前至少需要一个来源；如果目前只计划 Release，可以稍后配置。文件必须位于项目 workspace 内。</value></data>
-<data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>只有项目 Owner 和 Admin 可以修改版本策略。</value></data>
-<data name="ProjectVersionSave" xml:space="preserve"><value>保存版本策略</value></data>
-<data name="ProjectVersionSaved" xml:space="preserve"><value>版本策略已保存</value></data>
-<data name="NotConfigured" xml:space="preserve"><value>未配置</value></data>
-<data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>为此项目启用发布管理</value></data>
-<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>启用后，Roadmap 会显示 Release，并允许将多个 Milestone 归入一个 Release。任务通过所属 Milestone 继承 Release 上下文。请先在上方配置版本方案和清单文件投影。此功能默认关闭；启用不会自动发布或部署。</value></data>>
-  <data name="ProjectReleases" xml:space="preserve"><value>项目发布</value></data>
-  <data name="Releases" xml:space="preserve"><value>个发布</value></data>
-  <data name="NewRelease" xml:space="preserve"><value>新建发布</value></data>
-  <data name="ReleaseName" xml:space="preserve"><value>发布名称</value></data>
-  <data name="ReleaseTargetVersion" xml:space="preserve"><value>目标版本</value></data>
-  <data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>可选。必须符合项目设置中配置的版本方案。</value></data>
-  <data name="ReleaseTargetBranch" xml:space="preserve"><value>目标分支</value></data>
-  <data name="ReleaseStart" xml:space="preserve"><value>开始</value></data>
-  <data name="ReleaseMarkCandidate" xml:space="preserve"><value>标记为候选版本</value></data>
-  <data name="CancelRelease" xml:space="preserve"><value>取消发布</value></data>
-  <data name="ReleaseCreated" xml:space="preserve"><value>已创建发布</value></data>
-  <data name="ReleaseDeleted" xml:space="preserve"><value>已删除发布</value></data>
-  <data name="MilestoneRelease" xml:space="preserve"><value>发布</value></data>
-  <data name="NoRelease" xml:space="preserve"><value>未分配到发布</value></data>
-  <data name="NoReleases" xml:space="preserve"><value>此项目尚未创建任何发布。</value></data>
-  <data name="ReleaseStatusPlanned" xml:space="preserve"><value>计划中</value></data>
-  <data name="ReleaseStatusInProgress" xml:space="preserve"><value>进行中</value></data>
-  <data name="ReleaseStatusCandidate" xml:space="preserve"><value>候选</value></data>
-  <data name="ReleaseStatusPublished" xml:space="preserve"><value>已发布</value></data>
-  <data name="ReleaseStatusCancelled" xml:space="preserve"><value>已取消</value></data>
-
-  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>只有在版本策略、影响声明、landing 和验证检查全部通过后，ReleasePrepare 才会创建 Candidate。</value></data>
-  <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>生产版本端点</value></data>
-  <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>以 /v1/version 结尾的 HTTPS URL。发布工作流成功后，Beacon 会检查此端点，并要求 version 和 gitSha 与 Candidate 完全一致。</value></data>
-  <data name="CreateHotfixTask" xml:space="preserve"><value>创建 Hotfix 任务</value></data>
-  <data name="HotfixTaskTitle" xml:space="preserve"><value>Hotfix 任务标题</value></data>
-  <data name="HotfixTaskDescription" xml:space="preserve"><value>描述生产环境问题及所需修复</value></data>
-  <data name="HotfixTaskCreated" xml:space="preserve"><value>已从已部署的 Release 创建 Hotfix 任务</value></data>
-  <data name="HotfixSourceRelease" xml:space="preserve"><value>来源 Release</value></data>
-  <data name="HotfixDeployedVersion" xml:space="preserve"><value>已部署版本</value></data>
-  <data name="HotfixDeployedSha" xml:space="preserve"><value>部署到生产环境的提交</value></data>
-  <data name="HotfixDeploymentRun" xml:space="preserve"><value>打开部署工作流运行</value></data>
-  <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Hotfix 的向前移植任务</value></data>
-  <data name="HotfixTasks" xml:space="preserve"><value>Hotfix 与向前移植任务</value></data>
-  <data name="HotfixOriginNotice" xml:space="preserve"><value>此任务基于实际部署到生产环境的确切提交。Beacon 会保护其来源分支和基础提交。</value></data>
-  <data name="ForwardPortNotice" xml:space="preserve"><value>此普通任务是在来源 Hotfix 确认成功落地后创建的。请通过标准 Planner、Actor、Reviewer 和 landing 流程完成。</value></data>
-  <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release 流程：先在项目设置中配置权威版本和清单文件，然后在此创建 Release，并将 Milestone 关联到该 Release。关联 Milestone 的任务会在 Planner 上下文中获得目标版本和目标分支。Release 准备阶段会创建不可变 Candidate；生产发布是单独且需要明确确认的操作。</value></data>
-  <data name="PrepareReleaseCandidate" xml:space="preserve"><value>准备 Candidate</value></data>
-  <data name="ReleasePreparationPullRequest" xml:space="preserve"><value>打开发布 Pull Request</value></data>
-  <data name="VerifyReleaseLanding" xml:space="preserve"><value>验证 Landing</value></data>
-  <data name="ReleasePreparationInProgress" xml:space="preserve"><value>正在固定的工作站上准备发布。</value></data>
-  <data name="ReleasePrepareQueued" xml:space="preserve"><value>已在固定的工作站上排队执行发布准备。</value></data>
-  <data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>已在同一工作站上排队执行 Landing 验证。</value></data>
-  <data name="PublishRelease" xml:space="preserve"><value>发布到生产环境</value></data>
-  <data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>确认发布到生产环境</value></data>
-  <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>要将发布“{0}”以版本 {1}、标签“{2}”从分支“{3}”发布吗？此操作会创建不可变的 Git 标签并启动可能部署到生产环境的 GitHub 发布工作流。已推送的标签不会被移动或删除；重试会使用相同的 Candidate 和标签。</value></data>
-  <data name="ReleasePublicationQueued" xml:space="preserve"><value>已在固定的工作站上排队发布。Beacon 将验证 GitHub 工作流以及实际部署的版本/SHA。</value></data>
-  <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>不可变的发布标签已推送。重试不会移动该标签。</value></data>
-  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>版本影响</value></data>
-  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Actor 尚未声明此任务对版本的影响。</value></data>
-  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>已声明的影响</value></data>
-  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Actor 的理由</value></data>
-  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Reviewer 决定</value></data>
-  <data name="TaskVersionImpactNone" xml:space="preserve"><value>不改变版本</value></data>
-  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
-  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
-  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
-  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>已确认</value></data>
-  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>有异议</value></data>
-  <data name="TaskVersionImpactPending" xml:space="preserve"><value>等待 Reviewer</value></data>
-<data name="ChatPollingUnavailable" xml:space="preserve">
+  <data name="ChatPollingUnavailable" xml:space="preserve">
     <value>聊天实时更新暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
   </data>
-<data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
     <value>多次尝试后仍无法刷新任务和仓库状态。当前显示的信息可能已过期，系统会自动继续刷新。</value>
   </data>
-<data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
     <value>无法恢复与待处理仓库同步命令的连接。再次启动同步前，请检查任务和工作站状态。</value>
   </data>
-<data name="ProxyStatusUnavailable" xml:space="preserve">
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>聊天模型的运行状态暂时不可用。聊天仍可继续使用，但模型就绪状态可能已过期。</value>
   </data>
-<data name="ChatTaskContextUnavailable" xml:space="preserve">
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
     <value>无法加载此聊天的任务上下文。您仍可在不使用该上下文的情况下继续对话。</value>
   </data>
-<data name="TaskLoadUnavailable" xml:space="preserve">
+  <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>无法加载任务。任务详情服务当前不可用。此页面保持打开时将自动重试。诊断 ID：{0}</value>
   </data>
-<data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
     <value>无法加载工作站指标。请检查工作站连接后重试。诊断 ID：{0}</value>
   </data>
-<data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>等待您处理的任务列表暂时不可用。聊天仍可正常使用，页面会自动重试。</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>外观</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>切换到浅色主题</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>切换到深色主题</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>创建项目、重命名当前打开的项目，或删除你有管理权限的项目。</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>删除项目</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>删除 {0}？其任务、上下文和成员也会被删除。</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>项目已保存。</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>项目已删除。</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>项目名称不能为空。</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>打开</value>
+  </data>
+  <data name="ServerCompileNoTree" xml:space="preserve">
+    <value>服务器端编译不包含工作树。代理简报会在工作站上补充。</value>
+  </data>
+  <data name="MilestoneCounts" xml:space="preserve">
+    <value>{0} 个未完成 · {1} 个已关闭</value>
+  </data>
+  <data name="ReportTaskCount" xml:space="preserve">
+    <value>{0} 个任务</value>
+  </data>
+  <data name="SubtaskReported" xml:space="preserve">
+    <value>已报告</value>
+  </data>
+  <data name="MoreTasks" xml:space="preserve">
+    <value>另有 {0} 项</value>
+  </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>操作</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>智能分析</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>治理</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>审查</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>代理聊天</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>搜索或执行命令</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>命令面板</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>搜索页面</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>没有匹配的命令</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>工作站运行正常</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>工作站需要关注</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>工作站离线</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>没有工作站</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>{0} 台工作站 · {1} 台在线</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>当前项目概览</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>在看板上处理工作</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>未显示在看板上的任务</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>里程碑</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>项目知识</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>已记录的决策</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>看板快照</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>代理会话</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>代理设置</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>运行代理的设备</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>此项目</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>账户</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>模型连接</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>任务</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>创建项目</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>{0} 项需要关注</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>正在运行</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>当前没有进行中的工作。</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>需要关注</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>当前没有需要关注的事项。</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>系统负载</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>尚无工作站报告 CPU、内存或 GPU 负载。</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>工作站群运行状态</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>下一步</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>验证与执行是分开的。批准操作只会完成审查，不会完成工作记录。</value>
+  </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>当前项目</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>目标</value>
   </data>
   <data name="ReleasePreparationFailedSummary" xml:space="preserve">
     <value>发布准备未能完成。请查看下方诊断信息，解决原因后重试。</value>

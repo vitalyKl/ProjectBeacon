@@ -124,7 +124,7 @@
     <value>Шаблоны</value>
   </data>
 <data name="AgentTemplatesLead" xml:space="preserve">
-    <value>Профиль рабочей станции: задаёт режим AgentProvider и модели ролей Planner/Actor/Review по умолчанию. Эти модели используются как резервные, если для фазы задачи не назначена отдельная модель; настройки типа задачи ниже имеют приоритет.</value>
+    <value>Профиль рабочей станции: задаёт режим AgentProvider и модели ролей Planner/Actor/Review по умолчанию. Эти модели используются как резервные, если для семантической фазы задачи не настроена отдельная модель; модели фаз, заданные ниже в видах задач, имеют приоритет.</value>
   </data>
 <data name="AgentTemplateNew" xml:space="preserve">
     <value>Новый шаблон</value>
@@ -262,7 +262,7 @@
     <value>Модель решений</value>
   </data>
 <data name="DecisionModelHint" xml:space="preserve">
-    <value>Модель по умолчанию для фаз без параллельного разбиения. Модель, заданная непосредственно у фазы, имеет приоритет.</value>
+    <value>Модель по умолчанию для фаз, не разделённых на параллельные подзадачи. Модель, настроенная непосредственно для фазы, имеет приоритет.</value>
   </data>
 <data name="WorkerModel" xml:space="preserve">
     <value>Модель работников</value>
@@ -1604,7 +1604,7 @@
     <value>Рабочей станции ещё нет. Добавьте устройство в настройках и запустите beacon.exe.</value>
   </data>
 <data name="DeviceOfflineHint" xml:space="preserve">
-    <value>Устройство не в сети. Запустите beacon client и дождитесь статуса «Подключено».</value>
+    <value>Устройство не в сети. Запустите artifacts/daemon-win-x64/beacon.exe (или beacon client) и дождитесь статуса «Подключено».</value>
   </data>
 <data name="BrowseOnDeviceHint" xml:space="preserve">
     <value>Список папок берётся с выбранной рабочей станции, не из этого браузера.</value>
@@ -1625,10 +1625,10 @@
     <value>Папка проекта сохранена на этом устройстве.</value>
   </data>
 <data name="HowToAddModel" xml:space="preserve">
-    <value>Llama.cpp: положите GGUF в каталог локальных моделей в настройках и нажмите «Выбрать GGUF». Остальным типам нужна команда запуска. Сохранение регистрирует модель, «Применить на устройстве» пишет конфиг AgentProvider.</value>
+    <value>Llama.cpp: поместите файлы GGUF в каталог локальных моделей в разделе «Настройки», затем нажмите «Выбрать GGUF». Для других типов укажите ID модели в разделе «Дополнительно». Сохранение регистрирует модель; кнопка «Применить на устройстве» записывает конфигурацию агента.</value>
   </data>
 <data name="ModelSaveHint" xml:space="preserve">
-    <value>llama-swap подхватит реестр на следующем heartbeat клиента. Чтобы AgentProvider увидел модель, нажмите «Применить на устройстве». Само по себе это задачу не запускает.</value>
+    <value>llama-swap подхватит реестр при следующем heartbeat клиента. Чтобы агент увидел модель, её необходимо применить на устройстве. Ни одно из этих действий не запускает задачу.</value>
   </data>
 <data name="LaunchCommandRequired" xml:space="preserve">
     <value>Для этого типа бэкенда нужна команда запуска.</value>
@@ -1643,10 +1643,10 @@
     <value>Само ничего не запускается. Укажите папку на панели управления, добавьте модель в настройках, затем запустите пайплайн или завершите задачу через MCP finish_work.</value>
   </data>
 <data name="NextStepCreateSubtask" xml:space="preserve">
-    <value>Создайте подзадачу и запустите сессию актора. «Запустить» только помечает сессию активной в Beacon и не стартует AgentProvider.</value>
+    <value>Создайте подзадачу, затем запустите сессию Actor. Команда «Запустить сессию» лишь помечает её как активную в Beacon — сам агент не запускается.</value>
   </data>
 <data name="LaunchSessionHint" xml:space="preserve">
-    <value>Запуск сессии меняет статус в базе. AgentProvider при этом не стартует.</value>
+    <value>Команда «Запустить сессию» обновляет статус в базе данных, но не запускает агента.</value>
   </data>
 <data name="NoAgentSessionsHint" xml:space="preserve">
     <value>Нет активных сессий пайплайна. Модели сами задачи не начинают: откройте задачу и запустите пайплайн или используйте MCP.</value>
@@ -1688,7 +1688,7 @@
     <value>Чатов пока нет.</value>
   </data>
 <data name="ChatEmptyHint" xml:space="preserve">
-    <value>Начните чат. AgentProvider работает на станции через beacon client.</value>
+    <value>Начните чат. Агент работает на рабочей станции через beacon client.</value>
   </data>
 <data name="Message" xml:space="preserve">
     <value>Сообщение</value>
@@ -2027,10 +2027,10 @@
     <value>К последнему</value>
   </data>
 <data name="ChatReasoningEffort" xml:space="preserve">
-    <value>Уроеен рассуждений</value>
+    <value>Уровень рассуждений</value>
   </data>
 <data name="ChatEffortDefault" xml:space="preserve">
-    <value>По умольаний</value>
+    <value>По умолчанию</value>
   </data>
 <data name="ChatEffortLow" xml:space="preserve">
     <value>Низкий</value>
@@ -2048,10 +2048,10 @@
     <value>Модель готова: {0}</value>
   </data>
 <data name="ChatModelSwitching" xml:space="preserve">
-    <value>Перекление модели: {0}</value>
+    <value>Переключение модели: {0}</value>
   </data>
 <data name="ChatUsageSpeed" xml:space="preserve">
-    <value>{0} Вок/с</value>
+    <value>{0} ток./с</value>
   </data>
 <data name="ChatModelNotLoaded" xml:space="preserve">
     <value>Модель не загружена: {0}</value>
@@ -2108,10 +2108,10 @@
     <value>Изменение вступит в силу после перезапуска клиента рабочей станции.</value>
   </data>
 <data name="AgentRuntimeActive" xml:space="preserve">
-    <value>Фактически запущенный харнес</value>
+    <value>Текущая среда выполнения</value>
   </data>
 <data name="AgentRuntimePendingRestart" xml:space="preserve">
-    <value>Выбранный харнес отличается от запущенного на этой рабочей станции. Перезапустите клиент рабочей станции, чтобы применить выбор.</value>
+    <value>Выбранная среда выполнения отличается от той, которая сейчас запущена на этой рабочей станции. Перезапустите клиент рабочей станции, чтобы применить выбор.</value>
   </data>
 <data name="AgentRuntimeUnavailable" xml:space="preserve">
     <value>Недоступен</value>
@@ -2159,7 +2159,7 @@
 <data name="LandingFooterTagline" xml:space="preserve"><value>Локальная система управления AI-разработкой</value></data>
 
 <data name="PipelineStartHint" xml:space="preserve"><value>Запускает Planner для анализа задачи и подготовки плана выполнения.</value></data>
-<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это настройки рабочей станции и модели ролей по умолчанию. В pipeline они используются только если для соответствующей фазы задачи не задана отдельная модель.</value></data>
+<data name="AgentTemplateModelsScopeHint" xml:space="preserve"><value>Это значения ролей по умолчанию для рабочей станции и настройки AgentProvider. В сессиях конвейера привязки ролей используются только в том случае, если для семантической фазы задачи не настроена собственная модель.</value></data>
 <data name="TaskKindModelsScopeHint" xml:space="preserve"><value>Это выбор моделей для pipeline задач. Значения по умолчанию для решений/работников и модели отдельных фаз имеют приоритет над привязками ролей рабочей станции.</value></data>
 <data name="DaemonUpdates" xml:space="preserve"><value>Обновление демона</value></data>
 <data name="DaemonUpdateDescription" xml:space="preserve"><value>Проверка и установка последней версии клиента ProjectBeacon без ручной замены папки установки.</value></data>
@@ -2170,7 +2170,7 @@
 <data name="CheckDaemonUpdates" xml:space="preserve"><value>Проверить обновления</value></data>
 <data name="UpdateDaemonNow" xml:space="preserve"><value>Обновить демон</value></data>
 <data name="DaemonUpdateRequiresOnline" xml:space="preserve"><value>Для проверки и установки обновлений рабочая станция должна быть в сети.</value></data>
-<data name="UpdateDaemonConfirm" xml:space="preserve"><value>Установить версию клиента {0}? Демон автоматически перезапустится.</value></data>
+<data name="UpdateDaemonConfirm" xml:space="preserve"><value>Установить версию клиента рабочей станции {0}? Демон перезапустится автоматически.</value></data>
 <data name="DaemonUpdateScheduled" xml:space="preserve"><value>Обновление проверено и запланировано. Клиент рабочей станции перезапускается.</value></data>
 <data name="CheckClientUpdate" xml:space="preserve"><value>Проверить обновления демона</value></data>
 <data name="UpdateClient" xml:space="preserve"><value>Обновить демон</value></data>
@@ -2315,7 +2315,7 @@
     <value>Отменить редактирование</value>
   </data>
   <data name="McpPipelineAllowlistHint" xml:space="preserve">
-    <value>Имена инструментов в harness имеют вид mcp_&lt;сервер&gt;_&lt;инструмент&gt;. Чтобы разрешить их в pipeline, добавьте точное имя или mcp_&lt;сервер&gt;_* в Allowed MCP Tools у подзадачи Actor.</value>
+    <value>Имена инструментов публикуются в формате mcp_&lt;server&gt;_&lt;tool&gt;. Чтобы разрешить их в конвейерах задач, добавьте точное имя или шаблон mcp_&lt;server&gt;_* в список Allowed MCP Tools подзадачи Actor.</value>
   </data>
   <data name="TaskCurrentActivity" xml:space="preserve">
     <value>Текущая активность</value>
@@ -3264,15 +3264,6 @@
   <data name="LandingReasonPostMergeVerificationFailed" xml:space="preserve">
     <value>Слияние могло уже попасть в целевую ветку, но проверка после слияния завершилась ошибкой или её результат не удалось подтвердить. Проверьте целевую ветку, прежде чем запрашивать откат.</value>
   </data>
-  <data name="LandingReasonGitHubMergePending" xml:space="preserve">
-    <value>GitHub принял асинхронный запрос на слияние и ещё обрабатывает его. Появление PR в merge queue пока не подтверждено. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
-  </data>
-  <data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
-    <value>GitHub поместил PR в merge queue. Ожидается завершение слияния на стороне GitHub. Задача останется открытой, пока Beacon не подтвердит итоговый коммит и проверку после слияния.</value>
-  </data>
-  <data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
-    <value>GitHub отклонил асинхронный запрос на слияние. Проверьте причину отказа merge queue, внесите необходимые изменения и запросите новый предварительный просмотр слияния.</value>
-  </data>
   <data name="LandingReasonUnknown" xml:space="preserve">
     <value>Попытка слияния вернула причину, которую интерфейс пока не распознаёт. Проверьте журнал рабочей станции и передайте службе поддержки диагностический ID ниже.</value>
   </data>
@@ -3348,132 +3339,194 @@
   <data name="Recover" xml:space="preserve">
     <value>Восстановить</value>
   </data>
-<data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Автоматически синхронизировать с удалённым репозиторием</value></data>
-<data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon периодически получает изменения из upstream и выполняет fast-forward только для чистого репозитория без активной работы. Локальные изменения, расхождение истории, detached HEAD и активные сессии агентов не затрагиваются. Существующие локальные теги не перезаписываются и не удаляются.</value></data>
-<data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Для включения настройки подключите рабочую станцию с версией клиента Beacon, поддерживающей AutoSync.</value></data>
-<data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>Политика версионирования проекта</value></data>
-<data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon хранит официальную версию проекта и сверяет с ней настроенные version-файлы репозитория. Файлы репозитория являются проекциями; обычные сессии агентов не могут публиковать или менять официальную версию.</value></data>
-<data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>Не удалось загрузить политику версионирования.</value></data>
-<data name="OfficialProjectVersion" xml:space="preserve"><value>Официальная версия</value></data>
-<data name="VersionNotInitialized" xml:space="preserve"><value>Не задана</value></data>
-<data name="VersionScheme" xml:space="preserve"><value>Схема версионирования</value></data>
-<data name="VersionSchemeNumeric" xml:space="preserve"><value>Числовые компоненты</value></data>
-<data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
-<data name="VersionSchemeCalendar" xml:space="preserve"><value>Календарная версия</value></data>
-<data name="VersionComponentCount" xml:space="preserve"><value>Количество числовых компонентов</value></data>
-<data name="VersionCalendarFormat" xml:space="preserve"><value>Формат даты</value></data>
-<data name="VersionTagPattern" xml:space="preserve"><value>Шаблон Git-тега</value></data>
-<data name="VersionTagPatternHelp" xml:space="preserve"><value>Используйте ровно один placeholder {version}, например v{version}.</value></data>
-<data name="VersionAllowPrerelease" xml:space="preserve"><value>Разрешить prerelease-версии SemVer</value></data>
-<data name="VersionManifestSources" xml:space="preserve"><value>Источники версии в manifest-файлах</value></data>
-<data name="VersionManifestSourcesHelp" xml:space="preserve"><value>Один источник на строку: path|Format|selector. Примеры: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; для Regex укажите именованную группу (?&lt;version>...) или первую capture-группу.</value></data>
-<data name="InitialOfficialVersion" xml:space="preserve"><value>Инициализировать официальную версию</value></data>
-<data name="InitialOfficialVersionHelp" xml:space="preserve"><value>Значение можно задать только один раз. Дальнейшее изменение официальной версии выполняется только через ReleasePrepare.</value></data>
-<data name="SaveVersionPolicy" xml:space="preserve"><value>Сохранить политику версии</value></data>
-<data name="VersionSourceLineInvalid" xml:space="preserve"><value>Источник должен иметь формат path|Format|selector.</value></data>
-<data name="ProjectVersionScheme" xml:space="preserve"><value>Схема версионирования</value></data>
-<data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
-<data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Числовые компоненты</value></data>
-<data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Календарная версия</value></data>
-<data name="ProjectVersionComponentCount" xml:space="preserve"><value>Количество числовых компонентов (1–8)</value></data>
-<data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Формат календарной версии (инвариантный формат даты .NET)</value></data>
-<data name="ProjectVersionCalendarFormatHelp" xml:space="preserve"><value>Используйте обязательные токены yyyy, MM, dd и необязательные HH, mm, ss. Допустимые разделители: . - / _ пробел : T Z. Примеры: yyyy.MM.dd, yyyyMMdd, yyyy-MM-ddTHH:mm:ssZ.</value></data>
-<data name="ProjectVersionTagPattern" xml:space="preserve"><value>Шаблон Git-тега</value></data>
-<data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Используйте ровно один маркер {version}, например v{version}.</value></data>
-<data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>Разрешить prerelease-версии SemVer</value></data>
-<data name="ProjectOfficialVersion" xml:space="preserve"><value>Официальная версия проекта (источник истины — Beacon)</value></data>
-<data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Начальная официальная версия</value></data>
-<data name="ProjectVersionSources" xml:space="preserve"><value>Файлы-проекции версии</value></data>
-<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>Одна запись на строку: относительный/путь|Xml, Json, Toml или Regex|селектор. XML поддерживает только абсолютные пути к элементам и пути к потомкам, например /Project/PropertyGroup/Version или //Version. JSON использует JSON Pointer. TOML — путь ключей через точку; значение должно быть строкой или целым числом. Regex использует общее подмножество .NET/Python: ровно одна группа захвата ((?&lt;version&gt;...) или группа 1), допускаются non-capturing groups и look-ahead. Разрешённые escape-последовательности: \d, \D, \s, \S, \t, \r, \n, \f, \v, \A и \z; именованный backreference \k&lt;version&gt; должен идти после именованной группы. Look-behind, inline options, \w/\W/\b/\B, Unicode-категории, числовые backreferences и вложенные/вычитаемые character classes не поддерживаются. Для подготовки Candidate нужен хотя бы один источник; его можно добавить позже, если пока требуется только планировать Release. Файлы должны находиться внутри workspace проекта.</value></data>
-<data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Изменять политику версии могут только Owner и Admin проекта.</value></data>
-<data name="ProjectVersionSave" xml:space="preserve"><value>Сохранить политику версии</value></data>
-<data name="ProjectVersionSaved" xml:space="preserve"><value>Политика версии сохранена</value></data>
-<data name="NotConfigured" xml:space="preserve"><value>Не задано</value></data>
-<data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Включить управление релизами для проекта</value></data>
-<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>После включения Roadmap показывает релизы и позволяет объединять в них milestones. Задачи получают контекст релиза через свой milestone. Сначала настройте выше схему версии и файлы-манифесты. По умолчанию функция выключена; включение не публикует релиз и не запускает деплой.</value></data>>
-  <data name="ProjectReleases" xml:space="preserve"><value>Релизы проекта</value></data>
-  <data name="Releases" xml:space="preserve"><value>релизов</value></data>
-  <data name="NewRelease" xml:space="preserve"><value>Новый релиз</value></data>
-  <data name="ReleaseName" xml:space="preserve"><value>Название релиза</value></data>
-  <data name="ReleaseTargetVersion" xml:space="preserve"><value>Целевая версия</value></data>
-  <data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>Необязательно. Должна соответствовать схеме версионирования в настройках проекта.</value></data>
-  <data name="ReleaseTargetBranch" xml:space="preserve"><value>Целевая ветка</value></data>
-  <data name="ReleaseStart" xml:space="preserve"><value>Начать</value></data>
-  <data name="ReleaseMarkCandidate" xml:space="preserve"><value>Отметить кандидатом</value></data>
-  <data name="CancelRelease" xml:space="preserve"><value>Отменить релиз</value></data>
-  <data name="ReleaseCreated" xml:space="preserve"><value>Релиз создан</value></data>
-  <data name="ReleaseDeleted" xml:space="preserve"><value>Релиз удалён</value></data>
-  <data name="MilestoneRelease" xml:space="preserve"><value>Релиз</value></data>
-  <data name="NoRelease" xml:space="preserve"><value>Не привязан к релизу</value></data>
-  <data name="NoReleases" xml:space="preserve"><value>Для этого проекта ещё не создано ни одного релиза.</value></data>
-  <data name="ReleaseStatusPlanned" xml:space="preserve"><value>Запланирован</value></data>
-  <data name="ReleaseStatusInProgress" xml:space="preserve"><value>В работе</value></data>
-  <data name="ReleaseStatusCandidate" xml:space="preserve"><value>Кандидат</value></data>
-  <data name="ReleaseStatusPublished" xml:space="preserve"><value>Опубликован</value></data>
-  <data name="ReleaseStatusCancelled" xml:space="preserve"><value>Отменён</value></data>
-
-  <data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate создаётся только через ReleasePrepare после проверок политики версии, impact, landing и валидации.</value></data>
-  <data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>Endpoint версии production</value></data>
-  <data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>HTTPS URL, оканчивающийся на /v1/version. После успешного release workflow Beacon проверит его и потребует точного совпадения version и gitSha с Candidate.</value></data>
-  <data name="CreateHotfixTask" xml:space="preserve"><value>Создать задачу Hotfix</value></data>
-  <data name="HotfixTaskTitle" xml:space="preserve"><value>Название задачи Hotfix</value></data>
-  <data name="HotfixTaskDescription" xml:space="preserve"><value>Опишите проблему в production и требуемое исправление</value></data>
-  <data name="HotfixTaskCreated" xml:space="preserve"><value>Задача Hotfix создана из развёрнутого релиза</value></data>
-  <data name="HotfixSourceRelease" xml:space="preserve"><value>Исходный релиз</value></data>
-  <data name="HotfixDeployedVersion" xml:space="preserve"><value>Развёрнутая версия</value></data>
-  <data name="HotfixDeployedSha" xml:space="preserve"><value>Commit, развёрнутый в production</value></data>
-  <data name="HotfixDeploymentRun" xml:space="preserve"><value>Открыть workflow развёртывания</value></data>
-  <data name="ForwardPortOfHotfix" xml:space="preserve"><value>Перенос исправления Hotfix в основную ветку</value></data>
-  <data name="HotfixTasks" xml:space="preserve"><value>Задачи Hotfix и переноса исправлений</value></data>
-  <data name="HotfixOriginNotice" xml:space="preserve"><value>Эта задача создана от точного commit, развёрнутого в production. Beacon защищает исходные ветку и commit.</value></data>
-  <data name="ForwardPortNotice" xml:space="preserve"><value>Эта обычная задача создана после подтверждённой посадки исходного Hotfix. Выполните её через стандартный цикл Planner, Actor, Reviewer и landing.</value></data>
-  <data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Порядок работы: настройте в параметрах проекта официальную версию и файлы-манифесты, создайте здесь Release, затем привяжите к нему milestones. Задачи этих milestones получают целевую версию и ветку в контексте Planner. Подготовка Release создаёт неизменяемый Candidate; публикация в production выполняется отдельным действием с явным подтверждением.</value></data>
-  <data name="PrepareReleaseCandidate" xml:space="preserve"><value>Подготовить Candidate</value></data>
-  <data name="ReleasePreparationPullRequest" xml:space="preserve"><value>Открыть PR релиза</value></data>
-  <data name="VerifyReleaseLanding" xml:space="preserve"><value>Проверить landing</value></data>
-  <data name="ReleasePreparationInProgress" xml:space="preserve"><value>Подготовка релиза выполняется на закреплённой рабочей станции.</value></data>
-  <data name="ReleasePrepareQueued" xml:space="preserve"><value>Подготовка релиза поставлена в очередь закреплённой рабочей станции.</value></data>
-  <data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>Проверка landing поставлена в очередь той же рабочей станции.</value></data>
-  <data name="PublishRelease" xml:space="preserve"><value>Опубликовать в production</value></data>
-  <data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>Подтверждение публикации в production</value></data>
-  <data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Опубликовать релиз «{0}» как версию {1}, создав тег «{2}» из ветки «{3}»? Будет создан неизменяемый Git-тег и запущен настроенный GitHub release workflow, который может выполнить deploy в production. Отправленный тег никогда не перемещается и не удаляется; повторная попытка использует тот же Candidate и тег.</value></data>
-  <data name="ReleasePublicationQueued" xml:space="preserve"><value>Публикация поставлена в очередь закреплённой рабочей станции. Beacon проверит GitHub workflow и фактически развёрнутые версию/SHA.</value></data>
-  <data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>Неизменяемый release-тег уже отправлен. Повторная попытка не переместит его.</value></data>
-  <data name="TaskVersionImpactTitle" xml:space="preserve"><value>Влияние на версию</value></data>
-  <data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Actor ещё не указал влияние этой задачи на версию.</value></data>
-  <data name="TaskVersionImpactLevel" xml:space="preserve"><value>Заявленное влияние</value></data>
-  <data name="TaskVersionImpactRationale" xml:space="preserve"><value>Обоснование Actor</value></data>
-  <data name="TaskVersionImpactReview" xml:space="preserve"><value>Решение Reviewer</value></data>
-  <data name="TaskVersionImpactNone" xml:space="preserve"><value>Версия не меняется</value></data>
-  <data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
-  <data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
-  <data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
-  <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Подтверждено</value></data>
-  <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Оспорено</value></data>
-  <data name="TaskVersionImpactPending" xml:space="preserve"><value>Ожидает Reviewer</value></data>
-<data name="ChatPollingUnavailable" xml:space="preserve">
+  <data name="ChatPollingUnavailable" xml:space="preserve">
     <value>Обновление чата временно недоступно. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
   </data>
-<data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
+  <data name="TaskPipelineRefreshUnavailable" xml:space="preserve">
     <value>Не удалось обновить состояние задачи и репозитория после нескольких попыток. Отображаемые данные могут устареть; обновление продолжится автоматически.</value>
   </data>
-<data name="GitSyncCommandRestoreFailed" xml:space="preserve">
+  <data name="GitSyncCommandRestoreFailed" xml:space="preserve">
     <value>Не удалось восстановить связь с ожидающей командой синхронизации репозитория. Проверьте состояние задачи и рабочей станции, прежде чем запускать синхронизацию повторно.</value>
   </data>
-<data name="ProxyStatusUnavailable" xml:space="preserve">
+  <data name="ProxyStatusUnavailable" xml:space="preserve">
     <value>Состояние среды выполнения чат-модели временно недоступно. Чатом можно пользоваться, но сведения о готовности модели могут быть устаревшими.</value>
   </data>
-<data name="ChatTaskContextUnavailable" xml:space="preserve">
+  <data name="ChatTaskContextUnavailable" xml:space="preserve">
     <value>Не удалось загрузить контекст задачи для этого чата. Можно продолжить диалог без контекста задачи.</value>
   </data>
-<data name="TaskLoadUnavailable" xml:space="preserve">
+  <data name="TaskLoadUnavailable" xml:space="preserve">
     <value>Не удалось загрузить задачу. Сервис получения сведений о задаче недоступен. Страница будет автоматически повторять запрос. Диагностический ID: {0}</value>
   </data>
-<data name="DashboardHostSamplesUnavailable" xml:space="preserve">
+  <data name="DashboardHostSamplesUnavailable" xml:space="preserve">
     <value>Не удалось загрузить метрики рабочей станции. Проверьте её подключение и повторите попытку. Диагностический ID: {0}</value>
   </data>
-<data name="ChatWaitingTasksUnavailable" xml:space="preserve">
+  <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Список задач, ожидающих вашего ответа, временно недоступен. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>Внешний вид</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>Тёмная</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>Светлая</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>Как в системе</value>
+  </data>
+  <data name="ThemeToLight" xml:space="preserve">
+    <value>Переключить на светлую тему</value>
+  </data>
+  <data name="ThemeToDark" xml:space="preserve">
+    <value>Переключить на тёмную тему</value>
+  </data>
+  <data name="ProductVersion" xml:space="preserve">
+    <value>Beacon v{0}</value>
+  </data>
+  <data name="ProjectManageLead" xml:space="preserve">
+    <value>Создайте проект, переименуйте открытый проект или удалите проект, которым вы управляете.</value>
+  </data>
+  <data name="DeleteProject" xml:space="preserve">
+    <value>Удалить проект</value>
+  </data>
+  <data name="DeleteProjectConfirm" xml:space="preserve">
+    <value>Удалить проект «{0}»? Его задачи, контекст и участники будут удалены.</value>
+  </data>
+  <data name="ProjectRenamed" xml:space="preserve">
+    <value>Проект сохранён.</value>
+  </data>
+  <data name="ProjectDeleted" xml:space="preserve">
+    <value>Проект удалён.</value>
+  </data>
+  <data name="ProjectNameRequired" xml:space="preserve">
+    <value>Укажите название проекта.</value>
+  </data>
+  <data name="OpenProject" xml:space="preserve">
+    <value>Открыть</value>
+  </data>
+  <data name="NavOperate" xml:space="preserve">
+    <value>Операции</value>
+  </data>
+  <data name="NavIntelligence" xml:space="preserve">
+    <value>Аналитика</value>
+  </data>
+  <data name="NavGovern" xml:space="preserve">
+    <value>Управление</value>
+  </data>
+  <data name="Reviews" xml:space="preserve">
+    <value>Проверки</value>
+  </data>
+  <data name="AgentChat" xml:space="preserve">
+    <value>Чат с агентом</value>
+  </data>
+  <data name="SearchOrCommand" xml:space="preserve">
+    <value>Поиск или запуск команды</value>
+  </data>
+  <data name="CommandPalette" xml:space="preserve">
+    <value>Палитра команд</value>
+  </data>
+  <data name="CommandPalettePlaceholder" xml:space="preserve">
+    <value>Поиск по страницам</value>
+  </data>
+  <data name="CommandPaletteEmpty" xml:space="preserve">
+    <value>Подходящих команд нет</value>
+  </data>
+  <data name="FleetOperational" xml:space="preserve">
+    <value>Все рабочие станции работают нормально</value>
+  </data>
+  <data name="FleetDegraded" xml:space="preserve">
+    <value>Некоторые рабочие станции требуют внимания</value>
+  </data>
+  <data name="FleetOffline" xml:space="preserve">
+    <value>Рабочие станции не в сети</value>
+  </data>
+  <data name="FleetEmpty" xml:space="preserve">
+    <value>Нет рабочих станций</value>
+  </data>
+  <data name="FleetCounts" xml:space="preserve">
+    <value>Рабочих станций: {0} · в сети: {1}</value>
+  </data>
+  <data name="ShellHintOverview" xml:space="preserve">
+    <value>Краткая сводка по текущему проекту</value>
+  </data>
+  <data name="ShellHintBoard" xml:space="preserve">
+    <value>Работа с задачами на доске</value>
+  </data>
+  <data name="ShellHintBacklog" xml:space="preserve">
+    <value>Задачи, которых нет на доске</value>
+  </data>
+  <data name="ShellHintRoadmap" xml:space="preserve">
+    <value>Вехи проекта</value>
+  </data>
+  <data name="ShellHintContext" xml:space="preserve">
+    <value>Знания о проекте</value>
+  </data>
+  <data name="ShellHintDecisions" xml:space="preserve">
+    <value>Зафиксированные решения</value>
+  </data>
+  <data name="ShellHintReports" xml:space="preserve">
+    <value>Снимки доски</value>
+  </data>
+  <data name="ShellHintChat" xml:space="preserve">
+    <value>Сессия агента</value>
+  </data>
+  <data name="ShellHintAgents" xml:space="preserve">
+    <value>Настройка агентов</value>
+  </data>
+  <data name="ShellHintWorkstations" xml:space="preserve">
+    <value>Устройства, на которых работают агенты</value>
+  </data>
+  <data name="ShellHintProject" xml:space="preserve">
+    <value>Этот проект</value>
+  </data>
+  <data name="ShellHintSettings" xml:space="preserve">
+    <value>Учётная запись</value>
+  </data>
+  <data name="ShellHintConnections" xml:space="preserve">
+    <value>Подключения моделей</value>
+  </data>
+  <data name="ShellHintTask" xml:space="preserve">
+    <value>Задача</value>
+  </data>
+  <data name="ShellHintNewProject" xml:space="preserve">
+    <value>Создать проект</value>
+  </data>
+  <data name="AttentionCount" xml:space="preserve">
+    <value>Требуют внимания: {0}</value>
+  </data>
+  <data name="CurrentlyRunning" xml:space="preserve">
+    <value>Сейчас выполняется</value>
+  </data>
+  <data name="NoRunningWork" xml:space="preserve">
+    <value>Сейчас нет выполняемых задач.</value>
+  </data>
+  <data name="NeedsAttention" xml:space="preserve">
+    <value>Требует внимания</value>
+  </data>
+  <data name="NoAttention" xml:space="preserve">
+    <value>Нет элементов, требующих внимания.</value>
+  </data>
+  <data name="SystemLoad" xml:space="preserve">
+    <value>Нагрузка системы</value>
+  </data>
+  <data name="NoHostLoad" xml:space="preserve">
+    <value>Рабочие станции ещё не передавали данные о загрузке процессора, памяти и GPU.</value>
+  </data>
+  <data name="FleetHealth" xml:space="preserve">
+    <value>Состояние парка рабочих станций</value>
+  </data>
+  <data name="NextStep" xml:space="preserve">
+    <value>Следующий шаг</value>
+  </data>
+  <data name="ReviewSeparate" xml:space="preserve">
+    <value>Проверка отделена от выполнения. Одобрение завершает проверку, но не запись о проделанной работе.</value>
+  </data>
+  <data name="CurrentProject" xml:space="preserve">
+    <value>Текущий проект</value>
+  </data>
+  <data name="Goal" xml:space="preserve">
+    <value>Цель</value>
   </data>
   <data name="ReleasePreparationFailedSummary" xml:space="preserve">
     <value>Подготовка релиза не завершилась. Изучите диагностическое сообщение ниже, устраните причину и повторите попытку.</value>
