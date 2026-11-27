@@ -2913,3 +2913,26 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Run #46001832895 correctly identified the mismatch on Linux; Windows and macOS were still running their API suites when the fix was committed.
 - The prior run is not accepted as green. A new full Linux/Windows/macOS matrix must validate the corrected route contract and all subsequent suites.
 - PR #230 remains open, Ready for review and unmerged. No production tag or deployment; SaaS Control Plane and billing remain out of scope.
+
+
+## 2026-11-27 — Green exact-head CI and production configuration boundary
+
+### Validation
+
+- Last fully green code head before adding the new workflow-security assertions: 65329d3fc87329e0733cc0d705e5bce9b35e4822.
+- GitHub Actions run #46002824395 completed success on Linux, Windows and macOS. All three jobs completed without failed steps.
+- PR #230 remains open, Ready for review, mergeable and unmerged. No tag or deployment was created.
+
+### Production settings inspection
+
+- Repository rulesets endpoint returned [].
+- Branch protection read returned 403 for the connected integration; GitHub Environment and legacy tag-protection settings are not readable through the current connection. These are recorded as unverified, not assumed absent.
+- Static workflow inspection confirms CI has only contents: read and no repository secret expressions. Production SSH references are confined to the deploy job, which is tied to environment production and depends on tests, image, scan and client jobs.
+- Added script-level regression checks for CI secret isolation and deployment-secret scoping in scripts/test_release_workflow_permissions.py. Exact-head CI is required after this commit.
+
+### Next
+
+1. Validate the new workflow-security assertions on the latest branch SHA.
+2. Keep the first publication blocked until the repository owner verifies release-tag protections and production Environment reviewers/secrets in GitHub Settings.
+3. After that external configuration is confirmed, finish the acceptance review of candidate CI vs tag-triggered release workflow; do not create a release tag in this implementation PR.
+4. Keep PR #230 open until code checks and release safety prerequisites are complete.
