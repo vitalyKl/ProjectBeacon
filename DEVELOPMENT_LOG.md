@@ -2004,3 +2004,47 @@ Implemented a fail-closed terminal outcome:
 1. Re-run the full cross-platform CI on the current head after this journal entry.
 2. Verify that the repository's merge queue uses the merge method and complete the live queue acceptance in a disposable repository.
 3. Continue release workflow end-to-end acceptance for Candidate, Publish, deployment verification and failure recovery.
+
+
+## 2026-11-27 — Merge method and merge_group CI contract
+
+**Implementation commits**
+- 1ad4fdddc082de8b3b7b3ed884226ca1c6d714be — direct GitHub async merge requests explicitly request merge_method=merge while retaining merge_action=default.
+- 2b765b00d811db207c42f82a0f76df723a1b4db8 — regression assertion for the requested merge method.
+- 78b216b4c43c50fe129360b56c86c4c7597ab091 — document merge-commit requirement in generated Release PRs and provide a specific ancestry failure message.
+- 08eebcc7a769ad9a2a23a74139f0f923d0bfc13a — clarify the release-manifest tag gate diagnostic.
+- 033ae81861686a977b2071048b7dfdd6f67202a5 — add GitHub merge_group checks_requested event to CI.
+
+### Merge strategy verification
+
+- ReleasePrepare records the prepared commit SHA and Beacon-Release trailer. VerifyLanding requires that exact SHA to remain an ancestor of the remote target branch.
+- A temporary Git integration exercise confirmed that a merge commit keeps the original ReleasePrepare commit in ancestry, while a squash commit replaces it with a new one-parent commit. Rebase also rewrites the commit SHA.
+- Direct async merges now request merge_method=merge. GitHub documents merge_method as a direct-merge option; when merge_action=default selects a merge queue, the queue uses the administrator-selected Merge method.
+- Generated Release PRs now explicitly require a merge commit. The merge queue must be configured with Merge method=merge. VerifyLanding remains fail-closed if the original prepared SHA is not in target-branch ancestry, so squash/rebase cannot produce a Candidate through Beacon.
+
+### Merge queue CI integration
+
+- GitHub requires Actions workflows to subscribe to merge_group/checks_requested for required checks to be reported on synthetic merge-group refs.
+- Added this event to ci.yml. The existing full Linux/Windows/macOS jobs and check names are reused; concurrency falls back to github.ref for a merge_group run because there is no pull_request.number.
+- The change is not covered by the running CI #45957896644 because that run targets the previous head 8ddd6f535eb5d3bab1886d8829ec9ffa5a4f9820. A new exact-head run is required.
+
+### Environment limitation for live queue acceptance
+
+- The repository API reports ProjectBeacon is public and owner_type=User, and the connected account has no organization memberships and only this one writable repository.
+- GitHub's current documentation limits merge queues to public repositories owned by an organization, or private repositories owned by organizations on GitHub Enterprise Cloud. Therefore a live merge queue cannot be enabled/tested on the current personal-account ProjectBeacon repository under these conditions.
+- The implementation plan was updated on the separate plan branch: docs/release-management-plan commit edcfe36f277258e49868b77e4afc4fcf131e5549.
+- A separate writable org-owned disposable repository is required for live tests. Do not create a throwaway PR or simulate destructive queue behavior against ProjectBeacon itself.
+
+### Validation and blockers
+
+- Exact-head green CI #45955852379 validated implementation SHA e02e4d7579c3251e7b6ee5b82c8eaf7fc4611ad9 (all platforms; 2,762 Linux TRX results).
+- CI #45957896644 targets SHA 8ddd6f535eb5d3bab1886d8829ec9ffa5a4f9820 and is still running; it includes the merge-method changes but predates merge_group trigger commit 033ae81861686a977b2071048b7dfdd6f67202a5.
+- Classic v* tag protection and production Environment required reviewers remain unverified because the connected GitHub integration cannot read those settings. Queue Merge method=merge also needs administrator verification on an eligible org-owned test repository.
+- No production tag, deployment or PR merge was performed. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Re-run Linux/Windows/macOS CI on the current post-journal branch head, including merge_group workflow syntax and the merge-method regression test.
+2. Obtain an org-owned disposable repository with Merge Queue enabled and Merge method=merge; run pending/enqueued/expiry/removal/direct-merged/queued-merged/closed-PR/drift/post-merge-failure acceptance.
+3. Verify classic v* tag protection and production Environment required reviewers with an administrator.
+4. Complete the release workflow end-to-end in a real project, including Candidate, Publish, deployment proof and failure recovery.
