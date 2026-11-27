@@ -229,7 +229,12 @@ else
                                             }
                                             @if (!string.IsNullOrWhiteSpace(release.PreparationError))
                                             {
-                                                <MudText Typo="Typo.caption" Color="Color.Warning">@release.PreparationError</MudText>
+                                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                                    <MudText Typo="Typo.body2">@L["ReleasePreparationFailedSummary"]</MudText>
+                                                    <MudText Typo="Typo.caption" Style="white-space:pre-wrap;overflow-wrap:anywhere">
+                                                        @L["ReleaseDiagnosticDetails"]: @release.PreparationError
+                                                    </MudText>
+                                                </MudAlert>
                                             }
                                         }
                                         @if (release.Status == ReleaseStatus.Candidate)
@@ -251,7 +256,12 @@ else
                                             }
                                             @if (!string.IsNullOrWhiteSpace(release.PublicationError))
                                             {
-                                                <MudText Typo="Typo.caption" Color="Color.Warning">@release.PublicationError</MudText>
+                                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                                    <MudText Typo="Typo.body2">@L["ReleasePublicationFailedSummary"]</MudText>
+                                                    <MudText Typo="Typo.caption" Style="white-space:pre-wrap;overflow-wrap:anywhere">
+                                                        @L["ReleaseDiagnosticDetails"]: @release.PublicationError
+                                                    </MudText>
+                                                </MudAlert>
                                             }
                                             @if (release.PublicationStatus is ReleasePublicationStatus.NotStarted or ReleasePublicationStatus.FailedBeforeTag)
                                             {
