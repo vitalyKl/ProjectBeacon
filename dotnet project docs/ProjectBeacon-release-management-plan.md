@@ -1457,3 +1457,12 @@ CI после этих изменений требует минимум 2 771 Li
 - CI и Release workflow Linux TRX thresholds совпадают на 2 771; complete guard blocks идентичны.
 - Implementation branch `feat/release-management` head после этих исправлений и журнала: `ce4f2a4c6de79af9458342d50d68db3fb74b1efe`. Exact-head CI после этих исправлений ещё не завершён; run #45983775039 остаётся pre-fix failure.
 - Остаток: точный CI на post-fix head; live Merge Queue acceptance в eligible org-owned disposable repo; administrator verification Merge method=merge, classic tag protection `v*` и Environment `production` required reviewers. Production tag/deploy не запускать, PR #230 не вливать.
+
+
+### Follow-up — corrected Web resource marker type in bUnit tests
+
+- The first exact-head build attempt for the audit/localization fixes reported `CS0118`: short type name `Web` resolved to the namespace instead of the generated marker class.
+- The generated resource class is internal `ProjectBeacon.Web.Resources.Web`; the Web project explicitly grants `InternalsVisibleTo` to `ProjectBeacon.Web.Tests`.
+- Updated tests to request `IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>`.
+- Implementation/test branch now has test commits `142fcc19081caa6135b94556fd649bbe47086726` and `0d72f310cacb92619f4435652cc1f24caad6600a`, plus journal commit `419cc890ed93279ace5548e2deda574ddf7b0e27`.
+- The CI run #45987044512 targeted the pre-fix head `ce4f2a4c6de79af9458342d50d68db3fb74b1efe`; a fresh full cross-platform run is required on the latest exact head.
