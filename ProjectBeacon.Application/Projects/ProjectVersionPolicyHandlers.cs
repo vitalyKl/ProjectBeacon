@@ -176,6 +176,7 @@ public sealed class SetProjectVersionPolicyHandler
         if (policyOrInitialVersionChanges
             && await db.Releases.AnyAsync(release => release.ProjectId == command.ProjectId
                 && release.Status != ReleaseStatus.Cancelled
+                && release.Status != ReleaseStatus.Published
                 && release.PreparationStatus != ReleasePreparationStatus.NotStarted, ct))
             return Result.Failure<ProjectVersionPolicyDto>(
                 "Version policy and initial official version are locked while a ReleasePrepare workflow is active. Cancel a failed Release before changing policy.",
