@@ -281,16 +281,23 @@ internal static class ReleasePublishExecutor
                 return new TagEvidence(false, false,
                     "The remote release tag exists but could not be fetched without moving local refs. Refusing to overwrite it.");
             localTag = await ReadTagEvidenceAsync(root, filters, request, ct);
+            var advertisedTagObjectSha = remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
+            if (!localTag.Valid
+                || !string.Equals(localTag.TagObjectSha, advertisedTagObjectSha, StringComparison.OrdinalIgnoreCase))
+                return new TagEvidence(false, true,
+                    localTag.Error ?? "The remote tag object changed while it was being fetched. Refusing to accept unverified metadata.");
         }
         else if (hasRemote && localTag.Exists)
         {
             // The server may have created the tag while the previous acknowledgement was lost.
-            // Compare remote and local peeled commits; never force-update either side.
+            // Compare both the annotated object SHA and peeled commit; never force-update either side.
             var remoteSha = remoteEntries.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var peeled)
                 ? peeled
                 : remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-            if (!string.Equals(remoteSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase))
-                return new TagEvidence(false, false, "The remote tag already points to a different SHA. Refusing to move it.");
+            var remoteTagObjectSha = remoteEntries.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
+            if (!string.Equals(remoteSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(remoteTagObjectSha, localTag.TagObjectSha, StringComparison.OrdinalIgnoreCase))
+                return new TagEvidence(false, false, "The remote tag object or target differs from the locally verified immutable Candidate. Refusing to move it.");
         }
 
         if (localTag.Exists && !localTag.Valid)
@@ -337,6 +344,16 @@ internal static class ReleasePublishExecutor
                 if (!Succeeded(afterFailedPush) || !string.Equals(afterSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase))
                     return new TagEvidence(false, false,
                         "Tag push was rejected or its result is unknown. The tag was not moved; inspect the remote before retrying. " + Clip(push.StdErr));
+
+                // A competing writer may have created the same tag name while our push
+                // acknowledgement was lost. Matching the peeled commit is insufficient:
+                // fetch the remote tag object to a temporary ref and verify its annotation.
+                var remoteEvidence = await ReadRemoteTagEvidenceAsync(root, filters, originUrl, request, ct);
+                var advertisedObjectSha = after.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
+                if (!remoteEvidence.Valid
+                    || !string.Equals(remoteEvidence.TagObjectSha, advertisedObjectSha, StringComparison.OrdinalIgnoreCase))
+                    return new TagEvidence(false, true,
+                        remoteEvidence.Error ?? "The remote tag object changed during concurrent publication; its metadata could not be proven.");
                 tagPushed = true;
             }
             else
@@ -356,35 +373,92 @@ internal static class ReleasePublishExecutor
             : verify.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
         if (!string.Equals(remoteTarget, request.CandidateSha, StringComparison.OrdinalIgnoreCase))
             return new TagEvidence(false, tagPushed, "The remote release tag does not resolve to the exact immutable Candidate SHA.");
+        var finalEvidence = await ReadRemoteTagEvidenceAsync(root, filters, originUrl, request, ct);
+        var finalObjectSha = verify.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
+        if (!finalEvidence.Valid
+            || !string.Equals(finalEvidence.TagObjectSha, finalObjectSha, StringComparison.OrdinalIgnoreCase))
+            return new TagEvidence(false, tagPushed,
+                finalEvidence.Error ?? "The remote annotated tag object changed during final verification.");
         return new TagEvidence(true, true, null);
     }
 
-    private sealed record TagRead(bool Exists, bool Valid, string? Error);
+    private sealed record TagRead(bool Exists, bool Valid, string? TagObjectSha, string? Error);
 
     private static async Task<TagRead> ReadTagEvidenceAsync(
-        string root, string[] filters, PublishRequest request, CancellationToken ct)
+        string root, string[] filters, PublishRequest request, CancellationToken ct, string? referenceOverride = null)
     {
-        var reference = "refs/tags/" + request.TagName;
+        var reference = referenceOverride ?? "refs/tags/" + request.TagName;
         var type = await GitValue(root, ct, filters, "cat-file", "-t", reference);
         if (!string.Equals(type.Value, "tag", StringComparison.Ordinal))
-            return new TagRead(type.Value is not null, false, "Release tag must be annotated.");
+            return new TagRead(type.Value is not null, false, null, "Release tag must be annotated.");
         var tagObject = await GitValue(root, ct, filters, "cat-file", "-p", reference);
         var target = await GitValue(root, ct, filters, "rev-parse", reference + "^{}");
-        if (tagObject.Error is not null || target.Error is not null)
-            return new TagRead(true, false, "Could not inspect annotated release tag metadata.");
-        var messageAt = tagObject.Value!.IndexOf("\n\n", StringComparison.Ordinal);
-        var message = messageAt >= 0 ? tagObject.Value[(messageAt + 2)..] : string.Empty;
-        var expectedIdentity =
-            message.Contains("ProjectBeacon-Release: " + request.ReleaseId.ToString("D"), StringComparison.Ordinal)
-            && message.Contains("ProjectBeacon-Candidate: " + request.CandidateId.ToString("D"), StringComparison.Ordinal)
-            && message.Contains("ProjectBeacon-Candidate-SHA: " + request.CandidateSha, StringComparison.Ordinal)
-            && message.Contains("ProjectBeacon-Version: " + request.Version, StringComparison.Ordinal);
-        var targetMatches = string.Equals(target.Value, request.CandidateSha, StringComparison.OrdinalIgnoreCase);
-        return new TagRead(true,
-            expectedIdentity && targetMatches,
-            !targetMatches
-                ? "Annotated tag points to a different commit than the immutable Candidate."
-                : expectedIdentity ? null : "Annotated tag message does not contain the exact ProjectBeacon Release/Candidate identity.");
+        var objectSha = await GitValue(root, ct, filters, "rev-parse", reference);
+        if (tagObject.Error is not null || target.Error is not null || objectSha.Error is not null
+            || !AgentTaskGitOperations.IsGitSha(objectSha.Value ?? string.Empty))
+            return new TagRead(true, false, objectSha.Value, "Could not inspect annotated release tag metadata.");
+        var valid = HasExpectedAnnotatedTagEvidence(
+            type.Value, tagObject.Value!, target.Value!, request.TagName,
+            request.ReleaseId, request.CandidateId, request.CandidateSha, request.Version);
+        return new TagRead(true, valid, objectSha.Value,
+            valid ? null : "Annotated tag object does not prove the exact Release, Candidate identity, version, tag name and target SHA.");
+    }
+
+    private static async Task<TagRead> ReadRemoteTagEvidenceAsync(
+        string root, string[] filters, string originUrl, PublishRequest request, CancellationToken ct)
+    {
+        var temporaryReference = "refs/beacon/release-tag-verification/"
+            + request.ReleaseId.ToString("N") + "/" + Guid.NewGuid().ToString("N");
+        var fetched = await AgentTaskGitOperations.RunRemoteGitAsync(
+            root, filters, ct, originUrl,
+            "fetch", "--no-tags", "--no-recurse-submodules", originUrl,
+            "refs/tags/" + request.TagName + ":" + temporaryReference);
+        if (!Succeeded(fetched))
+            return new TagRead(false, false, null, "Could not fetch the remote annotated release tag for identity verification: " + Clip(fetched.StdErr));
+        try
+        {
+            return await ReadTagEvidenceAsync(root, filters, request, ct, temporaryReference);
+        }
+        finally
+        {
+            // This ref is local-only and unique per verification. Cleanup failure is safe:
+            // the next verification uses another random ref and never moves the remote tag.
+            _ = await Git(root, ct, filters, "update-ref", "-d", temporaryReference);
+        }
+    }
+
+    internal static bool HasExpectedAnnotatedTagEvidence(
+        string objectType,
+        string tagObject,
+        string targetSha,
+        string tagName,
+        Guid releaseId,
+        Guid candidateId,
+        string candidateSha,
+        string version)
+    {
+        if (!string.Equals(objectType, "tag", StringComparison.Ordinal)
+            || !AgentTaskGitOperations.IsGitSha(targetSha)
+            || !AgentTaskGitOperations.IsGitSha(candidateSha)
+            || !string.Equals(targetSha, candidateSha, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var separator = tagObject.IndexOf("\n\n", StringComparison.Ordinal);
+        if (separator < 0)
+            return false;
+        var header = tagObject[..separator].Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        var messageLines = tagObject[(separator + 2)..].Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        static bool HasSingleExactLine(IEnumerable<string> lines, string expected) =>
+            lines.Count(line => string.Equals(line.TrimEnd(), expected, StringComparison.Ordinal)) == 1;
+
+        return HasSingleExactLine(header, "object " + candidateSha)
+            && HasSingleExactLine(header, "type commit")
+            && HasSingleExactLine(header, "tag " + tagName)
+            && HasSingleExactLine(messageLines, "ProjectBeacon Release " + version)
+            && HasSingleExactLine(messageLines, "ProjectBeacon-Release: " + releaseId.ToString("D"))
+            && HasSingleExactLine(messageLines, "ProjectBeacon-Candidate: " + candidateId.ToString("D"))
+            && HasSingleExactLine(messageLines, "ProjectBeacon-Candidate-SHA: " + candidateSha)
+            && HasSingleExactLine(messageLines, "ProjectBeacon-Version: " + version);
     }
 
     private sealed record RemoteTagMap(Dictionary<string, string> ShaByRef, string? Error);
