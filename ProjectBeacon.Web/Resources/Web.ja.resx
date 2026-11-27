@@ -3493,4 +3493,13 @@ orthstar</value>
 <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>入力待ちのタスク一覧は一時的に利用できません。チャットは引き続き使用でき、ページは自動的に再試行します。</value>
   </data>
+  <data name="ReleasePreparationFailedSummary" xml:space="preserve">
+    <value>リリース準備が完了しませんでした。以下の診断情報を確認して原因を修正し、再試行してください。</value>
+  </data>
+  <data name="ReleasePublicationFailedSummary" xml:space="preserve">
+    <value>本番環境への公開が完了しませんでした。以下の診断情報を確認してください。不変タグがすでに push 済みの場合、再試行では同じ Candidate とタグを使用します。</value>
+  </data>
+  <data name="ReleaseDiagnosticDetails" xml:space="preserve">
+    <value>診断の詳細</value>
+  </data>
 </root>
