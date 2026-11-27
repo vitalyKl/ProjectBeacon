@@ -1337,3 +1337,22 @@ Implementation journal записывает полный результат в c
 4. Нужна реальная end-to-end приёмка ReleasePrepare → merge commit → immutable Candidate → Publish/tag → release workflow → deployed version/SHA, включая failure/retry paths.
 
 PR #230 остаётся open/unmerged. Production tag/deployment не создавались. SaaS Control Plane и billing вне scope.
+
+
+---
+
+## Уточнение — стратегия merge не должна меняться у обычного GitLand (27 ноября 2026)
+
+При ревью обнаружено, что `GitHubLandingMergeExecutor` является общим executor для обычных task PR, а не только для Release PR. Безусловный параметр `merge_method=merge` менял бы merge strategy всех GitHub task PR и нарушал существующую настройку репозитория.
+
+Исправлено:
+- Обычный GitLand снова отправляет exact head SHA и `merge_action=default`, не задавая `merge_method`; стратегия обычного PR остаётся на стороне настроек репозитория/merge queue.
+- Regression test закрепляет отсутствие `merge_method` в общем GitLand запросе.
+- Release PR сохраняет отдельный merge-commit contract. VerifyLanding проверяет ancestry точного ReleasePrepare commit; tag workflow проверяет original commit/trailer. Squash/rebase не создают Candidate и не допускают Publish.
+- Для Release PR Merge Queue должна быть настроена на Merge method=merge. Если очередь не используется, repository direct merge default либо выбор Owner/Admin должен создать merge commit.
+- Текущий shared GitLand не форсирует особый метод только для Release PR. Если требуется, чтобы Beacon сам инициировал слияние Release PR без участия Owner/Admin или repository policy, это отдельная задача: dedicated Release merge command с соответствующей авторизацией и async state recovery.
+
+Implementation commits: `00e0bc0fbbcf4d0135ddbcd4e3afa16c24614bca`, `d2f1448ce622ed70f4363f1d0043b55f139e3bd1`, `ce6577819e57df8c7907f32f97d8e7dba38874b5`.  
+Implementation journal commit: `3fa2dc36a253ddbccde3dddaa545a3a826201cb1`.
+
+CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94ae67c66095164ab1`, but predates this scope correction. A new exact-head CI is required. No PR merge or production publication.
