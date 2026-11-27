@@ -295,4 +295,136 @@ public sealed class ReleaseHandlerTests : IDisposable
         Assert.True(stillEnabled.Success, stillEnabled.Error);
         Assert.True(stillEnabled.Value!.ReleaseManagementEnabled);
     }
+
+    [Fact]
+    public async Task PrepareReleaseRequiresProjectOwnerOrAdmin()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Prepare authorization", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var release = await _db.Releases.SingleAsync(
+            item => item.Id == created.Value!.Id, TestContext.Current.CancellationToken);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new PrepareReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new PrepareReleaseCommand(
+                _projectId, release.Id, release.Revision, MemberActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(ReleasePreparationStatus.NotStarted, release.PreparationStatus);
+        Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task PrepareReleaseRequiresConfiguredVersionSources()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Missing projections", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var release = await _db.Releases.SingleAsync(
+            item => item.Id == created.Value!.Id, TestContext.Current.CancellationToken);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var result = await new PrepareReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new PrepareReleaseCommand(
+                _projectId, release.Id, release.Revision, OwnerActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Validation, result.Kind);
+        Assert.Contains("version-file projections", result.Error, StringComparison.Ordinal);
+        Assert.Equal(ReleasePreparationStatus.NotStarted, release.PreparationStatus);
+        Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task VerifyReleaseLandingRequiresProjectOwnerOrAdmin()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Verify authorization", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var result = await new VerifyReleaseLandingHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new VerifyReleaseLandingCommand(
+                _projectId, created.Value!.Id, created.Value.PreparationRevision, MemberActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task VerifyReleaseLandingRejectsReleaseThatHasNotBeenPrepared()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Not prepared", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var result = await new VerifyReleaseLandingHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new VerifyReleaseLandingCommand(
+                _projectId, created.Value!.Id, created.Value.PreparationRevision, OwnerActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        Assert.Contains("Prepared or VerifyFailed", result.Error, StringComparison.Ordinal);
+        Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task PublishReleaseRequiresProjectOwnerOrAdmin()
+    {
+        var result = await new PublishReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new PublishReleaseCommand(
+                _projectId, Guid.NewGuid(), 1, 1, MemberActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Forbidden, result.Kind);
+        Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task PublishReleaseRejectsAnythingOtherThanVerifiedCandidate()
+    {
+        var created = await CreateHandler().HandleAsync(new CreateReleaseCommand(
+            _projectId,
+            new CreateReleaseRequest("Not a candidate", null, "0.7.5.9", "main", 1),
+            OwnerActor()), TestContext.Current.CancellationToken);
+        Assert.True(created.Success, created.Error);
+
+        var result = await new PublishReleaseHandler(
+                Factory(), new AuthorizationService(), new EfAuditWriter())
+            .HandleAsync(new PublishReleaseCommand(
+                _projectId, created.Value!.Id, created.Value.Revision, 1, OwnerActor()),
+                TestContext.Current.CancellationToken);
+
+        Assert.False(result.Success);
+        Assert.Equal(ErrorKind.Conflict, result.Kind);
+        Assert.Contains("verified Candidate", result.Error, StringComparison.Ordinal);
+        Assert.Equal(0, await _db.WorkstationCommands.CountAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(ReleaseStatus.Planned, (await _db.Releases.SingleAsync(
+            item => item.Id == created.Value.Id, TestContext.Current.CancellationToken)).Status);
+    }
+
 }
