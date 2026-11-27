@@ -1684,3 +1684,12 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Full dotnet/CI validation ещё не выполнена.
 
 - Добавлен positive control для /versions/0: канонический индекс массива по-прежнему обновляет значение. Test commit: 63c9a21e39fedec59e36f5fae8b6cfdc9a382a38.
+
+### SemVer 2.0.0 prerelease conformance — 28 ноября 2026
+
+- C# policy validator и Python tag gate теперь запрещают ведущие нули в полностью числовых prerelease identifiers: 1.2.3-01 и 1.2.3-rc.01 отклоняются.
+- Ненумерованные identifiers, содержащие буквы/дефис, остаются допустимыми; build metadata имеет отдельную грамматику и допускает ведущие нули.
+- В обе стороны добавлены одинаковые positive/negative cases, включая 0, rc.1, 01alpha, +build.0001 и недопустимые 01/rc.01.
+- Official specification: https://semver.org/.
+- C# source: fabf0b318d2222038362c86a5e225fd622b57e4c; Python source: beb970dfaf17002f157604d9d1860f5be290191a; C# tests: 8df554d37cf4437ba8af59dc1f1cfc94595ecdd2; Python tests: 07550ef543a1e1bcda038861ce070920adde255d.
+- Regex fixtures checked in isolated Python; full C# test and exact-head Actions remain pending.
