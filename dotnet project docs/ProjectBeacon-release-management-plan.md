@@ -177,3 +177,11 @@
 Добавлены автоматические проверки в scripts/test_release_workflow_permissions.py: CI не должен использовать repository secrets; production SSH secrets должны присутствовать только в deploy job; deploy обязан использовать Environment production и полный gate chain.
 
 **Внешний блокер перед первым production publish:** владелец репозитория должен подтвердить/настроить protection для release tags (запрет update/delete при разрешённом первичном создании доверенным publisher), required reviewer для Environment production с запретом self-review, а также допустимые deployment refs. Четыре SSH secrets должны быть заданы именно в Environment production: PRODUCTION_SSH_HOST, PRODUCTION_SSH_USER, PRODUCTION_SSH_PRIVATE_KEY, PRODUCTION_SSH_KNOWN_HOSTS. Эти настройки не изменялись автоматически; production tag/deployment не запускались.
+
+
+### Дополнительная публикационная защита — 27 ноября 2026
+
+- До создания тега workstation теперь обязан подтвердить не только наличие GitHub CLI и успешную авторизацию, но и фактический доступ к списку запусков workflow release.yml через Actions API.
+- Это важно, потому что сама отправка тега запускает release workflow; отсутствие доступа к наблюдению после push не должно превращаться в штатный сценарий.
+- ReleasePublishExecutor выполняет этот preflight до EnsureImmutableTagAsync. При ошибке workflow-readability новый тег этим вызовом не создаётся.
+- Добавлен регрессионный тест строгой проверки preflight-ответа; CI и release.yml TRX floor подняты синхронно до 2,773.
