@@ -471,7 +471,7 @@ def validate_version(policy: dict[str, Any], version: str) -> None:
     if scheme == "SemVer":
         if component_count != 3:
             fail("SemVer policy componentCount must be exactly 3")
-        pattern = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+        pattern = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
         match = re.fullmatch(pattern, version)
         if match is None:
             fail(f"version {version!r} is not valid SemVer 2.0.0")
