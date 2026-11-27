@@ -2464,3 +2464,40 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 1. Finish the localized diagnostic UI and all-cultures test on exact-head CI.
 2. Continue release UI/RLS acceptance and validate retry states without creating a production tag.
 3. External Merge Queue, Merge method=merge, classic v* tag protection and production Environment reviewers remain acceptance blockers.
+
+
+## 2026-11-27 — Rehydrate Candidate evidence for Publish and completion
+
+**Implementation commits**
+- f764da264843491ad2c8b0c6c9071e0bd0b45926 — add a domain method to reattach an immutable Candidate snapshot to a freshly loaded Release aggregate. The method validates project/Release/Candidate identity, pinned workstation, Candidate revision, version and target branch; it does not change business state or revisions.
+- 26ab2c4488b9b0ca5dcdd3d056e0fd4a3ab00a2a — PublishReleaseHandler reattaches the separately loaded Candidate row before BeginPublication.
+- d55e45ab3199366a2f6907ae53739c9dea16eb82 — ReleasePublishCompletion reattaches the same persisted Candidate row before CompletePublication.
+- 58761cde64797ae238bcd10d93b15bc1882954eb and 4afe9620b22f859802662ce874a636d2934f03c4 — add/strengthen the fresh-DbContext application integration test.
+- c5d591a331b2d9ac7c8db02fcbd300c2581977b3 — do not lock version policy merely because a Release has already been Published.
+- 4285f6fc5caa1db4a8313f9e5de045b4504dc168 — extend the existing policy test to publish a Release, then successfully change/disable its version policy.
+
+### Critical defect and fix
+
+- ReleaseConfiguration explicitly ignores Release.CandidateSnapshot; the immutable Candidate evidence is stored in ReleaseCandidateSnapshots as a separate row.
+- PublishReleaseHandler already loaded that row but did not reattach it before calling Release.BeginPublication. After EF reload, CandidateSnapshot was null, so the domain transition rejected every normal production Publish attempt.
+- ReleasePublishCompletion also loaded the immutable Candidate row separately but did not reattach it before Release.CompletePublication, so a successfully tagged/deployed release would be rejected as FailedAfterTag.
+- Added explicit, fail-closed aggregate rehydration. It accepts only the exact persisted Candidate whose ProjectId, ReleaseId, CandidateId, pinned device, pre-Candidate release revision, target version and target branch match the reloaded aggregate. It does not mutate the database row or change the aggregate revision.
+- Added an integration test that persists a Candidate, opens fresh DbContexts, queues publication, opens another context for workstation completion, and verifies Published status, immutable tag, deployed version and exact deployed SHA. It also proves that a snapshot with a different CandidateId is rejected.
+
+### Completed Release version-policy lock
+
+- SetProjectVersionPolicyHandler previously considered every non-cancelled Release with PreparationStatus != NotStarted active, including already Published releases (whose preparation state remains Candidate).
+- The policy lock now excludes both Cancelled and Published Releases. InProgress/ Candidate workflows and non-cancelled failed preparation remain locked as before.
+- Extended the existing all-cultures/project version policy test to create a fully Published Release and then successfully change the tag pattern and disable Release Management without changing the official version.
+
+### Validation state
+
+- The prior CI run #45981186013 targeted pre-fix SHA a3ac90d3b2f5bc96ce91d77fa422ed0cb73b9f4e. It does not validate the Candidate rehydration fix, integration test or Published-policy regression.
+- A new exact-head Linux/Windows/macOS CI is required after this journal commit. No production tag, deployment or PR merge was performed.
+- PR #230 remains open/unmerged. SaaS Control Plane and billing remain out of scope.
+
+### Next
+
+1. Run exact-head CI and resolve any compile, test, EF or formatting issues.
+2. Verify the new end-to-end fresh-context Publish/Completion integration test passes.
+3. Continue the remaining external Merge Queue and publication protection acceptance only when an eligible org-owned disposable repository and administrator access are available.
