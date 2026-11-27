@@ -315,8 +315,7 @@ internal static class ReleasePublishExecutor
             if (!string.Equals(remoteSha, request.CandidateSha, StringComparison.OrdinalIgnoreCase)
                 || !string.Equals(remoteTagObjectSha, localTag.TagObjectSha, StringComparison.OrdinalIgnoreCase))
                 return new TagEvidence(false,
-                    MayHavePublishedTag(remoteInspectionSucceeded: true, remoteListingWellFormed: true,
-                        remoteSha, request.CandidateSha),
+                    MayHavePublishedTag(true, true, remoteSha, request.CandidateSha),
                     "The remote tag object or target differs from the locally verified immutable Candidate. Refusing to move it.");
         }
 
@@ -365,11 +364,7 @@ internal static class ReleasePublishExecutor
                 var afterSha = after.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var peeled)
                     ? peeled
                     : after.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
-                if (!MayHavePublishedTag(
-                    remoteInspectionSucceeded: true,
-                    remoteListingWellFormed: true,
-                    afterSha,
-                    request.CandidateSha))
+                if (!MayHavePublishedTag(true, true, afterSha, request.CandidateSha))
                     return new TagEvidence(false, false,
                         "The push failed and a successful remote inspection confirms that the Candidate tag was not published. "
                         + Clip(push.StdErr));
