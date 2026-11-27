@@ -162,3 +162,18 @@
 ### Рабочее правило
 
 Все продуктовые изменения по этому плану вносятся только в `feat/release-management`. Ветка `docs/release-management-plan` содержит зафиксированный план и является его отдельной документационной точкой. Новые завершённые этапы, результаты проверок, отклонения от плана и блокеры отражаются в корневом `DEVELOPMENT_LOG.md` рабочей ветки. Ни одна из этих веток автоматически не сливается в `main`.
+
+
+## Актуализация — 27 ноября 2026: production GitHub safeguards
+
+Проверка репозитория после зелёного CI PR #230 (head 65329d3, run #46002824395):
+
+- GET /repos/vitalyKl/ProjectBeacon/rulesets вернул пустой список. Активных repository rulesets через этот endpoint не обнаружено.
+- Чтение branches/main/protection возвращает 403 Resource not accessible by integration; branch protection нельзя ни подтвердить, ни опровергнуть из подключённой GitHub-интеграции.
+- Настройки GitHub Environment production и legacy tag protection API этой интеграции недоступны. Наличие required reviewers, запрета self-review и ограничений на изменение тегов остаётся неподтверждённым. Пустой список repository rulesets сам по себе не доказывает отсутствие legacy tag protection или organization-level controls.
+- В .github/workflows/ci.yml workflow-level token имеет только contents: read; CI не использует repository secrets.
+- В .github/workflows/release.yml production SSH credentials используются только в job deploy, привязанном к Environment production; deploy зависит от успешных tests, image, scan и client.
+
+Добавлены автоматические проверки в scripts/test_release_workflow_permissions.py: CI не должен использовать repository secrets; production SSH secrets должны присутствовать только в deploy job; deploy обязан использовать Environment production и полный gate chain.
+
+**Внешний блокер перед первым production publish:** владелец репозитория должен подтвердить/настроить protection для release tags (запрет update/delete при разрешённом первичном создании доверенным publisher), required reviewer для Environment production с запретом self-review, а также допустимые deployment refs. Четыре SSH secrets должны быть заданы именно в Environment production: PRODUCTION_SSH_HOST, PRODUCTION_SSH_USER, PRODUCTION_SSH_PRIVATE_KEY, PRODUCTION_SSH_KNOWN_HOSTS. Эти настройки не изменялись автоматически; production tag/deployment не запускались.
