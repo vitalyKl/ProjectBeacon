@@ -3190,3 +3190,29 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Implementation: 6816b7d458d93ff0cf763c28d3962ec78f160c3e.
 - Tests: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077.
 - Current implementation/test head before this journal update: e595a3f4d0d7fd98453cb4d6ac1c56e5d0a84077. Exact-head GitHub Actions remains outstanding; no green result is claimed.
+
+## 2026-11-28 — Support RFC 6901 document-root writes in ReleasePrepare
+
+### Finding
+
+- ProjectVersionPolicyCatalog and the Python release gate both accept the empty RFC 6901 JSON Pointer as the document root; reads also return a root-level JSON string version.
+- ReleasePrepare's C# writer nevertheless rejected an empty selector because SetJsonPointer required every pointer to start with /. A valid root-level JSON version source could therefore be read/validated but not updated during ReleasePrepare.
+
+### Correction
+
+- SetJsonPointer now returns the updated root node together with a success flag. For the empty pointer it replaces the document root with a JSON string containing the requested version; nested object/array paths continue to update their selected node.
+- Added an end-to-end writer unit test using a root JSON string ("2.4.1") and the empty selector. The test validates the policy, writes 2.4.2, reads it back and verifies ProjectVersionPolicyCatalog extracts the same version.
+- Source commit: 59f84fe05811cfb3334fa98f8f01829c071d7c02.
+- Test commit: 99f2b876eb7ff9a5f8842c64fc61cbb7187748f3.
+- Test assertion follow-up: 1884b31304e305daede8030b33b62de0865c964b.
+
+### Path-boundary review
+
+- Rechecked version source path handling on both sides. Python safe_relative_path rejects symlinks in every component and verifies the resolved file remains below the checkout root. C# ReleasePrepare ResolveSourcePath rejects reparse points (symlinks/junctions) in every project-relative component and verifies the final path is inside the project root.
+- No additional source-path code change was required.
+
+### Validation status
+
+- Current implementation/test commits above are committed to feat/release-management. Full C# test execution and exact-head GitHub Actions remain pending; this environment cannot clone/download the repository for a local dotnet run.
+- CI is intentionally not triggered on PR synchronize; workflow_dispatch is the documented route (Actions → CI → Run workflow). The available GitHub connection does not expose a workflow-dispatch action, so no current-head run is claimed.
+- PR #230 remains open and unmerged. No production tag/deployment. Live Merge Queue and owner verification of GitHub branch/tag protection plus production Environment approvals/deployment refs/secrets remain external blockers. SaaS Control Plane and billing remain out of scope.
