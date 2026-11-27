@@ -3569,4 +3569,116 @@ Beacon がホストするコーディングエージェントは置かない。<
   <data name="ReleaseDiagnosticDetails" xml:space="preserve">
     <value>診断の詳細</value>
   </data>
+
+<data name="LandingReasonGitHubMergePending" xml:space="preserve">
+    <value>GitHub は非同期マージ要求を受け付け、現在処理中です。マージキューへの登録はまだ確認されていません。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
+  </data>
+<data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
+    <value>GitHub は PR をマージキューに登録しました。GitHub によるマージ完了を待っています。Beacon がマージコミットとマージ後の検証を確認するまで、タスクは未完了のままです。</value>
+  </data>
+<data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
+    <value>GitHub は非同期マージ要求を拒否しました。マージキューの失敗理由を確認し、必要な変更を行ってから、新しいランディングプレビューを要求してください。</value>
+  </data>
+<data name="ProjectAutoSyncLabel" xml:space="preserve"><value>リモートリポジトリを自動同期</value></data>
+<data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon は定期的にこのプロジェクトの upstream を取得し、変更のないアイドル状態のチェックアウトに限って fast-forward します。ローカル変更、履歴の分岐、Detached HEAD、実行中のエージェントセッションは保持されます。既存のローカルタグを強制更新または削除することはありません。</value></data>
+<data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>この設定を有効にするには、AutoSync 対応の Beacon クライアントを実行するワークステーションを接続してください。</value></data>
+<data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>プロジェクトのバージョンポリシー</value></data>
+<data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon は正式なプロジェクトバージョンを保持し、設定されたリポジトリのマニフェストと照合します。リポジトリのファイルは投影であり、通常のタスク作業中にエージェントが正式バージョンを変更・公開することはできません。</value></data>
+<data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>バージョンポリシーを読み込めませんでした。</value></data>
+<data name="OfficialProjectVersion" xml:space="preserve"><value>正式バージョン</value></data>
+<data name="VersionNotInitialized" xml:space="preserve"><value>未設定</value></data>
+<data name="VersionScheme" xml:space="preserve"><value>バージョン方式</value></data>
+<data name="VersionSchemeNumeric" xml:space="preserve"><value>数値コンポーネント</value></data>
+<data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+<data name="VersionSchemeCalendar" xml:space="preserve"><value>カレンダーバージョン</value></data>
+<data name="VersionComponentCount" xml:space="preserve"><value>数値コンポーネント数</value></data>
+<data name="VersionCalendarFormat" xml:space="preserve"><value>日付形式</value></data>
+<data name="VersionTagPattern" xml:space="preserve"><value>Git タグパターン</value></data>
+<data name="VersionTagPatternHelp" xml:space="preserve"><value>{version} プレースホルダーを1つだけ使用します（例: v{version}）。</value></data>
+<data name="VersionAllowPrerelease" xml:space="preserve"><value>SemVer のプレリリースを許可</value></data>
+<data name="VersionManifestSources" xml:space="preserve"><value>マニフェストのバージョンソース</value></data>
+<data name="VersionManifestSourcesHelp" xml:space="preserve"><value>1行につき1ソース: path|Format|selector。例: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; Regex は名前付き (?&lt;version>...) または最初のキャプチャグループを使用します。</value></data>
+<data name="InitialOfficialVersion" xml:space="preserve"><value>正式バージョンを初期化</value></data>
+<data name="InitialOfficialVersionHelp" xml:space="preserve"><value>この値は一度だけ初期化できます。以後の変更には ReleasePrepare ワークフローが必要です。</value></data>
+<data name="SaveVersionPolicy" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
+<data name="VersionSourceLineInvalid" xml:space="preserve"><value>各ソースは path|Format|selector 形式で指定してください。</value></data>
+<data name="ProjectVersionScheme" xml:space="preserve"><value>バージョン方式</value></data>
+<data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+<data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>数値コンポーネント</value></data>
+<data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>カレンダーバージョン</value></data>
+<data name="ProjectVersionComponentCount" xml:space="preserve"><value>数値コンポーネント数 (1～8)</value></data>
+<data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>カレンダー形式 (.NET の不変カルチャ日付形式)</value></data>
+<data name="ProjectVersionCalendarFormatHelp" xml:space="preserve"><value>必須トークンは yyyy、MM、dd、任意トークンは HH、mm、ss です。使用できる区切り文字: . - / _ スペース : T Z。例: yyyy.MM.dd、yyyyMMdd、yyyy-MM-ddTHH:mm:ssZ。</value></data>
+<data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git タグパターン</value></data>
+<data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>{version} プレースホルダーを1つだけ指定します（例: v{version}）。</value></data>
+<data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>SemVer のプレリリースバージョンを許可</value></data>
+<data name="ProjectOfficialVersion" xml:space="preserve"><value>公式プロジェクトバージョン（Beacon が正本）</value></data>
+<data name="ProjectVersionInitialVersion" xml:space="preserve"><value>初期公式バージョン</value></data>
+<data name="ProjectVersionSources" xml:space="preserve"><value>バージョンファイルの投影元</value></data>
+<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>1 行に 1 つのソースを指定: 相対パス|Xml、Json、Toml、Regex|セレクター。XML は絶対要素パスまたは子孫パスのみ対応します（例: /Project/PropertyGroup/Version、//Version）。JSON は JSON Pointer、TOML はドット区切りキー パスを使用し、値は文字列または整数である必要があります。Regex は .NET/Python 共通のサブセットのみ対応します。キャプチャ グループは 1 つだけ（(?&lt;version&gt;...) またはグループ 1）で、非キャプチャ グループと先読みのみ使用できます。対応エスケープ: \d、\D、\s、\S、\t、\r、\n、\f、\v、\A、\z。名前付き \k&lt;version&gt; 参照は名前付きグループの後に置いてください。後読み、インライン オプション、\w/\W/\b/\B、Unicode カテゴリ、数値バックリファレンス、入れ子または減算文字クラスは未対応です。Candidate の準備には少なくとも 1 つのソースが必要です。Release の計画だけを先に行う場合は後から設定できます。ファイルはプロジェクト workspace 内に置いてください。</value></data>
+<data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>バージョンポリシーを変更できるのはプロジェクトの Owner と Admin のみです。</value></data>
+<data name="ProjectVersionSave" xml:space="preserve"><value>バージョンポリシーを保存</value></data>
+<data name="ProjectVersionSaved" xml:space="preserve"><value>バージョンポリシーを保存しました</value></data>
+<data name="NotConfigured" xml:space="preserve"><value>未設定</value></data>
+<data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>このプロジェクトでリリース管理を有効にする</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>有効にすると Roadmap に Release が表示され、Milestone を Release にまとめられます。タスクは関連付けられた Milestone を通じて Release コンテキストを継承します。最初に上のバージョン方式とマニフェスト投影を設定してください。既定では無効で、有効化だけでは公開やデプロイは行われません。</value></data>
+<data name="ProjectReleases" xml:space="preserve"><value>プロジェクトのリリース</value></data>
+<data name="Releases" xml:space="preserve"><value>件のリリース</value></data>
+<data name="NewRelease" xml:space="preserve"><value>新しいリリース</value></data>
+<data name="ReleaseName" xml:space="preserve"><value>リリース名</value></data>
+<data name="ReleaseTargetVersion" xml:space="preserve"><value>対象バージョン</value></data>
+<data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>任意。プロジェクト設定で指定されたバージョン方式に一致する必要があります。</value></data>
+<data name="ReleaseTargetBranch" xml:space="preserve"><value>対象ブランチ</value></data>
+<data name="ReleaseStart" xml:space="preserve"><value>開始</value></data>
+<data name="ReleaseMarkCandidate" xml:space="preserve"><value>候補にする</value></data>
+<data name="CancelRelease" xml:space="preserve"><value>リリースをキャンセル</value></data>
+<data name="ReleaseCreated" xml:space="preserve"><value>リリースを作成しました</value></data>
+<data name="ReleaseDeleted" xml:space="preserve"><value>リリースを削除しました</value></data>
+<data name="MilestoneRelease" xml:space="preserve"><value>リリース</value></data>
+<data name="NoRelease" xml:space="preserve"><value>リリース未割り当て</value></data>
+<data name="NoReleases" xml:space="preserve"><value>このプロジェクトにはまだリリースがありません。</value></data>
+<data name="ReleaseStatusPlanned" xml:space="preserve"><value>計画済み</value></data>
+<data name="ReleaseStatusInProgress" xml:space="preserve"><value>進行中</value></data>
+<data name="ReleaseStatusCandidate" xml:space="preserve"><value>候補</value></data>
+<data name="ReleaseStatusPublished" xml:space="preserve"><value>公開済み</value></data>
+<data name="ReleaseStatusCancelled" xml:space="preserve"><value>キャンセル済み</value></data>
+<data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Candidate は ReleasePrepare によって、ポリシー、影響、landing、検証の各チェックに合格した後に作成されます。</value></data>
+<data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>本番バージョンエンドポイント</value></data>
+<data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>末尾が /v1/version の HTTPS URL。リリースワークフロー成功後、Beacon はこのエンドポイントを確認し、version と gitSha が Candidate と一致することを要求します。</value></data>
+<data name="CreateHotfixTask" xml:space="preserve"><value>Hotfix タスクを作成</value></data>
+<data name="HotfixTaskTitle" xml:space="preserve"><value>Hotfix タスク名</value></data>
+<data name="HotfixTaskDescription" xml:space="preserve"><value>本番環境の問題と必要な修正を説明</value></data>
+<data name="HotfixTaskCreated" xml:space="preserve"><value>デプロイ済みリリースから Hotfix タスクを作成しました</value></data>
+<data name="HotfixSourceRelease" xml:space="preserve"><value>元のリリース</value></data>
+<data name="HotfixDeployedVersion" xml:space="preserve"><value>デプロイ済みバージョン</value></data>
+<data name="HotfixDeployedSha" xml:space="preserve"><value>本番環境にデプロイされたコミット</value></data>
+<data name="HotfixDeploymentRun" xml:space="preserve"><value>デプロイワークフローを開く</value></data>
+<data name="ForwardPortOfHotfix" xml:space="preserve"><value>Hotfix のフォワードポート</value></data>
+<data name="HotfixTasks" xml:space="preserve"><value>Hotfix とフォワードポートのタスク</value></data>
+<data name="HotfixOriginNotice" xml:space="preserve"><value>このタスクは本番環境にデプロイされた正確なコミットを基点にしています。ブランチとベースコミットは Beacon によって保護されます。</value></data>
+<data name="ForwardPortNotice" xml:space="preserve"><value>この通常タスクは、元の Hotfix の landing が確認された後に作成されました。通常の Planner、Actor、Reviewer、landing ワークフローで完了してください。</value></data>
+<data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release の流れ: Project Settings で正本となるバージョンとマニフェストファイルを設定し、ここで Release を作成して Milestone を関連付けます。関連 Milestone のタスクは Planner コンテキストで目標バージョンとブランチを受け取ります。Release の準備で不変の Candidate が作成され、本番公開には別途明示的な確認が必要です。</value></data>
+<data name="PrepareReleaseCandidate" xml:space="preserve"><value>Candidate を準備</value></data>
+<data name="ReleasePreparationPullRequest" xml:space="preserve"><value>リリース Pull Request を開く</value></data>
+<data name="VerifyReleaseLanding" xml:space="preserve"><value>Landing を検証</value></data>
+<data name="ReleasePreparationInProgress" xml:space="preserve"><value>固定されたワークステーションでリリース準備を実行中です。</value></data>
+<data name="ReleasePrepareQueued" xml:space="preserve"><value>固定されたワークステーションにリリース準備をキュー登録しました。</value></data>
+<data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>同じワークステーションに Landing 検証をキュー登録しました。</value></data>
+<data name="PublishRelease" xml:space="preserve"><value>本番環境へ公開</value></data>
+<data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>本番公開の確認</value></data>
+<data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>リリース「{0}」をバージョン {1}、タグ「{2}」、ブランチ「{3}」で公開しますか？不変の Git タグを作成し、本番環境へデプロイする可能性のある GitHub Release ワークフローを開始します。push 済みタグは移動・削除されず、再試行では同じ Candidate とタグを使用します。</value></data>
+<data name="ReleasePublicationQueued" xml:space="preserve"><value>固定されたワークステーションに公開処理をキュー登録しました。Beacon は GitHub ワークフローとデプロイ済みバージョン/SHA を検証します。</value></data>
+<data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>不変のリリースタグはすでに push 済みです。再試行しても移動しません。</value></data>
+<data name="TaskVersionImpactTitle" xml:space="preserve"><value>バージョンへの影響</value></data>
+<data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Actor はこのタスクのバージョンへの影響をまだ宣言していません。</value></data>
+<data name="TaskVersionImpactLevel" xml:space="preserve"><value>宣言された影響</value></data>
+<data name="TaskVersionImpactRationale" xml:space="preserve"><value>Actor の理由</value></data>
+<data name="TaskVersionImpactReview" xml:space="preserve"><value>Reviewer の判断</value></data>
+<data name="TaskVersionImpactNone" xml:space="preserve"><value>バージョン変更なし</value></data>
+<data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+<data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+<data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+<data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>確認済み</value></data>
+<data name="TaskVersionImpactChallenged" xml:space="preserve"><value>異議あり</value></data>
+<data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer 待ち</value></data>
 </root>
