@@ -220,6 +220,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             queuedAttempt.MarkExecutePending();
             queuedMergeRequestId = Guid.NewGuid().ToString("D");
             queuedAttempt.MarkGitHubMergeQueued(queuedMergeRequestId, "pending");
+            var queuedMergeAcceptedAtUtc = queuedAttempt.UpdatedAt;
             _db.LandingAttempts.Add(queuedAttempt);
 
             // An external/manual merge without a Beacon LandingAttempt is not eligible
@@ -285,6 +286,7 @@ public sealed class DeviceAutoSyncTargetsHandlerTests : IDisposable
             Assert.Equal(queuedMergeRequestId, queued.MergeRequestId);
             Assert.Equal("pending", queued.MergeRequestStatus);
             Assert.False(queued.GitHubMergeQueued);
+            Assert.Equal(queuedMergeAcceptedAtUtc, queued.MergeRequestAcceptedAtUtc);
             Assert.Equal(queuedCandidateTree, queued.CandidateTreeSha);
             Assert.Equal("dotnet test --no-build", queued.PostMergeCheckCommand);
             Assert.Null(queued.PersistedPostMergeCheckExitCode);
