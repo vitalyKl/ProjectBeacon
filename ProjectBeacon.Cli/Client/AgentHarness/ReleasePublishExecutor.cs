@@ -338,6 +338,10 @@ internal static class ReleasePublishExecutor
                     root, filters, ct, originUrl, "ls-remote", "--tags", originUrl,
                     "refs/tags/" + request.TagName, "refs/tags/" + request.TagName + "^{}");
                 var after = ParseLsRemote(afterFailedPush.StdOut);
+                if (after.Error is not null)
+                    return new TagEvidence(false,
+                        after.ShaByRef.ContainsKey("refs/tags/" + request.TagName),
+                        "Could not safely interpret the remote tag after an ambiguous push: " + after.Error);
                 var afterSha = after.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var peeled)
                     ? peeled
                     : after.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
@@ -368,6 +372,8 @@ internal static class ReleasePublishExecutor
         if (!Succeeded(remoteVerify))
             return new TagEvidence(false, tagPushed, "Could not verify the exact release tag on the remote.");
         var verify = ParseLsRemote(remoteVerify.StdOut);
+        if (verify.Error is not null)
+            return new TagEvidence(false, tagPushed, "Could not safely interpret the final remote tag evidence: " + verify.Error);
         var remoteTarget = verify.ShaByRef.TryGetValue("refs/tags/" + request.TagName + "^{}", out var finalPeeled)
             ? finalPeeled
             : verify.ShaByRef.GetValueOrDefault("refs/tags/" + request.TagName);
