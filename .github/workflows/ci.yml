@@ -186,7 +186,7 @@ jobs:
               raise SystemExit(f"::error::Only {total} test results reported; expected at least {MIN_TOTAL}")
           unexpected = sorted(set(skipped) - EXPECTED_NOT_EXECUTED)
           if unexpected:
-              raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\\n" + "\\n".join(unexpected))
+              raise SystemExit("::error::Unexpected tests NotExecuted on Linux (only platform-conditional skips are allowed):\n" + "\n".join(unexpected))
           print(f"OK: {total} results, {len(skipped)} platform-conditional skips, {len(paths)} modules, symlink gates Passed")
           PY
       - name: Verify formatting
