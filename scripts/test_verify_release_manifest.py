@@ -13,6 +13,7 @@ from verify_release_manifest import (
     dotnet_regex_to_python,
     fail,
     is_safe_git_tag_name,
+    read_pointer,
     read_regex_version,
     read_toml_version,
     read_xml_version,
@@ -42,6 +43,24 @@ class ReleaseManifestSafetyTests(unittest.TestCase):
 
 
 class VersionSourceParityTests(unittest.TestCase):
+    def test_json_pointer_supports_document_root_and_rfc_6901_escaped_object_keys(self) -> None:
+        self.assertEqual("0.7.5.9", read_pointer("0.7.5.9", ""))
+        document = {"a/b": {"m~n": "0.7.5.9"}}
+        self.assertEqual("0.7.5.9", read_pointer(document, "/a~1b/m~0n"))
+
+    def test_json_pointer_rejects_invalid_escape_sequences(self) -> None:
+        document = {"version": "0.7.5.9", "version~2name": "wrong"}
+        for pointer in ("/version~", "/version~2name", "/version~~0"):
+            with self.subTest(pointer=pointer), self.assertRaises(SystemExit):
+                read_pointer(document, pointer)
+
+    def test_json_pointer_array_indexes_use_ascii_non_padded_decimal(self) -> None:
+        document = {"versions": ["0.7.5.9"]}
+        self.assertEqual("0.7.5.9", read_pointer(document, "/versions/0"))
+        for pointer in ("/versions/00", "/versions/٠", "/versions/+0", "/versions/1", "/versions/"):
+            with self.subTest(pointer=pointer), self.assertRaises(SystemExit):
+                read_pointer(document, pointer)
+
     def test_toml_projection_accepts_only_string_and_integer_scalars(self) -> None:
         self.assertEqual("0.7.5.9", read_toml_version(
             tomllib.loads('version = "0.7.5.9"'), "version"))
