@@ -263,6 +263,16 @@ public sealed class ReleaseHandlerTests : IDisposable
         await _db.Entry(milestone).ReloadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(release.Id, milestone.ReleaseId);
 
+        var renameProject = await new UpdateProjectHandler(
+                Factory(), new AuthorizationService(), new ContentWriter())
+            .HandleAsync(
+                new UpdateProjectCommand(
+                    new UpdateProjectRequest(_projectId, "Renamed after prepare", null),
+                    OwnerActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(renameProject.Success);
+        Assert.Equal(ErrorKind.Conflict, renameProject.Kind);
+
         var updateTask = await new UpdateTaskHandler(Factory(), new ContentWriter())
             .HandleAsync(
                 new UpdateTaskCommand(new UpdateTaskRequest(
@@ -270,6 +280,18 @@ public sealed class ReleaseHandlerTests : IDisposable
                 TestContext.Current.CancellationToken);
         Assert.False(updateTask.Success);
         Assert.Equal(ErrorKind.Conflict, updateTask.Kind);
+
+        var externalTask = TaskItem.Create("External dependency target", _projectId);
+        _db.Tasks.Add(externalTask);
+        _db.TaskDependencies.Add(TaskDependency.Create(task.Id, externalTask.Id));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var deleteDependencyTarget = await new DeleteTaskHandler(Factory(), new ContentWriter())
+            .HandleAsync(
+                new DeleteTaskCommand(new DeleteTaskRequest(externalTask.Id, _projectId), OwnerActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(deleteDependencyTarget.Success);
+        Assert.Equal(ErrorKind.Conflict, deleteDependencyTarget.Kind);
 
         var addStep = await new AddTaskStepHandler(Factory())
             .HandleAsync(
