@@ -1593,3 +1593,38 @@ Repository rulesets endpoint вернул пустой список; branch prot
 Текущий exact-head CI для этих двух новых CLI tests и обновлённого TRX floor запущен на PR head 260bd39430fc1157bbde744502f2387c364c4b69 (run #46028191547). На момент записи build / API test stage ещё выполнялись, failed steps не наблюдалось. S6 code acceptance фиксировать завершённым только после зелёной Linux/Windows/macOS матрицы на этом SHA.
 
 Остаётся внешний acceptance для live release / merge queue в writable organization-owned disposable repository. Эта проверка не заменяется unit/MCP fixture tests и не должна выполняться с production tag.
+## Итог S6 — независимый package.json и финальная cross-platform проверка (27 ноября 2026)
+
+### Проверки независимого источника версии
+
+В implementation branch feat/release-management добавлен независимый npm fixture NpmReleaseProject/package.json. Он использует SemVer 2.4.1, JSON Pointer /version и custom tag pattern release-{version}; источник не зависит от Directory.Build.props.
+
+Покрытие:
+
+- Domain fixture test: policy validation, extraction, normalization и custom tag projection.
+- MCP integration test version_check: читает package.json из изолированного BEACON_WORKSPACE_ROOT, сопоставляет версию с официальной политикой и возвращает in_sync для 2.4.1.
+- ReleasePrepare writer test: обновляет package.json с 2.4.1 на 2.4.2, сохраняет остальные JSON fields и повторно подтверждает проекцию той же политикой.
+
+### CI — точный implementation head
+
+- Head: 260bd39430fc1157bbde744502f2387c364c4b69.
+- GitHub Actions run #46028191547: success на Linux, Windows и macOS.
+- На каждой платформе прошли API, Application, CLI, Domain, Infrastructure, Web и Worker suites; оба новых S6 CLI tests прошли в каждой платформенной матрице.
+- Build, EF model check и formatting прошли на всех платформах.
+- Linux дополнительно прошёл Test release workflow permissions, Test release manifest tag policy, report failed test details и TRX guard с MIN_TOTAL = 2775.
+- CI и release workflow используют одинаковый TRX guard block. В этой матрице ошибок нет.
+
+### Текущее состояние веток и PR
+
+- Main: 7258d4e20a4cc5ad32f5a7b0994ae400365a4c5a, версия 0.7.5.10.
+- Implementation branch feat/release-management: 1 073 commits ahead / 0 behind main при проверке 27 ноября 2026.
+- PR #230 остаётся открытым, Ready for review, mergeable и unmerged. Производственный тег и deployment не создавались.
+
+### Что ещё не разрешает первый production publish
+
+- Владелец репозитория должен подтвердить protection для release tags (запрет update/delete при разрешённом первичном создании доверенным publisher), branch/ruleset required checks и допустимые refs.
+- GitHub Environment production должен иметь required reviewer, запрет self-review и четыре SSH secrets: PRODUCTION_SSH_HOST, PRODUCTION_SSH_USER, PRODUCTION_SSH_PRIVATE_KEY, PRODUCTION_SSH_KNOWN_HOSTS.
+- Эти настройки остаются неподтверждёнными через подключённую GitHub-интеграцию. Их отсутствие нельзя выводить из пустого списка repository rulesets.
+- Живой GitHub Merge Queue и first-publish workflow observation нужно подтвердить в writable organization-owned disposable repository. Не использовать production tag или реализацию PR для acceptance.
+
+PR #230 не сливать до выполнения внешних acceptance условий.
