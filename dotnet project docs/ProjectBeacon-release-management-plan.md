@@ -1365,3 +1365,13 @@ CI #45974881947 passed on previous implementation SHA `500c2e872239c9807920fc94a
 - Это закрывает прежний пробел, когда тест запрещал `packages: write` для tests/deploy, но не обнаруживал бы случайное `contents: write` или `id-token: write`.
 - Commit теста: `4ee8625e999adac5dc0958482725ad9aaa3d8658`; journal implementation branch: `34111f1f2f05ba96e5abd5fe109bc012a3c6b445`.
 - Прежний CI [#45977749031](https://github.com/vitalyKl/ProjectBeacon/actions/runs/45977749031) проходил до этого теста и не валидирует его. Нужен новый exact-head CI на post-journal SHA.
+
+
+## Дополнение — локализованные ошибки Release в Roadmap (27 ноября 2026)
+
+- В UI Roadmap поля `PreparationError` и `PublicationError` ранее выводились как единственный английский диагностический текст.
+- Добавлены отдельные локализованные сводки и подпись «Диагностика» для en/ru/de/ja/zh. Полный технический текст сохраняется и показывается с переносами строк и длинных строк.
+- Для ошибки публикации локализованная сводка отдельно напоминает: если immutable tag уже отправлен, повторная попытка использует тот же Candidate и тег.
+- Три новых ключа включены в существующую проверку `UiNotificationResources_AreAvailableInEverySupportedCulture`; LocalizationParityTests проверяет наличие ключей в satellite assemblies всех поддерживаемых языков. Новых test cases и изменения TRX floor нет.
+- Реализация: resource commits `beeb442d`, `4ed9f47e`, `a5aaf49b`, `39093054`, `0efcc485`; Roadmap UI `14f6a09f`; localization test `803e655a`; implementation journal `a3ac90d3`.
+- Предыдущий CI #45977749031 был зелёным до новых permission/localization changes. Нужен новый exact-head CI на последней feature-ветке.
