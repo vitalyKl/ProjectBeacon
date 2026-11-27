@@ -76,6 +76,34 @@ public sealed class ReleasePrepareExecutorTests
         }
     }
 
+    [Fact]
+    public async Task ReleasePrepare_WritesCanonicalJsonArrayIndex()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "beacon-json-array-version-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "versions.json");
+        const string original = """{"versions":["2.4.1"]}""";
+        try
+        {
+            await File.WriteAllTextAsync(path, original);
+            var source = new ProjectVersionSourcePolicy("versions.json", "Json", "/versions/0");
+            var policy = new ProjectVersionPolicy(
+                "SemVer", 3, null, "release-{version}", false, [source]);
+            Assert.True(ProjectVersionPolicyCatalog.Validate(policy, out var policyError), policyError);
+
+            var result = await ReleasePrepareExecutor.WriteVersionSourceAsync(
+                path, source, policy, "2.4.2", TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.Error);
+            var document = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+            Assert.Equal("2.4.2", document["versions"]![0]!.GetValue<string>());
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
     [Theory]
     [InlineData("/versions/00")]
     [InlineData("/versions/+0")]
