@@ -143,6 +143,17 @@ public sealed class AuditEvent : Entity
                     throw new ArgumentException($"Audit detail key '{property.Name}' is not allowlisted.", nameof(detailsJson));
 
                 var value = property.Value;
+                if (property.Name == "workflowRunId"
+                    && (value.ValueKind != JsonValueKind.Number
+                        || !value.TryGetInt64(out var workflowRunId)
+                        || workflowRunId <= 0))
+                    throw new ArgumentException(
+                        "Audit detail 'workflowRunId' must be a positive integer.", nameof(detailsJson));
+                if (property.Name == "tagPushed"
+                    && value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    throw new ArgumentException(
+                        "Audit detail 'tagPushed' must be a JSON boolean.", nameof(detailsJson));
+
                 if (value.ValueKind == JsonValueKind.String)
                 {
                     var code = value.GetString();
