@@ -1490,3 +1490,14 @@ CI после этих изменений требует минимум 2 771 Li
 - Тестовые commits correction: `142fcc19081caa6135b94556fd649bbe47086726`, `0d72f310cacb92619f4435652cc1f24caad6600a`. Промежуточный run не включает эти изменения.
 - Implementation branch после correction нуждается в новом exact-head Linux/Windows/macOS CI. Не считать более ранние успешные runs проверкой текущего head.
 - Journal commit implementation branch: `b49aa5ebf4b037940122626a647696a870cdea88`. PR #230 остаётся open/unmerged.
+
+
+## Дополнение — исправление области видимости publication audit helper (27 ноября 2026)
+
+- Exact-head run #45987491865 на SHA `16abf8e891f315af63b14d3546da040e2e9bbd18` выявил ошибку сборки `CS0103: PublicationAuditDetails does not exist in the current context` на Linux/macOS.
+- Причина: helper был вставлен в `ReleasePrepareCompletion` перед первым `AddAudit` в файле, тогда как вызовы находились в `ReleasePublishCompletion`. Он не был доступен из класса публикации.
+- Исправлено: helper перенесён внутрь `ReleasePublishCompletion` перед его собственным `AddAudit`. Все четыре вызова и объявление теперь находятся в одном классе; дополнительного helper в ReleasePrepareCompletion нет.
+- Сопутствующие ошибки запуска API/Application/CLI/Infrastructure/Web/Worker tests на macOS/Linux были следствием failed solution Build и отсутствующих test assemblies, а не самостоятельными assertion failures. Windows на том run дошёл до успешного Build, но run был отменён из-за concurrency.
+- Implementation commit: `8d343b437ea06096ecedae5bb29854223f3e05ee`; implementation journal update: `2ad852f6d083004a194466aa98af7c242204d508`.
+- Нужен новый full exact-head CI после journal commit; прежний #45987491865 — известный pre-fix failure/cancelled run, он не валидирует исправление.
+- External blockers остаются: live Merge Queue acceptance в writable org-owned disposable repository; administrator verification queue Merge method=merge, classic tag protection `v*` и required reviewers Environment `production`. PR #230 не сливать, production tag/deploy не запускать.
