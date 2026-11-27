@@ -286,6 +286,33 @@ public class Release : Entity, IProjectScoped
         UpdatedAt = PreparationUpdatedAtUtc;
     }
 
+    /// <summary>
+    /// Rehydrates the immutable Candidate evidence after this Release aggregate was loaded
+    /// from persistence. CandidateSnapshot is intentionally not an EF navigation; callers
+    /// must load the separate evidence row and attach only the exact snapshot that created
+    /// the current Candidate.
+    /// </summary>
+    public void AttachCandidateSnapshot(ReleaseCandidateSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (Status != ReleaseStatus.Candidate
+            || PreparationStatus != ReleasePreparationStatus.Candidate
+            || ProjectId != snapshot.ProjectId
+            || Id != snapshot.ReleaseId
+            || CandidateId != snapshot.CandidateId
+            || PreparationDeviceId != snapshot.PreparedByDeviceId
+            || snapshot.ReleaseRevision != Revision - 1
+            || !string.Equals(TargetVersion?.Trim(), snapshot.Version, StringComparison.Ordinal)
+            || !string.Equals(TargetBranch, snapshot.TargetBranch, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "Candidate snapshot does not match the persisted Release identity, revision, target or pinned workstation.");
+
+        if (CandidateSnapshot is not null && CandidateSnapshot.Id != snapshot.Id)
+            throw new InvalidOperationException("A different immutable Candidate snapshot is already attached.");
+
+        CandidateSnapshot = snapshot;
+    }
+
     private void RequirePreparationCommand(
         Guid commandId, ReleasePreparationStatus expectedStatus, Guid? expectedCommandId)
     {
