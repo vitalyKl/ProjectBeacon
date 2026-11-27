@@ -1073,3 +1073,11 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 - CI и release.yml Linux TRX floor повышен до 2 766; оба TRX guard blocks должны оставаться одинаковыми.
 - Commits: e569c12168bac0da273ca1a0eb75d74d6012ed41 (test), 9b0054661751f96d7683b8a963c40eea622d4667 и 05a894353218347dd2e7791acbd559d39c919e5d (guards), 5ec65e8c3846c4a59e981055994fc0c8c0175d38 (journal).
 - Последний завершённый green CI всё ещё относится к более раннему head e02e4d75; актуальная группа annotated-tag and retry changes требует fresh exact-head CI.
+
+
+### Дополнение — точное сравнение tag identity lines
+
+- Проверка metadata annotated tag теперь сравнивает строки полностью, не удаляя trailing whitespace. Строки Release/Candidate/SHA/version должны совпасть целиком и встречаться ровно один раз.
+- В существующий tag-evidence regression fact добавлено отрицательное условие для Release identity line с хвостовым пробелом. Общее число новых test facts не изменилось, Linux TRX threshold остаётся 2 766.
+- Code commit: 2de0e5f3dba63c434430900bf6598f82d6c2d17f; test commit: aa85877a7baffdab021fc8833b40ec00e453d27e; journal commit: 85b83094c168e59d9e2359faa72ba1f34707eeab.
+- Текущий точный кодовый head требует новой матрицы CI Linux/Windows/macOS.
