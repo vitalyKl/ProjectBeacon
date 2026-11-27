@@ -43,16 +43,18 @@ internal static class ReleasePublishExecutor
         string? payloadJson,
         CancellationToken ct)
     {
-        if (projectId == Guid.Empty || string.IsNullOrWhiteSpace(localRoot) || !Directory.Exists(localRoot))
-            return Fail("Release publication requires an existing project runtime root and project id.");
+        if (projectId == Guid.Empty)
+            return Fail("Release publication requires a project id.");
         if (string.IsNullOrWhiteSpace(payloadJson) || payloadJson.Length > MaxPayloadCharacters)
             return Fail("Release publication payload is missing or exceeds the size limit.");
-
         if (!TryReadRequest(payloadJson, out var request, out var payloadError))
             return Fail(payloadError ?? "Release publication payload is invalid.");
         if (request.ProjectId != projectId)
             return FailBeforeTag(request,
                 "Release publication project id does not match the authenticated workstation command.");
+        if (string.IsNullOrWhiteSpace(localRoot) || !Directory.Exists(localRoot))
+            return FailBeforeTag(request,
+                "Release publication requires an existing project runtime root; no release tag was pushed.");
 
         var tagPushAttempted = false;
         try
