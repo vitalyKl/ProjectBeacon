@@ -1579,3 +1579,17 @@ Repository rulesets endpoint вернул пустой список; branch prot
 - Реальный GitHub Merge Queue и first-publish workflow observation нужно подтвердить в writable organization-owned disposable repository; не использовать для этого production tag или PR реализации.
 - Для S6 нужен end-to-end fixture отдельного проекта с независимым источником версии, например package.json, чтобы проверить отсутствие зависимости от Directory.Build.props.
 - PR #230 остаётся открытым, Ready for review и не слитым. No release tag / deployment created.
+## Дополнение — S6: независимый npm-проект и JSON version source (27 ноября 2026)
+
+Добавлено независимое sample project fixture NpmReleaseProject/package.json с SemVer 2.4.1; оно не использует Directory.Build.props и проецирует версию через JSON Pointer /version. Tag pattern для примера: release-{version}.
+
+Покрытие в implementation branch feat/release-management:
+
+- Domain fixture test: policy validation, extraction из package.json, SemVer normalization и формирование release-2.4.1.
+- MCP integration test version_check: читает project policy из Beacon API, а package.json — непосредственно из текущего изолированного BEACON_WORKSPACE_ROOT; проверяет projectedVersion=2.4.1, in_sync и custom tag projection.
+- ReleasePrepare writer test: обновляет /version с 2.4.1 на 2.4.2, сохраняет остальные JSON fields и повторно извлекает записанную версию через тот же VersionPolicy.
+- Linux TRX floor поднят синхронно в ci.yml и release.yml до 2 775; guard-блоки сверены и идентичны.
+
+Текущий exact-head CI для этих двух новых CLI tests и обновлённого TRX floor запущен на PR head 260bd39430fc1157bbde744502f2387c364c4b69 (run #46028191547). На момент записи build / API test stage ещё выполнялись, failed steps не наблюдалось. S6 code acceptance фиксировать завершённым только после зелёной Linux/Windows/macOS матрицы на этом SHA.
+
+Остаётся внешний acceptance для live release / merge queue в writable organization-owned disposable repository. Эта проверка не заменяется unit/MCP fixture tests и не должна выполняться с production tag.
