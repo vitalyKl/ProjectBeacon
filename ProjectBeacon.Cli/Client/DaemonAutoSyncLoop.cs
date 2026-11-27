@@ -173,7 +173,7 @@ internal sealed class DaemonAutoSyncLoop : IDaemonLoop
                     var result = await failureResponse.Content.ReadFromJsonAsync<DeviceRemoteLandingFailureResult>(
                         JsonOptions, ct);
                     RecordState(remoteLanding.TaskId, "remote-landing-failed:" + result?.FailureCode,
-                        $"AutoSync task {remoteLanding.TaskId}: GitHub merge queue rejected the exact PR request. Landing attempt is {result?.AttemptStatus ?? "Failed"}; request a fresh Preview after reviewing the failure.");
+                        $"AutoSync task {remoteLanding.TaskId}: GitHub merge request did not complete ({result?.FailureCode ?? "unknown"}). Landing attempt is {result?.AttemptStatus ?? "Failed"}; request a fresh Preview after reviewing the failure.");
                 }
                 else
                 {
