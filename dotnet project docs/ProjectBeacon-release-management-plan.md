@@ -1064,3 +1064,12 @@ Implementation: ветка `feat/release-management`, PR [#230](https://github.c
 - Локальный bare-remote exercise подтвердил, что fetch в такой временный ref возвращает annotated tag object и peeled commit, а удаление временного ref не перемещает обычный refs/tags ref.
 - Code commit: eb1033d9bc19f3dd091c74a43474b029d3a4e811; journal commit: 8b351b84c3ed4d2268cd17e9acab144c945a6f68.
 - Новый exact-head CI требуется; предыдущий run #45959467058 покрывает head e5ec37cda058b584c638a42cfe241acd6f8806fe, а не этот follow-up.
+
+
+## Дополнение — retry publication только с исходным immutable Candidate payload (27 ноября 2026)
+
+- Добавлен Domain regression test FailedAfterTag: после того как immutable tag уже опубликован, failure оставляет Release в FailedAfterTag и не разрешает отмену Candidate; повторный Publish разрешён только с тем же payload, Candidate, tag и deployment endpoint.
+- Проверка также фиксирует сохранение PublicationTagPushed и ранее полученного workflow run id, при этом новый retry связывается с новым command id и увеличивает PublicationRevision.
+- CI и release.yml Linux TRX floor повышен до 2 766; оба TRX guard blocks должны оставаться одинаковыми.
+- Commits: e569c12168bac0da273ca1a0eb75d74d6012ed41 (test), 9b0054661751f96d7683b8a963c40eea622d4667 и 05a894353218347dd2e7791acbd559d39c919e5d (guards), 5ec65e8c3846c4a59e981055994fc0c8c0175d38 (journal).
+- Последний завершённый green CI всё ещё относится к более раннему head e02e4d75; актуальная группа annotated-tag and retry changes требует fresh exact-head CI.
