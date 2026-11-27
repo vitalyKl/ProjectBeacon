@@ -1383,36 +1383,6 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
             detailsJson: JsonSerializer.Serialize(details)));
     }
 
-    /// <summary>
-    /// A workstation may lose its acknowledgement after pushing the immutable tag.
-    /// Accept a negative tag-pushed assertion only when the failure result is bound to
-    /// this exact server-queued Publish payload and includes an explicit boolean.
-    /// Incomplete or mismatched evidence must never make a Candidate cancellable.
-    /// </summary>
-    internal static bool ReadTagPushedEvidence(JsonObject payload, string? resultJson)
-    {
-        if (!TryObject(resultJson, out var result)
-            || !IsPublicationResultForPayload(payload, result)
-            || !TryReadBool(result, "tagPushed", out var tagPushed))
-            return true;
-        return tagPushed;
-    }
-
-    private static bool IsPublicationResultForPayload(JsonObject payload, JsonObject result) =>
-        ReadString(result, "action") == "Publish"
-        && ReadGuid(result, "projectId") != Guid.Empty
-        && ReadGuid(result, "projectId") == ReadGuid(payload, "projectId")
-        && ReadGuid(result, "releaseId") != Guid.Empty
-        && ReadGuid(result, "releaseId") == ReadGuid(payload, "releaseId")
-        && ReadGuid(result, "candidateId") != Guid.Empty
-        && ReadGuid(result, "candidateId") == ReadGuid(payload, "candidateId")
-        && !string.IsNullOrWhiteSpace(ReadString(result, "version"))
-        && string.Equals(ReadString(result, "version"), ReadString(payload, "version"), StringComparison.Ordinal)
-        && !string.IsNullOrWhiteSpace(ReadString(result, "tagName"))
-        && string.Equals(ReadString(result, "tagName"), ReadString(payload, "tagName"), StringComparison.Ordinal)
-        && !string.IsNullOrWhiteSpace(ReadString(result, "candidateSha"))
-        && string.Equals(ReadString(result, "candidateSha"), ReadString(payload, "candidateSha"), StringComparison.OrdinalIgnoreCase);
-
     private static bool TryObject(string? json, out JsonObject value)
     {
         value = new JsonObject();
@@ -1436,14 +1406,8 @@ internal sealed class ReleasePrepareCompletion : ICommandCompletion
     private static int ReadInt(JsonObject value, string name) =>
         value[name] is JsonValue element && element.TryGetValue<int>(out var number) ? number : 0;
 
-    private static bool TryReadBool(JsonObject value, string name, out bool flag)
-    {
-        flag = false;
-        return value[name] is JsonValue element && element.TryGetValue<bool>(out flag);
-    }
-
     private static bool ReadBool(JsonObject value, string name) =>
-        TryReadBool(value, name, out var flag) && flag;
+        value[name] is JsonValue element && element.TryGetValue<bool>(out var flag) && flag;
 
     private static bool IsGitSha(string? value) =>
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit);
@@ -1671,6 +1635,40 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
             tagName, workflowRunId.Value, workflowRunUrl, deployedVersion, deployedSha,
             DateTime.SpecifyKind(deployedAt, DateTimeKind.Utc));
         return true;
+    }
+
+    /// <summary>
+    /// Missing or mismatched failure evidence is conservative: the immutable tag may
+    /// already exist. A negative assertion is accepted only for the exact queued Publish.
+    /// </summary>
+    internal static bool ReadTagPushedEvidence(JsonObject payload, string? resultJson)
+    {
+        if (!TryObject(resultJson, out var result)
+            || !IsPublicationResultForPayload(payload, result)
+            || !TryReadBool(result, "tagPushed", out var tagPushed))
+            return true;
+        return tagPushed;
+    }
+
+    private static bool IsPublicationResultForPayload(JsonObject payload, JsonObject result) =>
+        ReadString(result, "action") == "Publish"
+        && ReadGuid(result, "projectId") != Guid.Empty
+        && ReadGuid(result, "projectId") == ReadGuid(payload, "projectId")
+        && ReadGuid(result, "releaseId") != Guid.Empty
+        && ReadGuid(result, "releaseId") == ReadGuid(payload, "releaseId")
+        && ReadGuid(result, "candidateId") != Guid.Empty
+        && ReadGuid(result, "candidateId") == ReadGuid(payload, "candidateId")
+        && !string.IsNullOrWhiteSpace(ReadString(result, "version"))
+        && string.Equals(ReadString(result, "version"), ReadString(payload, "version"), StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(ReadString(result, "tagName"))
+        && string.Equals(ReadString(result, "tagName"), ReadString(payload, "tagName"), StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(ReadString(result, "candidateSha"))
+        && string.Equals(ReadString(result, "candidateSha"), ReadString(payload, "candidateSha"), StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryReadBool(JsonObject value, string name, out bool flag)
+    {
+        flag = false;
+        return value[name] is JsonValue element && element.TryGetValue<bool>(out flag);
     }
 
     private static void AddAudit(IBeaconDb db, Project project, Guid releaseId, string action, object details)
