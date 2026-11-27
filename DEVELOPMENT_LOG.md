@@ -2511,3 +2511,15 @@ No production tag, deployment or PR merge was performed. SaaS Control Plane and 
 - Workflow commits: `57bca5d7b4a134b18b681280a203bfceef426066` and `2962247979515cee3d4379d16dc79eb98156e2e8`.
 - These workflow commits are newer than the previous journal entry and require exact-head CI.
 
+
+
+## 2026-11-27 — Merge latest main locale audit into release branch
+
+**Merge commit:** `b34f72682913cf597cdfe2fc61c024d15d2dd5fa`  
+**Parents:** feature `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548`, main `7258d4e20a4cc5ad32f5a7b0994ae400365a4c5a`.
+
+- Main had advanced one commit with the locale audit/completion. Integrated it using a real two-parent merge commit; no force-update.
+- Only the five shared Resource files conflicted logically. The merge retained the updated main translations and re-applied the three Release error summary/detail keys in each culture.
+- Verified all five files contain `ReleasePreparationFailedSummary`, `ReleasePublicationFailedSummary` and `ReleaseDiagnosticDetails`.
+- The branch is now ahead of main and behind by zero commits. No application code or SaaS Control Plane/billing work was changed by this merge.
+- The previous in-flight CI #45982946580 targeted pre-merge SHA `24efb8d55b2f2f29bda46196a27cfcfa9bfb1548` and cannot validate the merged head. Exact-head CI is required after this entry.
