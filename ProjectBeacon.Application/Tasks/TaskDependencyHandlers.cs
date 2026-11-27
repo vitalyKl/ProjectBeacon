@@ -17,68 +17,52 @@ public class SetDependenciesHandler : ICommandHandler<SetDependenciesCommand, Re
 
     public async Task<Result<TaskItemDto>> HandleAsync(SetDependenciesCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks
-            .Include(t => t.Dependencies)
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+        return await ReleaseScopeMutationCoordinator.ExecuteForTaskAsync(
+            _dbFactory,
+            command.Request.TaskId,
+            null,
+            async (db, task, token) =>
+            {
+                await db.Entry(task).Collection(item => item.Dependencies).LoadAsync(token);
+                var existingIds = task.Dependencies.Select(dependency => dependency.DependentTaskId).ToList();
+                var toRemove = existingIds.Except(command.Request.DependentTaskIds);
+                var toAdd = command.Request.DependentTaskIds.Except(existingIds);
 
-        if (task is null)
-            return Result.Failure<TaskItemDto>("Task not found.");
-        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
-            db, task.ProjectId, [task.MilestoneId], ct);
-        if (milestoneBlock is not null)
-            return Result.Failure<TaskItemDto>(milestoneBlock, ErrorKind.Conflict);
+                foreach (var id in toRemove)
+                {
+                    var dependency = task.Dependencies.FirstOrDefault(item => item.DependentTaskId == id);
+                    if (dependency is not null)
+                        db.TaskDependencies.Remove(dependency);
+                }
 
-        var existingIds = task.Dependencies.Select(d => d.DependentTaskId).ToList();
-        var toRemove = existingIds.Except(command.Request.DependentTaskIds);
-        var toAdd = command.Request.DependentTaskIds.Except(existingIds);
+                foreach (var id in toAdd)
+                {
+                    if (id == task.Id)
+                        return Result.Failure<TaskItemDto>("A task cannot depend on itself.");
 
-        foreach (var id in toRemove)
-        {
-            var dep = task.Dependencies.FirstOrDefault(d => d.DependentTaskId == id);
-            if (dep is not null)
-                db.TaskDependencies.Remove(dep);
-        }
+                    var dependentTaskExists = await db.Tasks.AnyAsync(
+                        item => item.Id == id && item.ProjectId == task.ProjectId, token);
+                    if (!dependentTaskExists)
+                        return Result.Failure<TaskItemDto>($"Dependent task {id} not found.");
 
-        foreach (var id in toAdd)
-        {
-            if (id == task.Id)
-                return Result.Failure<TaskItemDto>("A task cannot depend on itself.");
+                    db.TaskDependencies.Add(Domain.Entities.Tasks.TaskDependency.Create(task.Id, id));
+                }
 
-            var depTaskExists = await db.Tasks.AnyAsync(t => t.Id == id && t.ProjectId == task.ProjectId, ct);
-            if (!depTaskExists)
-                return Result.Failure<TaskItemDto>($"Dependent task {id} not found.");
-
-            db.TaskDependencies.Add(Domain.Entities.Tasks.TaskDependency.Create(task.Id, id));
-        }
-
-        await db.SaveChangesAsync(ct);
-        await db.Entry(task).Collection(t => t.Dependencies).LoadAsync(ct);
-
-        return Result.Ok(MapToDto(task));
+                await db.SaveChangesAsync(token);
+                await db.Entry(task).Collection(item => item.Dependencies).LoadAsync(token);
+                return Result.Ok(MapToDto(task));
+            },
+            ct);
     }
 
     private static TaskItemDto MapToDto(TaskItem task) =>
         new(
-            task.Id,
-            task.Title,
-            task.Description,
-            task.Status.ToString(),
-            task.Priority,
-            task.Type,
+            task.Id, task.Title, task.Description, task.Status.ToString(), task.Priority, task.Type,
             task.Status == TaskItemStatus.InProgress ? task.SubStage : null,
-            task.ProjectId,
-            task.LabelId,
-            task.MilestoneId,
-            task.ReviewNotes,
-            task.CreatedAt,
-            task.CompletedAt,
-            [],
-            task.Dependencies.Select(d => d.DependentTaskId).ToList(),
-            task.ContentRevision,
-            task.HotfixSourceReleaseId,
-            task.HotfixDeployedSha,
-            task.HotfixTargetBranch,
-            task.HotfixRequestId,
-            task.ForwardPortOfTaskId);
+            task.ProjectId, task.LabelId, task.MilestoneId, task.ReviewNotes,
+            task.CreatedAt, task.CompletedAt, [],
+            task.Dependencies.Select(dependency => dependency.DependentTaskId).ToList(),
+            task.ContentRevision, task.HotfixSourceReleaseId, task.HotfixDeployedSha,
+            task.HotfixTargetBranch, task.HotfixRequestId, task.ForwardPortOfTaskId);
 }
+
