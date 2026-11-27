@@ -27,7 +27,7 @@ This log is maintained in the repository and updated in the same branch as imple
 | Git tags | GitSync fetch uses `--no-tags`. | Define and implement tag sync separately from working-tree fast-forward. |
 | Version policy | The implementation branch now has project-scoped VersionPolicy and Release entities; current main base is `0.7.5.9`. | Keep all changes isolated in this feature branch; confirm CI and migrations before merge. |
 | Version workflow | Release workflow and configured version schemes are being reconciled as part of S3/S4; current repository version is `0.7.5.9`. | Do not allow tag/deploy publication until the workflow validates the configured scheme and source projections. |
-| Landing authority | PR #194 says GitLand remains the landing executor and does not merge remote PRs. | Preserve current behavior until an explicit, tested remote-authority design is implemented; this remains an architecture decision. |
+| Landing authority | PR #194's original contract remains the local GitLand executor, but this feature branch adds a server-authorized GitHub async merge path for validated remote PRs. | GitHub is authoritative for a remote merge; the pinned workstation executes the request and AutoSync reconciles only after MERGED proof. No bypass of repository rules or competing local merge authority. |
 | GitHub protection | Tag rulesets and production environment reviewers have not yet been verified. | Do not assume dangerous publication is externally protected. Verify before S3. |
 
 ## Progress
@@ -46,14 +46,14 @@ This log is maintained in the repository and updated in the same branch as imple
 
 ## Next actions
 
-1. Finish the current CI matrix, correct its compiler/test failures, and trigger another run on the exact current branch head.
-2. Confirm EF model snapshot has no pending model changes and all application/API/CLI/web/worker suites pass on Linux, Windows and macOS.
-3. Complete the GitHub merge-authority path: remote landing reconciliation is read-only today, and GitHub PRs still require an external merge. The agent must be able to request/execute a validated merge through a server-authorized, policy-checked operation without bypassing branch protection.
-4. Verify GitHub tag rulesets and production Environment reviewers before enabling real publication.
+1. Record the exact-head CI result and run one final matrix after the journal/plan corrections below.
+2. Keep the first production publish blocked until the repository owner verifies release-tag protections and Environment production reviewers, deployment refs and secrets in GitHub Settings.
+3. Once those external safeguards are confirmed, complete the first-publish acceptance review using a dedicated release candidate; do not create a production tag from this implementation PR.
+4. Keep PR #230 open until code checks and the external production safeguards are both accepted.
 
 ## Blockers and decisions
 
-- **Landing authority:** current PR #194 contract and plan recommendation differ. No code change may make GitHub and local GitLand competing authorities. Keep existing GitLand semantics until a single remote-authoritative transaction is designed and tested.
+- **Landing authority — resolved in this branch:** the server-authorized GitLand Execute path now calls GitHub's asynchronous merge API with the exact reviewed PR head SHA and the repository's default merge action. Before submission it revalidates the task worktree, pinned review base, PR identity, APPROVED decision and required checks. `pending`/`enqueued` is not treated as a landing; AutoSync observes the exact request until GitHub reports MERGED and then verifies merge commit/tree and post-merge evidence. No `bypass_rules`, admin merge or forced ref update is requested. The earlier wording that remote PRs still need an external manual merge is obsolete.
 - **GitHub protection:** repository rulesets API returned an empty list on 2026-11-24. The legacy tag-protection and production Environment endpoints are not readable through the current GitHub connection (HTTP 400), and branch-protection read returned HTTP 403. This does not prove the settings are absent, but they are unverified; tag publication/deployment remains disabled.
 - **Validation environment:** the current execution environment has no .NET SDK and cannot resolve github.com from the shell. GitHub connector writes are available, but local build/test execution is not. Before claiming validation, use GitHub Actions on the exact branch head or a working .NET-enabled environment.
 - **ProjectBeacon MCP / Context7:** repository `AGENTS.md` requires both for project implementation. They are not exposed in this execution environment; this limitation must be reported and repository source remains the fallback, not represented as MCP/Context7 verification.
@@ -2987,3 +2987,29 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Linux TRX floor remains 2,773; CI and release workflow guard blocks are identical. The disabled/missing workflow cases extend an existing Fact, so no additional TRX result was introduced.
 - Run a fresh full Linux/Windows/macOS matrix on the post-journal SHA before accepting this work.
 - PR #230 remains open and unmerged. No release tag or production deployment was created. External tag protection and Environment production settings remain unverified and block first publish.
+
+
+## 2026-11-27 — Exact-head matrix green; remote merge authority verified
+
+### CI validation
+
+- Exact branch head: `0c1d749610fc42a391e85a85430e27cdc2bf0804`.
+- GitHub Actions run #46022091769 completed `success` on Linux, Windows and macOS.
+- All seven suites passed on each platform: API, Application, CLI, Domain, Infrastructure, Web and Worker.
+- Build, EF model check and formatting passed on all platforms. Linux also passed the release-workflow permission test, release-manifest tag-policy test and TRX guard (`MIN_TOTAL = 2773`).
+- No compiler, test, model-diff, TRX or formatting failures remain on this SHA.
+
+### S4 — server-authorized GitHub merge path (reviewed against source and tests)
+
+- `ExecuteLandingHandler` accepts a manual request only from a human user-bound actor, or an automatic request only from the trusted Worker. It rechecks current Git policy revision, latest Approve verdict, exact successful Review proof, task/source SHA, review base, pinned workstation and candidate evidence before queueing trusted GitLand.
+- The pinned workstation's `GitHubLandingMergeExecutor` rechecks the clean task worktree and exact source SHA, same fetch/push GitHub origin, pinned remote base, unique matching PR, PR head/base/state, mergeability, CLEAN merge state, APPROVED review decision and all required checks.
+- It calls GitHub's async merge endpoint with the exact PR head SHA and `merge_action=default`. It does not request `bypass_rules`, admin merge, force, or a separate merge strategy.
+- A `pending` or `enqueued` response is persisted as an accepted asynchronous request, not reported as landed. AutoSync then polls the exact PR/request; reconciliation requires MERGED state and verifies merge commit, remote base ancestry, tree and post-merge checks.
+- `GitHubLandingMergeExecutorTests` assert the exact-head async request arguments and explicitly reject bypass/admin/force options; response and merge-tree tests cover queued, merged, failed and malformed states.
+- This resolves the stale journal item that said the agent still required an external manual merge. GitHub remains the authority for remote merge execution; the workstation is the validated executor and evidence reporter.
+
+### Remaining external blocker
+
+- Repository rulesets were empty on the inspected endpoint; branch protection read returned 403 for the connected integration. Legacy tag protection and Environment `production` settings remain unverified, not presumed absent.
+- Before first production publish, the repository owner must verify tag update/delete protections, production Environment required reviewers/self-review policy and deployment refs, and confirm the four production SSH secrets are scoped to that Environment.
+- PR #230 remains open, Ready for review and unmerged. No production tag or deployment was created.
