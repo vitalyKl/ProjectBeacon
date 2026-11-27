@@ -110,51 +110,50 @@ public sealed class SetTaskVersionImpactHandler
             return Result.Failure<TaskVersionImpactDto>(
                 "A rationale of 1-1000 characters is required.", ErrorKind.Validation);
 
-        await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.FirstOrDefaultAsync(item => item.Id == command.TaskId, ct);
-        if (task is null)
-            return Result.Failure<TaskVersionImpactDto>("Task not found.", ErrorKind.NotFound);
-        if (!await GetTaskVersionImpactHandler.CanAccessProjectAsync(
-            db, task.ProjectId, command.Actor, readOnly: false, ct))
-            return Result.Forbidden<TaskVersionImpactDto>();
-        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
-            db, task.ProjectId, [task.MilestoneId], ct);
-        if (milestoneBlock is not null)
-            return Result.Failure<TaskVersionImpactDto>(milestoneBlock, ErrorKind.Conflict);
-        if (command.ExpectedRevision < 1 || command.ExpectedRevision != task.VersionImpactRevision)
-            return Result.Failure<TaskVersionImpactDto>(
-                "Version impact changed since it was loaded. Read it again and retry.", ErrorKind.Conflict);
-
-        var previousImpact = task.VersionImpact;
-        task.SetVersionImpact(command.Impact, command.Rationale);
-        var orgId = await db.Projects.Where(project => project.Id == task.ProjectId)
-            .Select(project => (Guid?)project.OrgId).FirstOrDefaultAsync(ct);
-        _auditWriter.Stage(db, AuditEventFactory.ForActor(
-            command.Actor,
-            "task.version_impact.declared",
-            "TaskVersionImpact",
-            task.Id.ToString("D"),
-            orgId,
-            task.ProjectId,
-            detailsJson: JsonSerializer.Serialize(new
+        return await ReleaseScopeMutationCoordinator.ExecuteForTaskAsync(
+            _dbFactory,
+            command.TaskId,
+            null,
+            async (db, task, token) =>
             {
-                previousState = previousImpact ?? "Unspecified",
-                newState = task.VersionImpact ?? "Unknown",
-                count = task.VersionImpactRevision
-            })));
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<TaskVersionImpactDto>(
-                "Version impact changed concurrently. Read it again and retry.", ErrorKind.Conflict);
-        }
-        return Result.Ok(GetTaskVersionImpactHandler.Map(task));
+                if (!await GetTaskVersionImpactHandler.CanAccessProjectAsync(
+                    db, task.ProjectId, command.Actor, readOnly: false, token))
+                    return Result.Forbidden<TaskVersionImpactDto>();
+                if (command.ExpectedRevision < 1 || command.ExpectedRevision != task.VersionImpactRevision)
+                    return Result.Failure<TaskVersionImpactDto>(
+                        "Version impact changed since it was loaded. Read it again and retry.", ErrorKind.Conflict);
+
+                var previousImpact = task.VersionImpact;
+                task.SetVersionImpact(command.Impact, command.Rationale);
+                var orgId = await db.Projects.Where(project => project.Id == task.ProjectId)
+                    .Select(project => (Guid?)project.OrgId).FirstOrDefaultAsync(token);
+                _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    command.Actor,
+                    "task.version_impact.declared",
+                    "TaskVersionImpact",
+                    task.Id.ToString("D"),
+                    orgId,
+                    task.ProjectId,
+                    detailsJson: JsonSerializer.Serialize(new
+                    {
+                        previousState = previousImpact ?? "Unspecified",
+                        newState = task.VersionImpact ?? "Unknown",
+                        count = task.VersionImpactRevision
+                    })));
+                try
+                {
+                    await db.SaveChangesAsync(token);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure<TaskVersionImpactDto>(
+                        "Version impact changed concurrently. Read it again and retry.", ErrorKind.Conflict);
+                }
+                return Result.Ok(GetTaskVersionImpactHandler.Map(task));
+            },
+            ct);
     }
 }
-
 
 /// <summary>
 /// Confirms or challenges the current task impact. Authorization is bound to the authenticated
@@ -189,67 +188,68 @@ public sealed class ReviewTaskVersionImpactHandler
             return Result.Failure<TaskVersionImpactDto>(
                 "A review note of 1-1000 characters is required.", ErrorKind.Validation);
 
-        await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.FirstOrDefaultAsync(item => item.Id == command.TaskId, ct);
-        if (task is null)
-            return Result.Failure<TaskVersionImpactDto>("Task not found.", ErrorKind.NotFound);
-        if (command.Actor.ProjectId != task.ProjectId)
-            return Result.Forbidden<TaskVersionImpactDto>();
-        var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
-            db, task.ProjectId, [task.MilestoneId], ct);
-        if (milestoneBlock is not null)
-            return Result.Failure<TaskVersionImpactDto>(milestoneBlock, ErrorKind.Conflict);
-
-        var session = await db.PipelineSessions.FirstOrDefaultAsync(
-            item => item.Id == reviewSessionId
-                && item.TaskId == task.Id
-                && item.ProjectId == task.ProjectId
-                && item.Role == PipelineRole.Review
-                && (item.Status == SessionStatus.Active || item.Status == SessionStatus.WaitingForUser),
-            ct);
-        if (session is null)
-            return Result.Forbidden<TaskVersionImpactDto>(
-                "The supplied Reviewer session is not active for this task.");
-
-        if (task.VersionImpact is null)
-            return Result.Failure<TaskVersionImpactDto>(
-                "The Actor has not declared version impact for this task.", ErrorKind.Conflict);
-        if (command.ExpectedRevision < 1 || command.ExpectedRevision != task.VersionImpactRevision)
-            return Result.Failure<TaskVersionImpactDto>(
-                "Version impact changed since it was reviewed. Read it again and retry.", ErrorKind.Conflict);
-
-        task.ReviewVersionImpact(command.Decision, command.Note, reviewSessionId);
-        var orgId = await db.Projects.Where(project => project.Id == task.ProjectId)
-            .Select(project => (Guid?)project.OrgId).FirstOrDefaultAsync(ct);
-        _auditWriter.Stage(db, AuditEventFactory.ForActor(
-            command.Actor,
-            command.Decision == "Confirmed"
-                ? "task.version_impact.confirmed"
-                : "task.version_impact.challenged",
-            "TaskVersionImpact",
-            task.Id.ToString("D"),
-            orgId,
-            task.ProjectId,
-            detailsJson: JsonSerializer.Serialize(new
+        return await ReleaseScopeMutationCoordinator.ExecuteForTaskAsync(
+            _dbFactory,
+            command.TaskId,
+            null,
+            async (db, task, token) =>
             {
-                previousState = task.VersionImpact ?? "Unknown",
-                newState = command.Decision,
-                reviewSessionId = reviewSessionId.ToString("D"),
-                count = task.VersionImpactRevision
-            })));
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<TaskVersionImpactDto>(
-                "Version impact changed concurrently. Read it again and retry.", ErrorKind.Conflict);
-        }
-        catch (InvalidOperationException exception)
-        {
-            return Result.Failure<TaskVersionImpactDto>(exception.Message, ErrorKind.Conflict);
-        }
-        return Result.Ok(GetTaskVersionImpactHandler.Map(task));
+                if (command.Actor.ProjectId != task.ProjectId)
+                    return Result.Forbidden<TaskVersionImpactDto>();
+
+                var session = await db.PipelineSessions.FirstOrDefaultAsync(
+                    item => item.Id == reviewSessionId
+                        && item.TaskId == task.Id
+                        && item.ProjectId == task.ProjectId
+                        && item.Role == PipelineRole.Review
+                        && (item.Status == SessionStatus.Active || item.Status == SessionStatus.WaitingForUser),
+                    token);
+                if (session is null)
+                    return Result.Forbidden<TaskVersionImpactDto>(
+                        "The supplied Reviewer session is not active for this task.");
+
+                if (task.VersionImpact is null)
+                    return Result.Failure<TaskVersionImpactDto>(
+                        "The Actor has not declared version impact for this task.", ErrorKind.Conflict);
+                if (command.ExpectedRevision < 1 || command.ExpectedRevision != task.VersionImpactRevision)
+                    return Result.Failure<TaskVersionImpactDto>(
+                        "Version impact changed since it was reviewed. Read it again and retry.", ErrorKind.Conflict);
+
+                task.ReviewVersionImpact(command.Decision, command.Note, reviewSessionId);
+                var orgId = await db.Projects.Where(project => project.Id == task.ProjectId)
+                    .Select(project => (Guid?)project.OrgId).FirstOrDefaultAsync(token);
+                _auditWriter.Stage(db, AuditEventFactory.ForActor(
+                    command.Actor,
+                    command.Decision == "Confirmed"
+                        ? "task.version_impact.confirmed"
+                        : "task.version_impact.challenged",
+                    "TaskVersionImpact",
+                    task.Id.ToString("D"),
+                    orgId,
+                    task.ProjectId,
+                    detailsJson: JsonSerializer.Serialize(new
+                    {
+                        previousState = task.VersionImpact ?? "Unknown",
+                        newState = command.Decision,
+                        reviewSessionId = reviewSessionId.ToString("D"),
+                        count = task.VersionImpactRevision
+                    })));
+                try
+                {
+                    await db.SaveChangesAsync(token);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    return Result.Failure<TaskVersionImpactDto>(
+                        "Version impact changed concurrently. Read it again and retry.", ErrorKind.Conflict);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return Result.Failure<TaskVersionImpactDto>(exception.Message, ErrorKind.Conflict);
+                }
+                return Result.Ok(GetTaskVersionImpactHandler.Map(task));
+            },
+            ct);
     }
 }
+
