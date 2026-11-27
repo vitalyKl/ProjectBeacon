@@ -404,6 +404,14 @@ internal static class MilestoneMutationCoordinator
             Guid scopedProjectId;
             if (projectId is { } requestedProjectId)
             {
+                // Preserve the route contract: an id outside this project is 404 even
+                // for an outsider; an existing milestone in this project is then
+                // authorized and returns 403 when the caller lacks project membership.
+                var scopedMilestoneExists = await db.Milestones.IgnoreQueryFilters().AsNoTracking()
+                    .AnyAsync(item => item.Id == milestoneId && item.ProjectId == requestedProjectId, ct);
+                if (!scopedMilestoneExists)
+                    return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
+
                 if (actor is not { IsHuman: true, UserId: not null } humanActor
                     || !await ProposalProjectAuthorization.CanWriteAsync(
                         db, humanActor, requestedProjectId, ct))
