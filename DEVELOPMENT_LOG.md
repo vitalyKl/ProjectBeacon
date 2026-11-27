@@ -2889,3 +2889,27 @@ The next intermediate run on `2e04b6c` reached all platform test suites. Linux A
 - A last repository-wide check against `docs/ignore-query-filters.allowlist` found that the pipeline lifecycle handler had one remaining bypass, not two, after the launch lookup was moved back to tenant-filtered queries. The manifest is now corrected from 2 to 1.
 - Counts rechecked on the branch: MilestoneHandlers 5; ProjectHandlers 12; TaskLifecycleHandlers 6; PipelineLifecycleHandlers 1; PipelineControlHandlers 1; PipelineReviewHandlers 1; DeviceRemoteLandingReconciliationHandler 27; WorkstationCommandHandlers 10. Each matches its reviewed manifest entry.
 - Run #46001290569 was cancelled after subsequent pushes and is not an acceptance result. Run the full matrix again on the latest branch head.
+
+
+## 2026-11-27 — Preserve project-scoped Milestone 404/403 contract
+
+### Latest exact-head API finding
+
+The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch in `P2AuthorizationHttpTests.MilestoneMutations_RequireProjectMembershipAndRespectProjectScopedRoutes`:
+
+- Requesting a milestone id through another project's route while authenticated as an outsider must return 404 (the milestone is not in that route project).
+- The coordinator authorized the requested project before checking the milestone/project pair, so it returned 403 before discovering the route mismatch.
+
+### Correction
+
+- For project-scoped Milestone mutations, the coordinator now performs an exact, tightly scoped unfiltered existence lookup on `MilestoneId + route ProjectId`.
+- If the pair does not exist, it returns 404 before authorization; this does not reveal whether the id belongs to another project.
+- If the pair exists, project membership authorization runs and returns 403 for an outsider.
+- After authorization, the handler takes the project lock and reloads the Milestone with normal tenant filters before applying the Candidate-scope guard and mutation.
+- Updated the reviewed allowlist for `MilestoneHandlers.cs` from 5 to 6 calls; the new sixth lookup is explicitly constrained by both route identifiers.
+
+### Validation status
+
+- Run #46001832895 correctly identified the mismatch on Linux; Windows and macOS were still running their API suites when the fix was committed.
+- The prior run is not accepted as green. A new full Linux/Windows/macOS matrix must validate the corrected route contract and all subsequent suites.
+- PR #230 remains open, Ready for review and unmerged. No production tag or deployment; SaaS Control Plane and billing remain out of scope.
