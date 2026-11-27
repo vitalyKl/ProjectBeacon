@@ -155,7 +155,7 @@ internal static class ReleaseScopeMutationCoordinator
 
             // ProjectId is immutable for a TaskItem. Resolve it first, take the shared
             // project lock, then reload the task and evaluate Candidate membership.
-            var projectId = await db.Tasks.IgnoreQueryFilters().AsNoTracking()
+            var projectId = await db.Tasks.AsNoTracking()
                 .Where(task => task.Id == taskId)
                 .Select(task => (Guid?)task.ProjectId)
                 .FirstOrDefaultAsync(ct);
@@ -164,7 +164,7 @@ internal static class ReleaseScopeMutationCoordinator
             if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, projectId.Value, ct))
                 return Result.Failure<T>("Task not found.", ErrorKind.NotFound);
 
-            var task = await db.Tasks.IgnoreQueryFilters()
+            var task = await db.Tasks
                 .FirstOrDefaultAsync(item => item.Id == taskId && item.ProjectId == projectId.Value, ct);
             if (task is null)
                 return Result.Failure<T>("Task not found.", ErrorKind.NotFound);
@@ -202,7 +202,7 @@ internal static class ReleaseScopeMutationCoordinator
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            var scope = await db.TaskSteps.IgnoreQueryFilters().AsNoTracking()
+            var scope = await db.TaskSteps.AsNoTracking()
                 .Where(step => step.Id == stepId)
                 .Select(step => new { step.TaskId, step.ProjectId })
                 .FirstOrDefaultAsync(ct);
@@ -212,9 +212,9 @@ internal static class ReleaseScopeMutationCoordinator
             if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scope.ProjectId, ct))
                 return Result.Failure<T>("Step not found.", ErrorKind.NotFound);
 
-            var task = await db.Tasks.IgnoreQueryFilters()
+            var task = await db.Tasks
                 .FirstOrDefaultAsync(item => item.Id == scope.TaskId && item.ProjectId == scope.ProjectId, ct);
-            var step = await db.TaskSteps.IgnoreQueryFilters()
+            var step = await db.TaskSteps
                 .FirstOrDefaultAsync(item => item.Id == stepId
                     && item.TaskId == scope.TaskId && item.ProjectId == scope.ProjectId, ct);
             if (task is null || step is null)
