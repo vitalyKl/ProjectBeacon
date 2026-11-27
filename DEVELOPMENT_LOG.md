@@ -3231,3 +3231,23 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Exact source/test blobs were re-read from GitHub after commit. Full dotnet test and exact-head CI still require the documented manual workflow dispatch; neither is claimed green for the current branch.
 
 - Added a positive control for the same writer path: canonical array index /versions/0 still updates the selected JSON string to the requested version. Test commit: 63c9a21e39fedec59e36f5fae8b6cfdc9a382a38.
+
+## 2026-11-28 — Enforce SemVer 2.0.0 prerelease identifier grammar
+
+### Finding
+
+- The C# ProjectVersionPolicyCatalog and Python tag-time release validator used equivalent regexes, but both accepted numeric prerelease identifiers with leading zeroes, such as 1.2.3-01 and 1.2.3-rc.01.
+- SemVer 2.0.0 explicitly prohibits leading zeroes in numeric prerelease identifiers while allowing them in build metadata. Official specification: https://semver.org/.
+
+### Correction
+
+- Replaced both validators' prerelease grammar with the SemVer 2.0.0 numeric-or-alphanumeric identifier grammar. Numeric identifiers allow only 0 or a non-zero digit followed by digits; identifiers containing ASCII letters or hyphens remain valid; build metadata retains its independent grammar.
+- Added matching C# and Python test cases for valid numeric prerelease 0, invalid 01, invalid rc.01, valid rc.1, valid alphanumeric 01alpha, valid build metadata +build.0001, and invalid prerelease 01 with build metadata.
+- C# implementation: fabf0b318d2222038362c86a5e225fd622b57e4c.
+- Python implementation: beb970dfaf17002f157604d9d1860f5be290191a.
+- C# tests: 8df554d37cf4437ba8af59dc1f1cfc94595ecdd2.
+- Python tests: 07550ef543a1e1bcda038861ce070920adde255d.
+
+### Validation status
+
+- Exercised the shared regex cases locally with Python: all valid/invalid expectations matched. Full C# test execution and exact-head GitHub Actions remain pending manual workflow_dispatch; no green status is claimed.
