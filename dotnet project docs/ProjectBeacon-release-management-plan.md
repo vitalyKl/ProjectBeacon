@@ -1693,3 +1693,9 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Official specification: https://semver.org/.
 - C# source: fabf0b318d2222038362c86a5e225fd622b57e4c; Python source: beb970dfaf17002f157604d9d1860f5be290191a; C# tests: 8df554d37cf4437ba8af59dc1f1cfc94595ecdd2; Python tests: 07550ef543a1e1bcda038861ce070920adde255d.
 - Regex fixtures checked in isolated Python; full C# test and exact-head Actions remain pending.
+
+### Проверка CLI TRX switch для xunit.v3 4.0.2 — 28 ноября 2026
+
+- Прямая команда CLI test assembly использует -trx <file>. Установлено, что pinned xunit.v3 4.0.2 сохраняет этот ключ в Microsoft.Testing.Platform CLI и отображает его на xUnit TRX reporter.
+- Текущая команда workflow корректна; заменять её на общий --report-trx не требуется.
+- Официальная документация: https://xunit.net/docs/getting-started/v3/microsoft-testing-platform.
