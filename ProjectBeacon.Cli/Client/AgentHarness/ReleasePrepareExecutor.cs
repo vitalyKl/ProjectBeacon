@@ -210,9 +210,10 @@ internal static class ReleasePrepareExecutor
             ["sources"] = manifestSources,
             ["snapshotJson"] = snapshotJson
         };
-        var manifestPath = Path.Combine(worktree, ".beacon", "release.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
-        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString(JsonOptions), new UTF8Encoding(false), ct);
+        var manifestPath = ResolveManifestPath(worktree);
+        if (manifestPath.Error is not null)
+            return Fail(manifestPath.Error);
+        await File.WriteAllTextAsync(manifestPath.Path!, manifest.ToJsonString(JsonOptions), new UTF8Encoding(false), ct);
         changedPaths.Add(".beacon/release.json");
 
         var staged = await Git(worktree, ct, filters,
@@ -692,6 +693,46 @@ internal static class ReleasePrepareExecutor
         return (full, null);
     }
 
+    /// <summary>
+    /// Resolves the Release manifest destination without following repository-controlled
+    /// symlinks or junctions. The remote target branch is untrusted input at this boundary.
+    /// </summary>
+    internal static (string? Path, string? Error) ResolveManifestPath(string worktree)
+    {
+        if (string.IsNullOrWhiteSpace(worktree) || !Directory.Exists(worktree))
+            return (null, "Release manifest requires an existing release worktree.");
+
+        var fullWorktree = Path.GetFullPath(worktree);
+        if (Reparse(fullWorktree))
+            return (null, "Release worktree cannot be a symbolic link or junction.");
+        var resolvedWorktree = AgentTaskWorktree.ResolvePhysicalPath(fullWorktree);
+        if (!SamePath(fullWorktree, resolvedWorktree))
+            return (null, "Release worktree path resolves outside its assigned directory.");
+
+        var beaconDirectory = Path.Combine(fullWorktree, ".beacon");
+        if (Reparse(beaconDirectory))
+            return (null, "The .beacon manifest directory cannot be a symbolic link or junction.");
+        if (File.Exists(beaconDirectory))
+            return (null, "The .beacon manifest path exists but is not a directory.");
+
+        Directory.CreateDirectory(beaconDirectory);
+        if (Reparse(beaconDirectory))
+            return (null, "The .beacon manifest directory changed to a symbolic link or junction.");
+        var resolvedBeaconDirectory = AgentTaskWorktree.ResolvePhysicalPath(Path.GetFullPath(beaconDirectory));
+        if (!Within(resolvedWorktree, resolvedBeaconDirectory)
+            || !SamePath(beaconDirectory, resolvedBeaconDirectory))
+            return (null, "The .beacon manifest directory must remain inside the release worktree.");
+
+        var manifestPath = Path.Combine(resolvedBeaconDirectory, "release.json");
+        if (Reparse(manifestPath))
+            return (null, "The .beacon/release.json manifest cannot be a symbolic link or junction.");
+        var fullManifestPath = Path.GetFullPath(manifestPath);
+        if (!Within(resolvedWorktree, fullManifestPath))
+            return (null, "The release manifest path escapes the release worktree.");
+
+        return (fullManifestPath, null);
+    }
+
     private static string RepositoryRelative(string prefix, string source) =>
         string.IsNullOrWhiteSpace(prefix) ? source : prefix + "/" + source;
 
@@ -750,7 +791,17 @@ internal static class ReleasePrepareExecutor
 
     private static bool Reparse(string path)
     {
-        try { return (File.Exists(path) || Directory.Exists(path)) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
+        try
+        {
+            // LinkTarget also detects dangling symlinks, for which File.Exists and
+            // Directory.Exists both return false. This matters before opening a path
+            // that came from a checked-out remote branch.
+            if (new FileInfo(path).LinkTarget is not null
+                || new DirectoryInfo(path).LinkTarget is not null)
+                return true;
+            return (File.Exists(path) || Directory.Exists(path))
+                && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
         catch { return true; }
     }
 
