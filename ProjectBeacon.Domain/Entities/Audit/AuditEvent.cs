@@ -24,7 +24,7 @@ public sealed class AuditEvent : Entity
         "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId",
         "deployedSha", "hotfixRequestId", "repository", "pullRequestNumber",
         "pullRequestUrl", "mergeRequestId", "candidateId", "candidateSha",
-        "tagName", "workstationId", "publicationRevision"
+        "tagName", "workstationId", "publicationRevision", "tagPushed", "workflowRunId"
     };
 
     private static readonly Regex DetailCodePattern =
@@ -149,7 +149,7 @@ public sealed class AuditEvent : Entity
                     var valid = code is not null && (property.Name switch
                     {
                         "candidateId" or "workstationId" => Guid.TryParseExact(code, "D", out _),
-                        "candidateSha" => Regex.IsMatch(code, "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.CultureInvariant),
+                        "candidateSha" or "deployedSha" => Regex.IsMatch(code, "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.CultureInvariant),
                         "tagName" => ProjectVersionPolicyCatalog.IsSafeGitTagName(code),
                         "sourceBranch" or "targetBranch" => BranchNamePattern.IsMatch(code),
                         "repository" => GitHubRepositoryPattern.IsMatch(code),
@@ -162,8 +162,9 @@ public sealed class AuditEvent : Entity
                 }
                 else if (value.ValueKind == JsonValueKind.Number)
                 {
-                    if (!value.TryGetInt64(out _))
-                        throw new ArgumentException($"Audit detail '{property.Name}' must be an integer.", nameof(detailsJson));
+                    if (!value.TryGetInt64(out var integer)
+                        || (property.Name == "workflowRunId" && integer <= 0))
+                        throw new ArgumentException($"Audit detail '{property.Name}' must be a positive integer.", nameof(detailsJson));
                 }
                 else if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                 {
