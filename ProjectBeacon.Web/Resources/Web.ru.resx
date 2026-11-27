@@ -3475,4 +3475,13 @@
 <data name="ChatWaitingTasksUnavailable" xml:space="preserve">
     <value>Список задач, ожидающих вашего ответа, временно недоступен. Чат остаётся доступен; страница будет повторять попытки автоматически.</value>
   </data>
+  <data name="ReleasePreparationFailedSummary" xml:space="preserve">
+    <value>Подготовка релиза не завершилась. Изучите диагностическое сообщение ниже, устраните причину и повторите попытку.</value>
+  </data>
+  <data name="ReleasePublicationFailedSummary" xml:space="preserve">
+    <value>Публикация в production не завершилась. Изучите диагностику ниже. Если неизменяемый тег уже отправлен, повторная попытка использует тот же Candidate и тег.</value>
+  </data>
+  <data name="ReleaseDiagnosticDetails" xml:space="preserve">
+    <value>Диагностика</value>
+  </data>
 </root>
