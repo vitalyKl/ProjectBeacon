@@ -215,7 +215,7 @@ public class GetMilestoneHandler : ICommandHandler<GetMilestoneCommand, Result<M
     public async Task<Result<MilestoneDto>> HandleAsync(GetMilestoneCommand command, CancellationToken ct = default)
     {
         await using var db = _dbFactory.CreateDbContext();
-        var milestone = await db.Milestones.IgnoreQueryFilters()
+        var milestone = await db.Milestones
             .FirstOrDefaultAsync(item => item.Id == command.Request.MilestoneId
                 && (command.Request.ProjectId == null || item.ProjectId == command.Request.ProjectId), ct);
         if (milestone is null)
@@ -251,7 +251,7 @@ public class ListProjectMilestonesHandler : ICommandHandler<ListProjectMilestone
             return Result.Forbidden<IList<MilestoneDto>>(
                 "Project membership is required to list milestones.");
 
-        var milestones = await db.Milestones.IgnoreQueryFilters()
+        var milestones = await db.Milestones
             .Where(m => m.ProjectId == command.Request.ProjectId)
             .OrderBy(m => m.Order)
             .Select(m => new MilestoneDto(
@@ -393,7 +393,7 @@ internal static class MilestoneMutationCoordinator
             db.ChangeTracker.Clear();
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            var scope = await db.Milestones.IgnoreQueryFilters().AsNoTracking()
+            var scope = await db.Milestones.AsNoTracking()
                 .Where(item => item.Id == milestoneId
                     && (projectId == null || item.ProjectId == projectId.Value))
                 .Select(item => new { item.ProjectId })
@@ -404,7 +404,7 @@ internal static class MilestoneMutationCoordinator
             if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, scope.ProjectId, ct))
                 return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
 
-            var milestone = await db.Milestones.IgnoreQueryFilters()
+            var milestone = await db.Milestones
                 .FirstOrDefaultAsync(item => item.Id == milestoneId && item.ProjectId == scope.ProjectId, ct);
             if (milestone is null)
                 return Result.Failure<T>("Milestone not found.", ErrorKind.NotFound);
