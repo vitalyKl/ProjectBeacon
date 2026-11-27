@@ -1534,6 +1534,9 @@ internal sealed class ReleasePublishCompletion : ICommandCompletion
 
         try
         {
+            // CandidateSnapshot is a separate immutable table row, not an EF navigation.
+            // Reattach the exact row loaded above before the aggregate validates deployment proof.
+            release.AttachCandidateSnapshot(candidate);
             release.CompletePublication(
                 row.Id,
                 proof.TagName,
