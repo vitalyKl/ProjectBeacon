@@ -58,6 +58,21 @@ public sealed class ProjectVersionPolicyCatalogTests
         Assert.True(ProjectVersionPolicyCatalog.TryNormalizeVersion(prerelease, "1.2.3-rc.1", out _, out _));
     }
 
+    [Theory]
+    [InlineData("1.2.3-0", true)]
+    [InlineData("1.2.3-01", false)]
+    [InlineData("1.2.3-rc.01", false)]
+    [InlineData("1.2.3-rc.1", true)]
+    [InlineData("1.2.3-01alpha", true)]
+    [InlineData("1.2.3-rc.1+build.0001", true)]
+    [InlineData("1.2.3-01+build.1", false)]
+    public void SemVer_RejectsLeadingZeroesOnlyInNumericPrereleaseIdentifiers(string version, bool expected)
+    {
+        var policy = new ProjectVersionPolicy("SemVer", 3, null, "v{version}", true, []);
+
+        Assert.Equal(expected, ProjectVersionPolicyCatalog.TryNormalizeVersion(policy, version, out _, out _));
+    }
+
     [Fact]
     public void Calendar_RequiresExactInvariantFormat()
     {
