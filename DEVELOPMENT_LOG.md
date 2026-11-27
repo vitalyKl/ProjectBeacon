@@ -3251,3 +3251,9 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 ### Validation status
 
 - Exercised the shared regex cases locally with Python: all valid/invalid expectations matched. Full C# test execution and exact-head GitHub Actions remain pending manual workflow_dispatch; no green status is claimed.
+
+## 2026-11-28 — Verify xUnit v3 CLI TRX option
+
+- Rechecked the direct CLI test invocation against the repository's pinned xunit.v3 4.0.2 package.
+- The xUnit v3 Microsoft.Testing.Platform CLI explicitly supports -trx <file> and maps it to the xUnit TRX reporter; the existing CLI workflow argument is valid and does not require conversion to the generic MTP --report-trx option.
+- No code or workflow change required. Official xUnit docs: https://xunit.net/docs/getting-started/v3/microsoft-testing-platform.
