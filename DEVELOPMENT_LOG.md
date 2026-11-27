@@ -3151,3 +3151,10 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Current PR head after CI diagnostics: 29739645d478c5e55c1acd70359c1c2487c7a083; a new exact-head Linux/Windows/macOS run is required. No green result is claimed.
 - The same-SHA retry of the previous macOS failure, run #46051958285, was still running API tests at the last status check. It tests the earlier documentation-only head 43b18f32adc5b30280597da7c1cd197f541501b3, not this current branch head.
 - PR #230 remains open and unmerged. No production tag or deployment was created. External merge-queue and GitHub production-protection acceptance remain unresolved. SaaS Control Plane and billing remain out of scope.
+
+## 2026-11-28 — Explicit shell for cross-platform CLI TRX output
+
+- The Windows/macOS CLI test step creates its TRX directory with mkdir -p. Set the step shell explicitly to Bash so the directory-creation command has identical semantics on Windows and macOS rather than depending on the runner's default shell alias.
+- The report step intentionally uses PowerShell 7; the current macOS 26 hosted image includes PowerShell 7.6.4, and Windows runners provide pwsh as the default PowerShell Core shell.
+- Follow-up workflow commit: 88c15b5d561b7b539a6d5b6cf1878480121bec62.
+- Current PR head after this journal update will be rechecked from GitHub. Exact-head CI is still outstanding; no green status is claimed.
