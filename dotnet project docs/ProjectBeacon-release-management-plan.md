@@ -1161,3 +1161,25 @@ Implementation: `feat/release-management`, PR #230.
 PR #230 остаётся open/unmerged. Production tag и deployment не запускались. SaaS Control Plane и billing не менялись.
 
 Implementation journal: `DEVELOPMENT_LOG.md`, commit `cc89faa0d3d0c078bad27711fb4dfc5d11628f81`.
+
+
+---
+
+## Дополнение — принцип наименьших привилегий для Release workflow (27 ноября 2026)
+
+В `.github/workflows/release.yml` найдено избыточное разрешение: workflow-level `packages: write` наследовалось jobs тестирования, сканирования и production deploy, хотя запись в GHCR необходима только image publisher.
+
+Исправлено в implementation commit `e1100e783b56100228a435b8b42ff753731dfb47`:
+
+- Workflow-level permissions: только `contents: read`.
+- `client`: `contents: write` — создание GitHub Release и загрузка клиентских архивов.
+- `image`: `contents: read`, `packages: write` — публикация контейнера в GHCR.
+- `scan`: `contents: read`, `packages: read` — pull и Trivy scan immutable image.
+- `tests` и `deploy`: только унаследованный `contents: read`, без package write.
+- Production secrets, SSH deployment и порядок gate jobs не менялись.
+
+Статическая проверка файла подтвердила: package write присутствует только в image job; package read — только в scan; глобального package write больше нет.
+
+Предыдущий exact-head CI #45962729055 был зелёным на SHA `841dd90bbd1e5375558acb20d2b0515c828876d4` (Linux/Windows/macOS, 2 767 Linux TRX результатов), но не включает изменение permissions. Run #45971210327 проверяет более поздний journal head `cc89faa0d3d0c078bad27711fb4dfc5d11628f81`, также до permission change; он не подтверждает эту правку. Требуется новый exact-head CI после обновления журнала.
+
+PR #230 остаётся open/unmerged. Production tags/deployments не запускались. SaaS Control Plane и billing вне scope.
