@@ -3687,4 +3687,7 @@ Beacon がホストするコーディングエージェントは置かない。<
 <data name="SnapshotPreviewUnavailable" xml:space="preserve">
     <value>保存されたスナップショットのデータ形式が正しくないため、プレビューできませんでした。</value>
   </data>
+<data name="InvalidProposalPayload" xml:space="preserve">
+    <value>提案のデータ形式が正しくないため、内容を読み取れませんでした。受信トレイを更新するか、作成者に再送信を依頼してください。</value>
+  </data>
 </root>
