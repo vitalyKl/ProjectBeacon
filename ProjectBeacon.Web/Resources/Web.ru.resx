@@ -3658,4 +3658,16 @@
 <data name="ProjectSwitchUnavailable" xml:space="preserve">
     <value>Не удалось изменить активный проект из-за непредвиденной ошибки. Диагностический ID: {0}</value>
   </data>
+<data name="UiBackgroundOperationRecovered" xml:space="preserve">
+    <value>Фоновые данные раздела «{0}» снова доступны.</value>
+  </data>
+<data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>Не удалось показать сохранённую версию: данные имеют неверный формат.</value>
+  </data>
+<data name="InvalidProposalPayload" xml:space="preserve">
+    <value>Не удалось прочитать содержимое предложения: данные имеют неверный формат. Обновите список или попросите автора отправить предложение повторно.</value>
+  </data>
+<data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>Данные патча репозитория имеют неверный или неполный формат. Обновите задачу и повторите попытку.</value>
+  </data>
 </root>

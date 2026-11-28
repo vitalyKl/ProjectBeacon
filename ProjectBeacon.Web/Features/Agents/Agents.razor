@@ -278,6 +278,10 @@ else
         var status = await GetStatus.HandleAsync(new GetProxyStatusCommand());
         if (status.Success)
             SetRuntimeStatus(status.Value);
+        else
+            Notifications.Warning(Notifications.FormatFailure(
+                status, L["Agents"].Value, L["Load"].Value,
+                new { Resource = "model runtime status" }));
     }
 
     private async Task AddModel()

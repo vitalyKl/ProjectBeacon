@@ -788,11 +788,24 @@
             {
                 SetLifecycle(
                     WorkstationCommandStatus.Failed,
-                    Notifications.FormatFailure(got, L["Workstations"].Value, L["Read"].Value),
+                    Notifications.FormatFailure(got, L["Workstations"].Value, L["Read"].Value,
+                        new { DeviceId = _wsDeviceId, CommandId = commandId, Operation = operationLabel }),
                     detailAlreadyFormatted: true);
                 return null;
             }
-            SetLifecycle(got.Value!.Status, got.Value.Error, operationLabel, new { DeviceId = _wsDeviceId, CommandId = commandId });
+
+            if (got.Value is null)
+            {
+                SetLifecycle(
+                    WorkstationCommandStatus.Failed,
+                    Notifications.FormatFailure(
+                        L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.Unclassified,
+                        L["Read"].Value, new { DeviceId = _wsDeviceId, CommandId = commandId, Operation = operationLabel }),
+                    detailAlreadyFormatted: true);
+                return null;
+            }
+
+            SetLifecycle(got.Value.Status, got.Value.Error, operationLabel, new { DeviceId = _wsDeviceId, CommandId = commandId });
             ApplyClientUpdateProgress(got.Value);
             await InvokeAsync(StateHasChanged);
             if (got.Value.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
