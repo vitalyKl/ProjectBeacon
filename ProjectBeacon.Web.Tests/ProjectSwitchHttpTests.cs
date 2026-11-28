@@ -29,7 +29,7 @@ public sealed class ProjectSwitchHttpTests
         var response = await client.GetAsync($"/project/switch?projectId={Guid.NewGuid()}&returnUrl=/board", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/dashboard", response.Headers.Location?.ToString());
+        Assert.Equal("/dashboard?projectSwitchError=failed", response.Headers.Location?.ToString());
     }
 
     [Fact]
