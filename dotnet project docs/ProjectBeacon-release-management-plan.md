@@ -210,3 +210,14 @@
 - Python release manifest parser приведён к RFC 6901: пустой root pointer, строгие ~0/~1 escapes и ASCII decimal array indexes. Roadmap release-load failures отделены от успешного empty state и покрыты Web tests.
 - Exact PR head 1532a507ba698bd82c81070828c03a99fc6e427a, run #46030846976: Linux, Windows и macOS success; все семь suites, build, EF model check и formatting успешны. Linux release security scripts and TRX guard also passed.
 - Остались только внешние acceptance: live async merge / Merge Queue и first-publish observation в writable disposable repository, подтверждение владельцем tag/branch protection и Environment production reviewers/self-review/deployment refs/four SSH secrets. Пока это не сделано, PR не сливать и production tag/deployment не создавать.
+
+
+## Final implementation status — 28 November 2026
+
+- Implementation PR #230 (**Implement Project Release Management: AutoSync, Version Policy and Releases**) was merged into `main` on 28 November 2026 at 09:53:45 UTC.
+- Merge commit: `4b78410596bc3fe93f5b150ebbf3448ae181708f`; merged implementation head: `dc7a4025c533949850ca8eb4b04d6d9387d50bc7`.
+- S0–S6 implementation is therefore part of `main`; the historical implementation branch must not be replayed over the current code.
+- Subsequent auth/UI PRs #241 and #243 were also merged. Main at `03c1fc69fa7b8043c7f9bab1885deb05a102f76f` passed post-merge CI run #46137352000 on Linux, Windows and macOS.
+- This merge and CI verification did **not** create a production release tag or trigger a production deployment.
+- External blockers for the first production publish remain: owner/admin verification of release-tag protection, `production` Environment required reviewers and self-review restrictions, allowed deployment refs and required SSH secrets; and live async-merge/Merge Queue acceptance in a writable org-owned disposable repository.
+- SaaS Control Plane and billing are not included in this implementation scope.
