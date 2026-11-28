@@ -124,19 +124,54 @@
                 var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(queued.Value!.Id, UserId)));
                 if (!got.Success)
                 {
-                    Notifications.Failure(got, L["Agents"].Value, L["Read"].Value);
+                    Notifications.Failure(got, L["Workstations"].Value, L["Read"].Value,
+                        new { DeviceId = deviceId, CommandId = queued.Value!.Id, Operation = "GGUF scan" });
                     return;
                 }
-                if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed)
+
+                if (got.Value is null)
+                {
+                    Notifications.Failure(L["CommandFailed"].Value, L["Workstations"].Value,
+                        ErrorCodes.Unclassified, L["Read"].Value,
+                        new { DeviceId = deviceId, CommandId = queued.Value!.Id, Operation = "GGUF scan" });
+                    return;
+                }
+
+                if (got.Value.Status is WorkstationCommandStatus.Succeeded
+                    or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 {
                     finished = got.Value;
                     break;
                 }
+
                 await Task.Delay(500);
             }
-            if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded || string.IsNullOrEmpty(finished.ResultJson))
+
+            var commandContext = new { DeviceId = deviceId, CommandId = queued.Value!.Id, Operation = "GGUF scan" };
+            if (finished is null)
             {
-                Notifications.Failure(finished?.Error, L["Agents"].Value, ErrorCodes.InternalError, L["Create"].Value, new { DeviceId = deviceId, CommandId = queued.Value!.Id });
+                Notifications.Failure(L["CommandTimedOut"].Value, L["Agents"].Value,
+                    ErrorCodes.Unavailable, L["PickGguf"].Value, commandContext);
+                return;
+            }
+
+            if (finished.Status == WorkstationCommandStatus.Cancelled)
+            {
+                Notifications.Warning(L["WorkstationCommandCancelled", L["PickGguf"].Value].Value);
+                return;
+            }
+
+            if (finished.Status != WorkstationCommandStatus.Succeeded)
+            {
+                Notifications.Failure(finished.Error ?? L["CommandFailed"].Value, L["Agents"].Value,
+                    ErrorCodes.InternalError, L["PickGguf"].Value, commandContext);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(finished.ResultJson))
+            {
+                Notifications.Failure(L["CommandFailed"].Value, L["Agents"].Value,
+                    ErrorCodes.Unclassified, L["PickGguf"].Value, commandContext);
                 return;
             }
             using var doc = JsonDocument.Parse(finished.ResultJson);
@@ -153,6 +188,14 @@
             }
             if (_ggufs.Count == 0)
                 Notifications.Add(L["NoGgufFiles"].Value, Severity.Info);
+        }
+        catch (Exception exception)
+        {
+            Notifications.ReportException(
+                exception,
+                "WorkstationCommandFailed",
+                "read GGUF scan result",
+                new { DeviceId = deviceId, Operation = "GGUF scan" });
         }
         finally
         {
