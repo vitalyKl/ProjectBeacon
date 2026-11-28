@@ -1226,4 +1226,53 @@ public sealed partial class AgentTaskGitOperationsTests
             try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
+
+    [Fact]
+    public async Task GitInfo_BlameDoesNotRunConfiguredTextconvDrivers()
+    {
+        var root = CreateTempRoot();
+        var repository = Path.Combine(root, "repository");
+        var worktreeRoot = Path.Combine(root, "worktrees");
+        Directory.CreateDirectory(repository);
+        AgentTaskWorktree? worktree = null;
+        try
+        {
+            var projectRoot = await InitializeRepositoryAsync(repository, withOrigin: false);
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, ".gitattributes"), "*.txt diff=beacon-textconv\n");
+            await File.WriteAllTextAsync(
+                Path.Combine(projectRoot, "blame.txt"), "alpha\nbeta\ngamma\n");
+            await GitAsync(repository, "add", "-A");
+            await GitAsync(repository, "commit", "-m", "Configure textconv blame fixture");
+            await GitAsync(repository, "config", "diff.beacon-textconv.textconv", "git hash-object");
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var opened = await AgentTaskWorktree.CreateAsync(
+                projectRoot, projectId, taskId, worktreeRoot, CancellationToken.None);
+            Assert.NotNull(opened.Worktree);
+            Assert.Null(opened.Error);
+            worktree = opened.Worktree!;
+
+            var blobSha = await GitAsync(
+                worktree.RecoveryPath, "hash-object", "src/app/blame.txt");
+            var result = await ExecuteAsync(
+                CreateAuthorization(worktree, projectId, taskId),
+                PipelineToolPolicy.GitInfo,
+                """{"kind":"blame","path":"blame.txt"}""");
+
+            Assert.False(result.IsError, result.Text);
+            Assert.Contains("alpha", result.Text, StringComparison.Ordinal);
+            Assert.Contains("beta", result.Text, StringComparison.Ordinal);
+            Assert.Contains("gamma", result.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(blobSha, result.Text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (worktree is not null)
+                await worktree.DisposeAsync();
+            try { Directory.Delete(root, recursive: true); } catch { }
+        }
+    }
+
 }
