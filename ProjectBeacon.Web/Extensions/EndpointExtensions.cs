@@ -32,7 +32,7 @@ public static class EndpointExtensions
             HttpContext ctx,
             LoginHandler handler,
             BeaconDbContext db,
-            IUiNotificationService diagnostics) =>
+            IUiDiagnosticService diagnostics) =>
         {
             try
             {
@@ -89,7 +89,7 @@ public static class EndpointExtensions
         app.MapGet("/project/switch", async (
             HttpContext ctx,
             BeaconDbContext db,
-            IUiNotificationService diagnostics) =>
+            IUiDiagnosticService diagnostics) =>
         {
             try
             {
