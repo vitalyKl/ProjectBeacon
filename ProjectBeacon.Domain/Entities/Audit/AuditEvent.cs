@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ProjectBeacon.Domain.Common;
+using ProjectBeacon.Domain.Entities.Projects;
 
 /// <summary>
 /// Append-only security and operator activity event. It stores identifiers and allowlisted
@@ -19,7 +20,11 @@ public sealed class AuditEvent : Entity
         "sourceBranch", "targetBranch", "sourceSha", "reviewTreeSha",
         "reviewCommandHash", "targetHeadSha", "candidateTreeSha",
         "candidateCheckOutputHash", "postMergeCheckOutputHash",
-        "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId"
+        "mergeCommitSha", "revertCommitSha", "reviewRunId", "deviceId",
+        "targetVersion", "previousReleaseId", "releaseId", "reviewSessionId",
+        "deployedSha", "hotfixRequestId", "repository", "pullRequestNumber",
+        "pullRequestUrl", "mergeRequestId", "candidateId", "candidateSha",
+        "tagName", "workstationId", "publicationRevision", "tagPushed", "workflowRunId"
     };
 
     private static readonly Regex DetailCodePattern =
@@ -27,6 +32,14 @@ public sealed class AuditEvent : Entity
 
     private static readonly Regex BranchNamePattern =
         new("^[A-Za-z0-9._/-]{1,200}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex GitHubRepositoryPattern =
+        new("^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex GitHubPullRequestUrlPattern =
+        new("^https://github\\.com/[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]{0,8}$",
+            RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public DateTime At { get; private set; }
     public AuditActorKind ActorKind { get; private set; }
@@ -130,19 +143,39 @@ public sealed class AuditEvent : Entity
                     throw new ArgumentException($"Audit detail key '{property.Name}' is not allowlisted.", nameof(detailsJson));
 
                 var value = property.Value;
+                if (property.Name == "workflowRunId"
+                    && (value.ValueKind != JsonValueKind.Number
+                        || !value.TryGetInt64(out var workflowRunId)
+                        || workflowRunId <= 0))
+                    throw new ArgumentException(
+                        "Audit detail 'workflowRunId' must be a positive integer.", nameof(detailsJson));
+                if (property.Name == "tagPushed"
+                    && value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                    throw new ArgumentException(
+                        "Audit detail 'tagPushed' must be a JSON boolean.", nameof(detailsJson));
+
                 if (value.ValueKind == JsonValueKind.String)
                 {
                     var code = value.GetString();
-                    var pattern = property.Name is "sourceBranch" or "targetBranch"
-                        ? BranchNamePattern
-                        : DetailCodePattern;
-                    if (code is null || !pattern.IsMatch(code))
-                        throw new ArgumentException($"Audit detail '{property.Name}' must be a short code, not free-form text.", nameof(detailsJson));
+                    var valid = code is not null && (property.Name switch
+                    {
+                        "candidateId" or "workstationId" => Guid.TryParseExact(code, "D", out _),
+                        "candidateSha" or "deployedSha" => Regex.IsMatch(code, "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.CultureInvariant),
+                        "tagName" => ProjectVersionPolicyCatalog.IsSafeGitTagName(code),
+                        "sourceBranch" or "targetBranch" => BranchNamePattern.IsMatch(code),
+                        "repository" => GitHubRepositoryPattern.IsMatch(code),
+                        "pullRequestUrl" => GitHubPullRequestUrlPattern.IsMatch(code),
+                        "targetVersion" => Regex.IsMatch(code, "^[A-Za-z0-9._+:/-]{1,100}$", RegexOptions.CultureInvariant),
+                        _ => DetailCodePattern.IsMatch(code)
+                    });
+                    if (!valid)
+                        throw new ArgumentException($"Audit detail '{property.Name}' must contain valid structured metadata, not free-form text.", nameof(detailsJson));
                 }
                 else if (value.ValueKind == JsonValueKind.Number)
                 {
-                    if (!value.TryGetInt64(out _))
-                        throw new ArgumentException($"Audit detail '{property.Name}' must be an integer.", nameof(detailsJson));
+                    if (!value.TryGetInt64(out var integer)
+                        || (property.Name == "workflowRunId" && integer <= 0))
+                        throw new ArgumentException($"Audit detail '{property.Name}' must be a positive integer.", nameof(detailsJson));
                 }
                 else if (value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                 {

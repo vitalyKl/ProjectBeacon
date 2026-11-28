@@ -22,6 +22,13 @@ public class Project : Entity, IOrgScoped
     public int ProposalPolicyRevision { get; private set; } = 1;
     /// <summary>Validated ProjectGitPolicy JSON. Defaults to manual landing, Escalate, and no auto-revert.</summary>
     public string GitPolicyJson { get; private set; } = "{\"autonomyLevel\":0,\"dirtyCheckoutBehavior\":\"Escalate\",\"protectedPaths\":[],\"maxChangedFiles\":200,\"maxChangedLines\":20000,\"autoRevertMode\":\"Off\"}";
+    /// <summary>Version and release rules configured for this project.</summary>
+    public string VersionPolicyJson { get; private set; } = ProjectVersionPolicyDefaults.Json;
+    /// <summary>Optimistic-concurrency token for version-policy edits.</summary>
+    public int VersionPolicyRevision { get; private set; } = 1;
+    /// <summary>Authoritative project version. Repository manifests are projections of this value.</summary>
+    public string? OfficialVersion { get; private set; }
+
     /// <summary>Optimistic-concurrency token for Git policy edits.</summary>
     public int GitPolicyRevision { get; private set; } = 1;
     public Guid OrgId { get; private set; }
@@ -35,6 +42,7 @@ public class Project : Entity, IOrgScoped
     public ICollection<ProjectInvite> Invites { get; private set; } = [];
     public ICollection<ApiToken> ApiTokens { get; private set; } = [];
     public ICollection<Milestone> Milestones { get; private set; } = [];
+    public ICollection<Release> Releases { get; private set; } = [];
 
     public static Project Create(string name, string? description, Guid orgId)
     {
@@ -68,6 +76,33 @@ public class Project : Entity, IOrgScoped
         ArgumentException.ThrowIfNullOrWhiteSpace(policyJson);
         GitPolicyJson = policyJson;
         GitPolicyRevision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Replaces the project version policy and increments its concurrency revision.</summary>
+    public void SetVersionPolicyJson(string policyJson)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(policyJson);
+        VersionPolicyJson = policyJson;
+        VersionPolicyRevision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Initializes the authoritative version once. Bumping it requires a release transaction.</summary>
+    public void InitializeOfficialVersion(string version)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        if (OfficialVersion is not null)
+            throw new InvalidOperationException("The official version is already initialized. Use ReleasePrepare to change it.");
+        OfficialVersion = version.Trim();
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Changes the authoritative version as part of a server-authorized release transaction.</summary>
+    public void SetOfficialVersionFromRelease(string version)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(version);
+        OfficialVersion = version.Trim();
         UpdatedAt = DateTime.UtcNow;
     }
 

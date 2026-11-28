@@ -4,6 +4,8 @@ using System.Text.Json;
 using Application.Authorization;
 using Application.Audit;
 using Application.Common;
+using Application.Devices;
+using Application.Releases;
 using Application.Persistence;
 using Application.Proposals;
 using Domain.Entities.Content;
@@ -63,11 +65,32 @@ public sealed class RestoreContentVersionHandler
     {
         if (command.ProjectId == Guid.Empty || command.ContentVersionId == Guid.Empty)
             return Result.Failure<RestoreContentVersionDto>("ProjectId and ContentVersionId are required.");
-
         if (command.ExpectedRevision < 1)
             return Result.Failure<RestoreContentVersionDto>("ExpectedRevision must be greater than zero.");
 
         await using var db = _dbFactory.CreateDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, command.ProjectId, ct))
+                return Result.Failure<RestoreContentVersionDto>("Project not found.", ErrorKind.NotFound);
+
+            var result = await RestoreLockedAsync(db, command, ct);
+            if (!result.Success)
+                return result;
+
+            await transaction.CommitAsync(ct);
+            return result;
+        });
+    }
+
+    private async Task<Result<RestoreContentVersionDto>> RestoreLockedAsync(
+        IBeaconDb db,
+        RestoreContentVersionCommand command,
+        CancellationToken ct)
+    {
         if (!command.Actor.IsHuman
             || command.Actor.UserId is null
             || !await ProposalProjectAuthorization.CanWriteAsync(db, command.Actor, command.ProjectId, ct))
@@ -78,6 +101,25 @@ public sealed class RestoreContentVersionHandler
             v => v.Id == command.ContentVersionId && v.ProjectId == command.ProjectId, ct);
         if (source is null)
             return Result.Failure<RestoreContentVersionDto>("Content version not found.");
+
+        if (source.TargetKind == ContentTargetKind.Milestone)
+        {
+            var milestoneBlock = await ReleaseMilestoneMutationGuard.GetBlockReasonAsync(
+                db, command.ProjectId, source.TargetId, ct);
+            if (milestoneBlock is not null)
+                return Result.Failure<RestoreContentVersionDto>(milestoneBlock, ErrorKind.Conflict);
+        }
+        else if (source.TargetKind == ContentTargetKind.TaskDescription)
+        {
+            var milestoneId = await db.Tasks
+                .Where(task => task.Id == source.TargetId && task.ProjectId == command.ProjectId)
+                .Select(task => task.MilestoneId)
+                .FirstOrDefaultAsync(ct);
+            var taskBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, command.ProjectId, [milestoneId], ct);
+            if (taskBlock is not null)
+                return Result.Failure<RestoreContentVersionDto>(taskBlock, ErrorKind.Conflict);
+        }
 
         // Restoring Decision/Constraint history can reinstate accepted governance state.
         // It therefore uses the same Owner/Admin boundary as approving governance proposals.
@@ -408,6 +450,7 @@ public sealed class RestoreContentVersionHandler
 
         return Result.Ok(new RestoreContentVersionDto(
             source.Id, source.TargetKind, source.TargetId, saved.Value, true));
+
     }
 
     private static bool HasSnapshotProperty(string json, string propertyName)

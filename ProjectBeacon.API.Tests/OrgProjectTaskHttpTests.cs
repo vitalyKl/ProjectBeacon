@@ -471,6 +471,91 @@ public sealed class OrgProjectTaskHttpTests
         Assert.Equal(0, tasks.GetArrayLength());
     }
 
+    [Fact]
+    public async Task VersionPolicyHttp_RoundTripsReleaseManagementFeatureFlag()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Version policy org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Version policy project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var route = $"/v1/projects/{projectId:D}/version-policy";
+
+        var initial = await client.GetFromJsonAsync<JsonElement>(route, TestContext.Current.CancellationToken);
+        Assert.False(initial.GetProperty("releaseManagementEnabled").GetBoolean());
+        Assert.Equal(1, initial.GetProperty("revision").GetInt32());
+
+        var enabled = await client.PutAsJsonAsync(route, new
+        {
+            scheme = "NumericComponents",
+            componentCount = 4,
+            calendarFormat = (string?)null,
+            tagPattern = "v{version}",
+            allowPrerelease = false,
+            sources = Array.Empty<object>(),
+            initialOfficialVersion = "0.7.5.9",
+            expectedRevision = 1,
+            releaseManagementEnabled = true
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(enabled.IsSuccessStatusCode,
+            await enabled.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var enabledBody = await enabled.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.True(enabledBody.GetProperty("releaseManagementEnabled").GetBoolean());
+        Assert.Equal("0.7.5.9", enabledBody.GetProperty("officialVersion").GetString());
+        Assert.Equal(2, enabledBody.GetProperty("revision").GetInt32());
+
+        var disabled = await client.PutAsJsonAsync(route, new
+        {
+            scheme = "NumericComponents",
+            componentCount = 4,
+            calendarFormat = (string?)null,
+            tagPattern = "v{version}",
+            allowPrerelease = false,
+            sources = Array.Empty<object>(),
+            initialOfficialVersion = (string?)null,
+            expectedRevision = 2,
+            releaseManagementEnabled = false
+        }, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(disabled.IsSuccessStatusCode,
+            await disabled.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var disabledBody = await disabled.Content.ReadFromJsonAsync<JsonElement>(Json, TestContext.Current.CancellationToken);
+        Assert.False(disabledBody.GetProperty("releaseManagementEnabled").GetBoolean());
+        Assert.Equal(3, disabledBody.GetProperty("revision").GetInt32());
+    }
+
+    [Fact]
+    public async Task PublishReleaseEndpoint_RejectsApiTokenEvenWithTaskWrite()
+    {
+        await using var factory = new AuthApiFactory();
+        var client = factory.CreateClient();
+        var jwt = await BootstrapAndLogin(client);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", jwt);
+
+        var org = await PostJson(client, "/v1/orgs", new { name = "Release auth org" });
+        var orgId = org.GetProperty("id").GetGuid();
+        var project = await PostJson(client, "/v1/projects", new { name = "Release auth project", orgId });
+        var projectId = project.GetProperty("id").GetGuid();
+        var token = await PostJson(client, $"/v1/projects/{projectId}/tokens", new
+        {
+            projectId,
+            name = "release-publisher-api-token",
+            capabilities = 3 // TaskRead | TaskWrite; release publication remains human-only.
+        });
+
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", token.GetProperty("token").GetString());
+        var response = await client.PostAsJsonAsync(
+            $"/v1/projects/{projectId}/releases/{Guid.NewGuid():D}/publish",
+            new { expectedReleaseRevision = 1, expectedPublicationRevision = 1 },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     private static async Task<string> BootstrapAndLogin(HttpClient client)
     {
         var bootRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/auth/bootstrap");

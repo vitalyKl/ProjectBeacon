@@ -42,6 +42,144 @@ public sealed class AuditEventTests
     }
 
     [Fact]
+    public void Create_AcceptsReleaseVersionAndMilestoneAssociationMetadata()
+    {
+        var previousReleaseId = Guid.NewGuid();
+        var releaseId = Guid.NewGuid();
+        var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            newState = "Planned",
+            targetVersion = "0.7.5.9",
+            targetBranch = "release/0.7.5.9",
+            previousReleaseId = previousReleaseId.ToString("D"),
+            releaseId = releaseId.ToString("D"),
+            count = 3
+        });
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+        Assert.NotEqual(previousReleaseId, releaseId);
+    }
+
+    [Fact]
+    public void Create_AcceptsReviewerDecisionSessionMetadata()
+    {
+        var sessionId = Guid.NewGuid();
+        var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            previousState = "patch",
+            newState = "Confirmed",
+            reviewSessionId = sessionId.ToString("D"),
+            count = 4
+        });
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_AcceptsCalendarTargetVersionAndAutoSyncPolicyMetadata()
+    {
+        const string detailsJson = """{"newState":"NumericComponents","policyCode":"ReleaseManagement.Enabled","reasonCode":"Escalate","resultCode":"AutoSync.Enabled","targetVersion":"2026/11/24","count":4}""";
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_AcceptsReleaseLifecycleMetadata()
+    {
+        const string detailsJson = """{"previousState":"Planned","newState":"Release.FieldsUpdated","targetVersion":"0.7.5.9+build.12","targetBranch":"release/0.7.5.9","count":3}""";
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_AcceptsValidatedGitHubPullRequestMergeMetadata()
+    {
+        const string json = """{"repository":"acme/project-beacon","pullRequestNumber":42,"pullRequestUrl":"https://github.com/acme/project-beacon/pull/42","mergeRequestId":"6a7c3d51-8397-49e4-86b5-4e7a4ac4f71a","resultCode":"GitHubMergeEnqueued"}""";
+
+        var auditEvent = Create(json);
+
+        Assert.Equal(json, auditEvent.DetailsJson);
+    }
+
+    [Theory]
+    [InlineData("repository", "acme/project beacon")]
+    [InlineData("repository", "https://github.com/acme/project-beacon")]
+    [InlineData("pullRequestUrl", "https://github.com/acme/project-beacon/pull/42?tab=checks")]
+    [InlineData("pullRequestUrl", "https://attacker.example/acme/project-beacon/pull/42")]
+    public void Create_RejectsUnsafeGitHubRepositoryAndPullRequestMetadata(string key, string value)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            [key] = value
+        });
+
+        Assert.Throws<ArgumentException>(() => Create(json));
+    }
+
+    [Fact]
+    public void Create_AcceptsImmutableReleasePublicationMetadata()
+    {
+        var detailsJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            candidateId = Guid.NewGuid().ToString("D"),
+            tagName = "customer/releases/0.7.5.10",
+            candidateSha = new string('a', 40),
+            workstationId = Guid.NewGuid().ToString("D"),
+            publicationRevision = 2,
+            tagPushed = true,
+            workflowRunId = 12345L,
+            targetVersion = "0.7.5.10",
+            deployedSha = new string('b', 40)
+        });
+
+        var auditEvent = Create(detailsJson);
+
+        Assert.Equal(detailsJson, auditEvent.DetailsJson);
+    }
+
+    [Fact]
+    public void Create_RejectsMalformedImmutableReleasePublicationMetadata()
+    {
+        var invalidDetails = new[]
+        {
+            """{"candidateId":"not-a-guid"}""",
+            """{"workstationId":"not-a-guid"}""",
+            """{"candidateSha":"not-a-git-sha"}""",
+            """{"deployedSha":"not-a-git-sha"}""",
+            """{"tagName":"release/../0.7.5.10"}""",
+            """{"publicationRevision":1.5}""",
+            """{"workflowRunId":0}""",
+            """{"workflowRunId":-1}""",
+            """{"workflowRunId":"12345"}""",
+            """{"workflowRunId":1.5}""",
+            """{"tagPushed":"true"}""",
+            """{"tagPushed":1}"""
+        };
+
+        foreach (var detailsJson in invalidDetails)
+            Assert.Throws<ArgumentException>(() => Create(detailsJson));
+    }
+
+    [Fact]
+    public void Create_RejectsFreeFormReleaseAndReviewContent()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"rationale":"This is a free-form description."}"""));
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"note":"The reviewer wrote a long note."}"""));
+        Assert.Throws<ArgumentException>(() =>
+            Create(detailsJson: """{"targetVersion":"version with spaces"}"""));
+    }
+
+    [Fact]
     public void Create_RejectsUnlistedSensitiveMetadataKeys()
     {
         Assert.Throws<ArgumentException>(() => Create(detailsJson: """{"password":"secret"}"""));

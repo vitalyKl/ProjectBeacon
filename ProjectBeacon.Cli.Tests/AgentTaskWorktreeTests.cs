@@ -64,6 +64,126 @@ public sealed class AgentTaskWorktreeTests
     }
 
     [Fact]
+    public async Task HotfixWorkspace_StartsFromVerifiedDeployedShaInsteadOfCurrentRemoteTip()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-hotfix-worktree-" + Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(parent, "repository");
+        var origin = Path.Combine(parent, "origin.git");
+        var worktrees = Path.Combine(parent, "worktrees");
+        Directory.CreateDirectory(repository);
+        try
+        {
+            await InitializeRepositoryAsync(repository);
+            var deployedSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(parent, "init", "--bare", origin);
+            await GitAsync(repository, "remote", "add", "origin", origin);
+            await GitAsync(repository, "push", "-u", "origin", "main");
+
+            await File.WriteAllTextAsync(Path.Combine(repository, "after-deployment.txt"), "later remote change\n");
+            await GitAsync(repository, "add", "after-deployment.txt");
+            await GitAsync(repository, "commit", "-m", "advance production branch");
+            await GitAsync(repository, "push", "origin", "main");
+            var remoteTip = await GitAsync(repository, "rev-parse", "HEAD");
+            Assert.NotEqual(deployedSha, remoteTip);
+
+            var created = await AgentTaskWorktree.CreateAsync(
+                repository, Guid.NewGuid(), Guid.NewGuid(), worktrees,
+                CancellationToken.None, "main", deployedSha);
+
+            Assert.NotNull(created.Worktree);
+            Assert.Null(created.Error);
+            await using var workspace = created.Worktree!;
+            Assert.Equal("main", workspace.BaseBranch);
+            Assert.Equal(deployedSha, workspace.BaseSha);
+            Assert.Equal(deployedSha, await GitAsync(workspace.RecoveryPath, "rev-parse", "HEAD"));
+            Assert.NotEqual(remoteTip, await GitAsync(workspace.RecoveryPath, "rev-parse", "HEAD"));
+            Assert.False(File.Exists(Path.Combine(workspace.WorkingDirectory, "after-deployment.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task HotfixWorkspace_RejectsReusingTaskMetadataWithDifferentDeployedSha()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-hotfix-worktree-mismatch-" + Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(parent, "repository");
+        var origin = Path.Combine(parent, "origin.git");
+        var worktrees = Path.Combine(parent, "worktrees");
+        Directory.CreateDirectory(repository);
+        try
+        {
+            await InitializeRepositoryAsync(repository);
+            var firstDeployedSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(parent, "init", "--bare", origin);
+            await GitAsync(repository, "remote", "add", "origin", origin);
+            await GitAsync(repository, "push", "-u", "origin", "main");
+            await File.WriteAllTextAsync(Path.Combine(repository, "second.txt"), "next commit\n");
+            await GitAsync(repository, "add", "second.txt");
+            await GitAsync(repository, "commit", "-m", "advance main");
+            await GitAsync(repository, "push", "origin", "main");
+            var secondDeployedSha = await GitAsync(repository, "rev-parse", "HEAD");
+
+            var projectId = Guid.NewGuid();
+            var taskId = Guid.NewGuid();
+            var first = await AgentTaskWorktree.CreateAsync(
+                repository, projectId, taskId, worktrees,
+                CancellationToken.None, "main", firstDeployedSha);
+            Assert.NotNull(first.Worktree);
+            await first.Worktree!.DisposeAsync();
+
+            var reopenedWithDifferentBase = await AgentTaskWorktree.CreateAsync(
+                repository, projectId, taskId, worktrees,
+                CancellationToken.None, "main", secondDeployedSha);
+
+            Assert.Null(reopenedWithDifferentBase.Worktree);
+            Assert.Contains("does not match", reopenedWithDifferentBase.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task HotfixWorkspace_FailsClosedWhenDeployedShaIsNotOnRemoteTargetBranch()
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "beacon-hotfix-worktree-orphan-" + Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(parent, "repository");
+        var origin = Path.Combine(parent, "origin.git");
+        var worktrees = Path.Combine(parent, "worktrees");
+        Directory.CreateDirectory(repository);
+        try
+        {
+            await InitializeRepositoryAsync(repository);
+            var deployedSha = await GitAsync(repository, "rev-parse", "HEAD");
+            await GitAsync(parent, "init", "--bare", origin);
+            await GitAsync(repository, "remote", "add", "origin", origin);
+            await GitAsync(repository, "push", "-u", "origin", "main");
+
+            await GitAsync(repository, "checkout", "--orphan", "replacement");
+            await GitAsync(repository, "rm", "-rf", ".");
+            await File.WriteAllTextAsync(Path.Combine(repository, "replacement.txt"), "rewritten history\n");
+            await GitAsync(repository, "add", "replacement.txt");
+            await GitAsync(repository, "commit", "-m", "replace branch history");
+            await GitAsync(repository, "push", "--force", "origin", "HEAD:main");
+
+            var result = await AgentTaskWorktree.CreateAsync(
+                repository, Guid.NewGuid(), Guid.NewGuid(), worktrees,
+                CancellationToken.None, "main", deployedSha);
+
+            Assert.Null(result.Worktree);
+            Assert.Contains("ancestor", result.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try { Directory.Delete(parent, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task Dispose_CommitsOutstandingChangesAsWorkInProgress()
     {
         var parent = Path.Combine(Path.GetTempPath(), "beacon-task-worktree-wip-" + Guid.NewGuid().ToString("N"));

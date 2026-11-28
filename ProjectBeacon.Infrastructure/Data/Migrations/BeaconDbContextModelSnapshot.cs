@@ -1788,6 +1788,21 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("OrgId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("OfficialVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("VersionPolicyJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("""{"scheme":"SemVer","componentCount":3,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":false,"deploymentVersionEndpoint":null,"sources":[]}""");
+
+                    b.Property<int>("VersionPolicyRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("ReviewCheckCommand")
                         .HasColumnType("text");
 
@@ -1953,15 +1968,253 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ReleaseId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId");
+                    b.HasIndex("ProjectId", "ReleaseId", "Order");
 
                     b.ToTable("Milestones");
                 });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.Release", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("PreparationUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreparationError")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid?>("PreparationCommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PreparationDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PreparationPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("PreparationRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("PreparationResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PreparationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("NotStarted");
+
+                    b.Property<string>("PublicationError")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid?>("PublicationCommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PublicationDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicationPayloadJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("PublicationRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("PublicationResultJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PublicationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("NotStarted");
+
+                    b.Property<bool>("PublicationTagPushed")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("PublicationUpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedTagName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("DeployedCommitSha")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("DeployedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeployedVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<long?>("DeploymentWorkflowRunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DeploymentWorkflowRunUrl")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("VerificationCommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TargetBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TargetVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("ProjectId", "Id");
+
+                    b.HasIndex("ProjectId", "Status", "Order");
+
+                    b.ToTable("Releases");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PreparedByDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BaseSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CandidateSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("CandidateTreeSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ManifestSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("PreparedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreparedCommitSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ReleaseRevision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("TagName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TargetBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("VersionPolicyRevision")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("ProjectId", "ReleaseId");
+
+                    b.HasIndex("ProjectId", "CandidateSha");
+
+                    b.ToTable("ReleaseCandidateSnapshots");
+                });
+
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.PipelineSession", b =>
                 {
@@ -2457,6 +2710,23 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("HotfixDeployedSha")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("HotfixRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("HotfixSourceReleaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HotfixTargetBranch")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("ForwardPortOfTaskId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -2466,13 +2736,68 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("VersionImpact")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("VersionImpactRationale")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("VersionImpactAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VersionImpactReviewStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("VersionImpactReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("VersionImpactReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("VersionImpactReviewedBySessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("VersionImpactRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
+                    b.HasAlternateKey("ProjectId", "Id");
+
                     b.HasIndex("LabelId");
+
+                    b.HasIndex("ProjectId", "HotfixRequestId")
+                        .IsUnique()
+            .HasFilter("\"HotfixRequestId\" IS NOT NULL");
+
+                    b.HasIndex("ProjectId", "ForwardPortOfTaskId")
+                        .IsUnique()
+            .HasFilter("\"ForwardPortOfTaskId\" IS NOT NULL");
+
+                    b.HasIndex("ProjectId", "HotfixSourceReleaseId");
 
                     b.HasIndex("MilestoneId");
 
                     b.HasIndex("ProjectId", "Status");
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "HotfixSourceReleaseId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "ForwardPortOfTaskId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.ToTable("Tasks");
                 });
@@ -3032,8 +3357,47 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", "Release")
+                        .WithMany("Milestones")
+                        .HasForeignKey("ProjectId", "ReleaseId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Release");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.Release", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
+                        .WithMany("Releases")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Project");
                 });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", b =>
+                {
+                    b.HasOne("ProjectBeacon.Domain.Entities.Projects.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Roadmap.Release", "Release")
+                        .WithOne()
+                        .HasForeignKey("ProjectBeacon.Domain.Entities.Roadmap.ReleaseCandidateSnapshot", "ProjectId", "ReleaseId")
+                        .HasPrincipalKey("ProjectBeacon.Domain.Entities.Roadmap.Release", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+                    b.Navigation("Release");
+                });
+
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.PipelineSession", b =>
                 {
@@ -3229,12 +3593,21 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.Navigation("Milestones");
 
+                    b.Navigation("Releases");
+
                     b.Navigation("Tasks");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.Milestone", b =>
                 {
+                    b.Navigation("Release");
+
                     b.Navigation("Tasks");
+                });
+
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Roadmap.Release", b =>
+                {
+                    b.Navigation("Milestones");
                 });
 
             modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.TaskItem", b =>
@@ -3245,6 +3618,92 @@ namespace ProjectBeacon.Infrastructure.Data.Migrations
 
                     b.Navigation("Subtasks");
                 });
+            modelBuilder.Entity("ProjectBeacon.Domain.Entities.Tasks.RemoteLandingProof", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GitHubRepository")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("MergedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MergeCommitSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("PullRequestNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PullRequestUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReviewRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RemoteBaseSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("SourceSha")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetBranch")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "GitHubRepository", "PullRequestNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RemoteLandingProofs_ProjectId_Repository_PullRequest");
+
+                    b.HasIndex("ProjectId", "MergeCommitSha");
+
+                    b.HasIndex("ProjectId", "TaskId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RemoteLandingProofs_ProjectId_TaskId");
+
+                    b.HasOne("ProjectBeacon.Domain.Entities.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId", "TaskId")
+                        .HasPrincipalKey("ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.ToTable("RemoteLandingProofs");
+                });
+
 #pragma warning restore 612, 618
         }
     }

@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Projects;
 
 using Application.Common;
+using Application.Releases;
 using Domain.Entities.Projects;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -142,18 +143,35 @@ public class DeleteLabelHandler
 
     public async Task<Result> HandleAsync(DeleteLabelRequest request, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var label = await db.Labels
-            .FirstOrDefaultAsync(l => l.Id == request.LabelId && l.ProjectId == request.ProjectId, ct);
-        if (label is null)
-            return Result.Failure("Label not found.");
+        var result = await ReleaseScopeMutationCoordinator.ExecuteForProjectAsync(
+            _dbFactory,
+            request.ProjectId,
+            [],
+            async (db, token) =>
+            {
+                var label = await db.Labels.FirstOrDefaultAsync(
+                    item => item.Id == request.LabelId && item.ProjectId == request.ProjectId, token);
+                if (label is null)
+                    return Result.Failure<bool>("Label not found.", ErrorKind.NotFound);
 
-        var tasks = await db.Tasks.Where(t => t.LabelId == label.Id).ToListAsync(ct);
-        foreach (var task in tasks)
-            task.AssignLabel(null);
+                var tasks = await db.Tasks
+                    .Where(task => task.ProjectId == request.ProjectId && task.LabelId == label.Id)
+                    .ToListAsync(token);
+                var blockReason = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                    db, request.ProjectId, tasks.Select(task => task.MilestoneId), token);
+                if (blockReason is not null)
+                    return Result.Failure<bool>(blockReason, ErrorKind.Conflict);
 
-        db.Labels.Remove(label);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok();
+                foreach (var task in tasks)
+                    task.AssignLabel(null);
+                db.Labels.Remove(label);
+                await db.SaveChangesAsync(token);
+                return Result.Ok(true);
+            },
+            ct);
+
+        return result.Success
+            ? Result.Ok()
+            : Result.Failure(result.Error ?? "Label delete conflict.", result.Kind);
     }
 }

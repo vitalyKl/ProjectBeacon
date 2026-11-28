@@ -123,7 +123,12 @@ public record TaskItemDto(
     DateTime? CompletedAt,
     IList<TaskCommentDto> Comments,
     IList<Guid> Dependencies,
-    int ContentRevision = 1);
+    int ContentRevision = 1,
+    Guid? HotfixSourceReleaseId = null,
+    string? HotfixDeployedSha = null,
+    string? HotfixTargetBranch = null,
+    Guid? HotfixRequestId = null,
+    Guid? ForwardPortOfTaskId = null);
 /// <summary>
 /// A comment, its author, and timestamps.
 /// </summary>

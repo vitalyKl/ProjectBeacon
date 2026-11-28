@@ -3,17 +3,19 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "**"
 
 permissions:
   contents: read
-  packages: write
 
 # Gate chain (no bypass): tests -> image -> scan -> client assets -> deploy.
 # Only this workflow publishes images; ci.yml never pushes to the registry.
 
 jobs:
   tests:
+    outputs:
+      version: ${{ steps.release-manifest.outputs.version }}
+      tag_name: ${{ steps.release-manifest.outputs.tag_name }}
     # Mirror of the authoritative CI Linux lane (build-test-linux in
     # .github/workflows/ci.yml). Tag pushes do not trigger ci.yml, so the
     # release gate re-runs the full suite here.
@@ -39,6 +41,13 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Test release workflow permissions
+        run: python3 scripts/test_release_workflow_permissions.py
+      - name: Test release manifest tag policy
+        run: python3 scripts/test_verify_release_manifest.py
+      - name: Verify Beacon release manifest
+        id: release-manifest
+        run: python3 scripts/verify_release_manifest.py
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
@@ -55,38 +64,41 @@ jobs:
         run: |
           dotnet tool restore
           dotnet ef migrations has-pending-model-changes --project ProjectBeacon.Infrastructure --startup-project ProjectBeacon.Infrastructure
+      # Match ci.yml: collect all test failures after normal build/test failures, but do not
+      # execute --no-build modules when this release run has been cancelled.
       - name: Test — API
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.API.Tests/ProjectBeacon.API.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.API.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Application
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Application.Tests/ProjectBeacon.Application.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Application.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — CLI
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
+        shell: bash
         run: |
           mkdir -p TestResults/ProjectBeacon.Cli.Tests
-          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
+          dotnet ProjectBeacon.Cli.Tests/bin/Debug/net9.0/ProjectBeacon.Cli.Tests.dll ProjectBeacon.Cli.Tests/testconfig.json -longRunning 30 -diagnostics -internalDiagnostics -showLiveOutput -trait- "Lane=Gpu" -result-trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx
       - name: Test — Domain
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Domain.Tests/ProjectBeacon.Domain.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Domain.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Infrastructure
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Infrastructure.Tests/ProjectBeacon.Infrastructure.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Infrastructure.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Web
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Web.Tests/ProjectBeacon.Web.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Web.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Test — Worker
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 8
         run: dotnet test ProjectBeacon.Worker.Tests/ProjectBeacon.Worker.Tests.csproj --no-build --results-directory TestResults/ProjectBeacon.Worker.Tests --report-xunit-trx --report-xunit-trx-filename test-results.trx -p:TestingPlatformCaptureOutput=false
       - name: Verify test results (TRX guards)
-        if: always()
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
@@ -96,8 +108,8 @@ jobs:
 
           BASE = "TestResults"
           EXPECTED_MODULES = 7
-          # Exact current total across the 7 modules; bump when tests are added.
-          MIN_TOTAL = 1543
+          # Minimum Linux test-result count for the full seven-module suite. Raise it as tests are added; keep it equal in ci.yml and release.yml.
+          MIN_TOTAL = 2775
           # The only tests allowed to be NotExecuted on Linux: platform-conditional
           # skips that cannot execute there. Anything else (e.g. a Postgres opt-out
           # leaking into this authoritative lane) fails the guard.
@@ -156,10 +168,13 @@ jobs:
         with:
           dotnet-version: 10.0.402
       - name: Publish self-contained workstation clients
+        env:
+          BEACON_RELEASE_VERSION: ${{ needs.tests.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="${BEACON_RELEASE_VERSION}"
+          [[ -n "${version}" ]] || { echo "::error::Verified release version output is missing."; exit 1; }
           mkdir -p release-assets
           for rid in win-x64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
             publish_dir="$PWD/publish/$rid"
@@ -195,6 +210,10 @@ jobs:
   image:
     needs: tests
     runs-on: ubuntu-latest
+    # Only the image publisher can write packages.
+    permissions:
+      contents: read
+      packages: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
       repo: ${{ steps.meta.outputs.repo }}
@@ -203,12 +222,18 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Image name
         id: meta
+        env:
+          BEACON_RELEASE_VERSION: ${{ needs.tests.outputs.version }}
         run: |
+          set -euo pipefail
           owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "owner=${owner}" >> "$GITHUB_OUTPUT"
           echo "repo=ghcr.io/${owner}/projectbeacon-web" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${owner}/projectbeacon-web:${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          version="${GITHUB_REF_NAME#v}"
+          # Image tags must not inherit a Git tag's hierarchy (which may contain
+          # slashes). The exact immutable SHA and digest are used for deployment.
+          echo "image=ghcr.io/${owner}/projectbeacon-web:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          version="${BEACON_RELEASE_VERSION}"
+          [[ -n "${version}" ]] || { echo "::error::Verified release version output is missing."; exit 1; }
           echo "version=${version}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
@@ -222,12 +247,11 @@ jobs:
         with:
           context: .
           push: true
-          # Immutable tags only: the version tag (protect v* on GitHub) and the
-          # full commit SHA. Never publish a mutable `latest`. The push digest
-          # is exported and bound to scan/deploy below.
+          # Publish only the full commit SHA as an immutable image tag. Git
+          # release tag names are project-configurable and may contain slashes;
+          # deployment uses the digest exported below, never a mutable alias.
           tags: |
             ${{ steps.meta.outputs.image }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/projectbeacon-web:${{ github.sha }}
           build-args: |
             BEACON_GIT_SHA=${{ github.sha }}
             BEACON_VERSION=${{ steps.meta.outputs.version }}
@@ -245,6 +269,9 @@ jobs:
     # and must be reviewed on every release.
     needs: image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
     steps:
@@ -316,7 +343,7 @@ jobs:
   deploy:
     # Deploy the exact digest verified by the scan to the production VPS.
     # The VPS runs the existing fail-closed Compose upgrade script.
-    needs: [image, scan, client]
+    needs: [tests, image, scan, client]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: production
@@ -331,10 +358,8 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
-            echo "::error::Release tag must be a semantic version such as v0.6.2."
-            exit 1
-          }
+          # The tests job validated the version/tag from .beacon/release.json
+          # using the project's configured version scheme and exact commit trailer.
           [[ "${IMAGE_REPO}" =~ ^ghcr\.io/[a-z0-9-]+/projectbeacon-web$ ]] || {
             echo "::error::Unexpected image repository."
             exit 1
@@ -410,10 +435,11 @@ jobs:
       - name: Verify public health and deployed Git SHA
         env:
           EXPECTED_GIT_SHA: ${{ github.sha }}
-          EXPECTED_VERSION: ${{ github.ref_name }}
+          EXPECTED_VERSION: ${{ needs.tests.outputs.version }}
         run: |
           set -euo pipefail
-          expected_version="${EXPECTED_VERSION#v}"
+          expected_version="${EXPECTED_VERSION}"
+          [[ -n "${expected_version}" ]] || { echo "::error::Verified release version output is missing."; exit 1; }
           for attempt in $(seq 1 12); do
             if response="$(curl --fail --silent --show-error --max-time 10 https://projectbeacon.tech/v1/version 2>/dev/null)" &&
                health="$(curl --fail --silent --show-error --max-time 10 https://projectbeacon.tech/health 2>/dev/null)" &&

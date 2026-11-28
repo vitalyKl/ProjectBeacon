@@ -91,6 +91,60 @@ public sealed partial class PipelineHandlerTests
     }
 
     [Fact]
+    public async Task ExecuteLanding_DoesNotRedispatchAnAlreadyPendingGitHubMerge()
+    {
+        var done = await SeedDoneSubtaskAsync("Do not redispatch a GitHub queued merge");
+        Guid deviceId;
+        Guid requestedBy;
+        using (TenantScope.EnterUnscoped())
+        {
+            deviceId = await _db.ProjectRuntimes.IgnoreQueryFilters()
+                .Where(runtime => runtime.ProjectId == done.ProjectId)
+                .Select(runtime => runtime.DeviceId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+            requestedBy = await _db.DaemonDevices.IgnoreQueryFilters()
+                .Where(device => device.Id == deviceId)
+                .Select(device => device.UserId)
+                .FirstAsync(TestContext.Current.CancellationToken);
+        }
+
+        var attempt = LandingAttempt.Start(
+            done.ProjectId, done.Task.Id, Guid.NewGuid(), requestedBy, deviceId,
+            "main", new string('a', 40), new string('b', 40), new string('c', 64),
+            "GitHub has already accepted the pull request into its merge queue.");
+        attempt.RecordPreview("main", new string('d', 40), new string('e', 40), new string('f', 64), 0, null);
+        attempt.MarkExecutePending();
+        var mergeRequestId = Guid.NewGuid().ToString("D");
+        attempt.MarkGitHubMergeQueued(mergeRequestId, "pending");
+        using (TenantScope.EnterUnscoped())
+        {
+            _db.LandingAttempts.Add(attempt);
+            await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        var factory = HandlerSqlite.Factory(_connection, Scope(done.ProjectId));
+        var actor = HumanActor(requestedBy);
+        var result = await new ExecuteLandingHandler(factory, new Application.Devices.EnqueueCommandHandler(factory))
+            .HandleAsync(new ExecuteLandingCommand(
+                new ExecuteLandingRequest(done.Task.Id, attempt.Id, Automatic: false), actor),
+                TestContext.Current.CancellationToken);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Equal(LandingAttemptStatus.ExecutePending, result.Value!.Status);
+        Assert.Equal("GitHubMergePending:" + mergeRequestId, result.Value.FailureCode);
+        using (TenantScope.EnterUnscoped())
+        {
+            var persisted = await _db.LandingAttempts.AsNoTracking()
+                .SingleAsync(item => item.Id == attempt.Id, TestContext.Current.CancellationToken);
+            Assert.Equal("GitHubMergePending:" + mergeRequestId, persisted.FailureCode);
+            Assert.Empty(await _db.WorkstationCommands.AsNoTracking()
+                .Where(command => command.Kind == WorkstationCommandKind.GitLand
+                    && command.PayloadJson.Contains(attempt.Id.ToString("D")))
+                .ToListAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
     public async Task LandingCommandDispatch_RecoversAnExpiredLeaseWithoutDuplicatingAnActiveCommand()
     {
         var done = await SeedDoneSubtaskAsync("Recover expired landing lease");

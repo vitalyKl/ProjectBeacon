@@ -215,6 +215,179 @@ public sealed class AgentTaskGitHubPullRequestOperationsTests
     }
 
     [Fact]
+    public void ForgeRead_IsRegisteredAndDoesNotAcceptCallerSuppliedRepositoryOrPullRequest()
+    {
+        Assert.True(AgentTaskGitOperations.IsGitTool(PipelineToolPolicy.ForgeRead));
+
+        var definition = AgentTaskGitOperations.ToolDefinition(PipelineToolPolicy.ForgeRead);
+        var parameters = definition["function"]?["parameters"] as JsonObject;
+        var properties = parameters?["properties"] as JsonObject;
+        Assert.NotNull(properties);
+        Assert.Equal(
+            new[] { "all", "pull_request", "reviews", "workflows" },
+            properties["view"]?["enum"]?.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(10, properties["limit"]?["maximum"]?.GetValue<int>());
+        Assert.DoesNotContain("repository", properties.Select(pair => pair.Key));
+        Assert.DoesNotContain("pullRequestNumber", properties.Select(pair => pair.Key));
+        Assert.DoesNotContain("branch", properties.Select(pair => pair.Key));
+        Assert.DoesNotContain("remote", properties.Select(pair => pair.Key));
+    }
+
+    [Fact]
+    public void ForgeRead_ParsesReviewDecisionsAndPreservesBoundedEvidence()
+    {
+        var commitSha = new string('a', 40);
+        var json = System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            new
+            {
+                id = 7,
+                user = new { login = "reviewer" },
+                state = "CHANGES_REQUESTED",
+                submitted_at = "2026-11-24T10:00:00Z",
+                commit_id = commitSha,
+                html_url = "https://github.com/example/repo/pull/1#pullrequestreview-7",
+                body = "Please handle the null branch before retrying."
+            }
+        });
+
+        var result = AgentTaskGitHubPullRequestOperations.ParseForgeCollection(json, "reviews", 5);
+
+        Assert.Null(result.Error);
+        var review = Assert.Single(result.Items!);
+        Assert.Equal(7L, review["id"]!.GetValue<long>());
+        Assert.Equal("reviewer", review["author"]!.GetValue<string>());
+        Assert.Equal("CHANGES_REQUESTED", review["state"]!.GetValue<string>());
+        Assert.Equal(commitSha, review["commitSha"]!.GetValue<string>());
+        Assert.Contains("null branch", review["body"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ForgeRead_ParsesConversationAndInlineCommentsWithoutReturningDiffHunks()
+    {
+        var conversationJson = System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            new
+            {
+                id = 11,
+                user = new { login = "maintainer" },
+                html_url = "https://github.com/example/repo/issues/1#issuecomment-11",
+                created_at = "2026-11-24T10:00:00Z",
+                updated_at = "2026-11-24T10:01:00Z",
+                body = "The public API should keep the previous response field."
+            }
+        });
+        var inlineJson = System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            new
+            {
+                id = 12,
+                user = new { login = "reviewer" },
+                html_url = "https://github.com/example/repo/pull/1#discussion_r12",
+                created_at = "2026-11-24T10:02:00Z",
+                updated_at = "2026-11-24T10:02:00Z",
+                body = "This assignment can be null.",
+                path = "src/Version.cs",
+                line = 42,
+                original_line = 41,
+                diff_hunk = "@@ untrusted diff content"
+            }
+        });
+
+        var conversation = AgentTaskGitHubPullRequestOperations.ParseForgeCollection(
+            conversationJson, "comments", 5);
+        var inline = AgentTaskGitHubPullRequestOperations.ParseForgeCollection(
+            inlineJson, "inline", 5);
+
+        Assert.Null(conversation.Error);
+        var conversationComment = Assert.Single(conversation.Items!);
+        Assert.Equal(11L, conversationComment["id"]!.GetValue<long>());
+        Assert.Equal("maintainer", conversationComment["author"]!.GetValue<string>());
+        Assert.Null(inline.Error);
+        var comment = Assert.Single(inline.Items!);
+        Assert.Equal(12L, comment["id"]!.GetValue<long>());
+        Assert.Equal("src/Version.cs", comment["path"]!.GetValue<string>());
+        Assert.Equal(42, comment["line"]!.GetValue<int>());
+        Assert.False(comment.AsObject().ContainsKey("diff_hunk"));
+    }
+
+    [Fact]
+    public void ForgeRead_ClipsExternalBodiesAndBoundsReturnedCollections()
+    {
+        var longBody = new string('x', 1200);
+        var json = System.Text.Json.JsonSerializer.Serialize(Enumerable.Range(1, 12).Select(id => new
+        {
+            id,
+            user = new { login = "reviewer" },
+            state = "COMMENTED",
+            submitted_at = "2026-11-24T10:00:00Z",
+            commit_id = new string('b', 40),
+            html_url = $"https://github.com/example/repo/pull/1#review-{id}",
+            body = longBody
+        }));
+
+        var result = AgentTaskGitHubPullRequestOperations.ParseForgeCollection(json, "reviews", 3);
+
+        Assert.Null(result.Error);
+        Assert.Equal(3, result.Items!.Count);
+        Assert.Equal(800 + "\n[comment truncated]".Length, result.Items[0]!["body"]!.GetValue<string>().Length);
+        Assert.Contains("[comment truncated]", result.Items[0]!["body"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ForgeRead_ParsesOnlyValidWorkflowRunSummaries()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            total_count = 1,
+            workflow_runs = new[]
+            {
+                new
+                {
+                    name = "CI",
+                    @event = "pull_request",
+                    status = "completed",
+                    conclusion = "failure",
+                    head_branch = "beacon/task/0123456789abcdef0123456789abcdef",
+                    head_sha = new string('c', 40),
+                    run_number = 1529,
+                    html_url = "https://github.com/example/repo/actions/runs/1529",
+                    created_at = "2026-11-24T10:00:00Z",
+                    updated_at = "2026-11-24T10:05:00Z"
+                }
+            }
+        });
+
+        var result = AgentTaskGitHubPullRequestOperations.ParseForgeCollection(json, "workflows", 5);
+
+        Assert.Null(result.Error);
+        var run = Assert.Single(result.Items!);
+        Assert.Equal("failure", run["conclusion"]!.GetValue<string>());
+        Assert.Equal("pull_request", run["event"]!.GetValue<string>());
+        Assert.Equal("1529", run["runNumber"]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("not json", "reviews")]
+    [InlineData("{}", "reviews")]
+    [InlineData("[]", "workflows")]
+    [InlineData("[]", "unsupported")]
+    public void ForgeRead_RejectsMalformedOrUnsupportedCollections(string json, string collection)
+    {
+        var result = AgentTaskGitHubPullRequestOperations.ParseForgeCollection(json, collection, 5);
+
+        Assert.Null(result.Items);
+        Assert.NotNull(result.Error);
+    }
+
+    [Fact]
+    public void ForgeRead_RejectsLimitsOutsideTenItems()
+    {
+        Assert.NotNull(AgentTaskGitHubPullRequestOperations.ParseForgeCollection("[]", "reviews", 0).Error);
+        Assert.NotNull(AgentTaskGitHubPullRequestOperations.ParseForgeCollection("[]", "reviews", 11).Error);
+    }
+
+    [Fact]
     public void RequiredCheckLookup_ReadsPendingStateFromJsonWithSuccessfulExitCode()
     {
         const string passedJson = """[{"name":"CI","state":"SUCCESS","bucket":"pass","link":"https://github.com/example/repo/actions/runs/1","workflow":"CI"}]""";

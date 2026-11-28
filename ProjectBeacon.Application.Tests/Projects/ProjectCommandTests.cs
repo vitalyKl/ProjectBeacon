@@ -1,8 +1,7 @@
 namespace ProjectBeacon.Application.Tests;
 
-using Application.Authorization;
-using Projects;
-using Tasks;
+using ProjectBeacon.Application.Authorization;
+using ProjectBeacon.Application.Projects;
 
 public sealed class ProjectCommandTests
 {

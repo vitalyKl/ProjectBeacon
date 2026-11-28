@@ -7,6 +7,7 @@
 @using System.Text.Json.Serialization
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Domain.Enums
+@using ProjectBeacon.Domain.Entities.Projects
 @using ProjectBeacon.Application.Authorization
 @using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Context
@@ -29,6 +30,8 @@
 @inject SetProposalPolicyHandler SetProposalPolicy
 @inject GetProjectGitPolicyHandler GetGitPolicy
 @inject SetProjectGitPolicyHandler SetGitPolicy
+@inject GetProjectVersionPolicyHandler GetVersionPolicy
+@inject SetProjectVersionPolicyHandler SetVersionPolicy
 @inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
 @inject IBeaconDbFactory DbFactory
 @inject DeleteProjectHandler DeleteProject
@@ -146,6 +149,14 @@ else
         else
         {
             <MudStack Spacing="2">
+                <MudCheckBox T="bool" @bind-Value="_gitAutoSyncEnabled"
+                             Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy || (!_gitAutoSyncEnabled && !HasAutoSyncWorkstation))"
+                             Label="@L["ProjectAutoSyncLabel"]" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ProjectAutoSyncHelp"]</MudText>
+                @if (!HasAutoSyncWorkstation)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["ProjectAutoSyncUnavailable"]</MudText>
+                }
                 <MudSelect T="int" Value="_gitPolicyAutonomy" ValueChanged="OnGitPolicyAutonomyChanged"
                            Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)" Label="@L["GitAutonomyLevel"]"
                            Variant="Variant.Outlined" Margin="Margin.Dense">
@@ -180,6 +191,88 @@ else
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!_canEditProposalPolicies || _gitPolicyBusy)"
                                OnClick="SaveGitPolicy">
                         @L["SaveGitPolicy"]
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        }
+    </MudPaper>
+
+    <MudText Typo="Typo.subtitle1" Class="mb-1">@L["ProjectVersionPolicyTitle"]</MudText>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-3">@L["ProjectVersionPolicyHelp"]</MudText>
+    <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mb-4">
+        @if (_versionPolicy is null)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ProjectVersionPolicyUnavailable"]</MudText>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                <MudSelect T="string" @bind-Value="_versionScheme"
+                           Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                           Label="@L["ProjectVersionScheme"]" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="string" Value="@("SemVer")">@L["ProjectVersionSchemeSemVer"]</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("NumericComponents")">@L["ProjectVersionSchemeNumeric"]</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Calendar")">@L["ProjectVersionSchemeCalendar"]</MudSelectItem>
+                </MudSelect>
+                @if (_versionScheme == "NumericComponents")
+                {
+                    <MudNumericField T="int" @bind-Value="_versionComponentCount"
+                                     Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                                     Label="@L["ProjectVersionComponentCount"]" Min="1" Max="8"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" />
+                }
+                @if (_versionScheme == "Calendar")
+                {
+                    <MudTextField T="string" @bind-Value="_versionCalendarFormat"
+                                  Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                                  Label="@L["ProjectVersionCalendarFormat"]"
+                                  HelperText="@L["ProjectVersionCalendarFormatHelp"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                }
+                <MudTextField T="string" @bind-Value="_versionTagPattern"
+                              Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                              Label="@L["ProjectVersionTagPattern"]"
+                              HelperText="@L["ProjectVersionTagPatternHelp"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                @if (_versionScheme == "SemVer")
+                {
+                    <MudCheckBox T="bool" @bind-Value="_versionAllowPrerelease"
+                                 Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                                 Label="@L["ProjectVersionAllowPrerelease"]" />
+                }
+                <MudCheckBox T="bool" @bind-Value="_releaseManagementEnabled"
+                             Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                             Label="@L["ProjectReleaseManagementEnabled"]" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ProjectReleaseManagementHelp"]</MudText>
+                <MudTextField T="string" Value="@(_versionPolicy.OfficialVersion ?? L["NotConfigured"].Value)"
+                              ReadOnly="true" Label="@L["ProjectOfficialVersion"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                @if (_versionPolicy.OfficialVersion is null)
+                {
+                    <MudTextField T="string" @bind-Value="_versionInitialOfficialVersion"
+                                  Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                                  Label="@L["ProjectVersionInitialVersion"]"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                }
+                <MudTextField T="string" @bind-Value="_versionSourcesText"
+                              Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                              Label="@L["ProjectVersionSources"]"
+                              HelperText="@L["ProjectVersionSourcesHelp"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Lines="5" />
+                <MudTextField T="string" @bind-Value="_versionDeploymentEndpoint"
+                              Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                              Label="@L["ProjectVersionDeploymentEndpoint"]"
+                              HelperText="@L["ProjectVersionDeploymentEndpointHelp"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                @if (!_canEditProposalPolicies)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["ProjectVersionOwnerAdminOnly"]</MudText>
+                }
+                <MudStack Row="true" Justify="Justify.FlexEnd">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               Disabled="@(!_canEditProposalPolicies || _versionPolicyBusy)"
+                               OnClick="SaveVersionPolicy">
+                        @L["ProjectVersionSave"]
                     </MudButton>
                 </MudStack>
             </MudStack>
@@ -374,6 +467,18 @@ else
     private int _gitMaxChangedLines = 20_000;
     private string _gitAutoRevertMode = "Off";
     private string _gitProtectedPathsText = string.Empty;
+    private bool _gitAutoSyncEnabled;
+    private ProjectVersionPolicyDto? _versionPolicy;
+    private bool _versionPolicyBusy;
+    private string _versionScheme = "SemVer";
+    private int _versionComponentCount = 3;
+    private string _versionCalendarFormat = string.Empty;
+    private string _versionTagPattern = "v{version}";
+    private bool _versionAllowPrerelease;
+    private bool _releaseManagementEnabled;
+    private string _versionInitialOfficialVersion = string.Empty;
+    private string _versionSourcesText = string.Empty;
+    private string _versionDeploymentEndpoint = string.Empty;
     private readonly Dictionary<string, ProposalDecisionMode> _proposalPolicyEdits = new(StringComparer.Ordinal);
     private List<ProjectSummaryDto> _projects = [];
     private string _projectName = string.Empty;
@@ -396,6 +501,9 @@ else
 
     private bool HasGitSyncWorkstation =>
         _runtimes.Any(runtime => runtime.DeviceOnline && runtime.GitSyncSupported);
+
+    private bool HasAutoSyncWorkstation =>
+        _runtimes.Any(runtime => runtime.DeviceOnline && runtime.AutoSyncSupported);
 
     private Severity GitSyncSeverity => _gitSyncResult switch
     {
@@ -489,6 +597,7 @@ else
         await ReloadRuntimes();
         await ReloadProposalPolicies();
         await ReloadGitPolicy();
+        await ReloadVersionPolicy();
 
         if (_canManageRepositorySync && _projectId is { } projectId)
             await RestorePendingGitSyncCommandAsync(projectId, isBackground: false);
@@ -528,12 +637,100 @@ else
         _gitMaxChangedFiles = policy.MaxChangedFiles;
         _gitMaxChangedLines = policy.MaxChangedLines;
         _gitProtectedPathsText = string.Join(Environment.NewLine, policy.ProtectedPaths);
+        _gitAutoSyncEnabled = policy.AutoSyncEnabled;
     }
 
     private void OnGitPolicyAutonomyChanged(int value)
     {
         if (_canEditProposalPolicies && value is 0 or 1 or 2)
             _gitPolicyAutonomy = value;
+    }
+
+    private void ApplyVersionPolicy(ProjectVersionPolicyDto policy)
+    {
+        _versionPolicy = policy;
+        _versionScheme = policy.Scheme;
+        _versionComponentCount = policy.ComponentCount;
+        _versionCalendarFormat = policy.CalendarFormat ?? string.Empty;
+        _versionTagPattern = policy.TagPattern;
+        _versionAllowPrerelease = policy.AllowPrerelease;
+        _releaseManagementEnabled = policy.ReleaseManagementEnabled;
+        _versionInitialOfficialVersion = policy.OfficialVersion ?? string.Empty;
+        _versionSourcesText = string.Join(Environment.NewLine,
+            policy.Sources.Select(source => $"{source.Path}|{source.Format}|{source.Selector}"));
+        _versionDeploymentEndpoint = policy.DeploymentVersionEndpoint ?? string.Empty;
+    }
+
+    private async Task ReloadVersionPolicy()
+    {
+        if (_projectId is not { } projectId)
+            return;
+        var result = await GetVersionPolicy.HandleAsync(projectId, _actor);
+        if (!result.Success || result.Value is null)
+        {
+            _versionPolicy = null;
+            Notifications.Add(Notifications.FormatFailure(result.Error ?? L["ProjectVersionPolicyUnavailable"].Value, L["ProjectSettings"].Value, result.ErrorCode, L["Load"].Value), Severity.Warning);
+            return;
+        }
+        ApplyVersionPolicy(result.Value);
+    }
+
+    private async Task SaveVersionPolicy()
+    {
+        if (_projectId is not { } projectId || !_canEditProposalPolicies
+            || _versionPolicyBusy || _versionPolicy is null)
+            return;
+
+        var sources = new List<ProjectVersionSourcePolicy>();
+        foreach (var line in _versionSourcesText.Split(
+            ['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = line.Split('|', 3, StringSplitOptions.TrimEntries);
+            if (parts.Length != 3)
+            {
+                Notifications.Failure(L["ProjectVersionSourcesHelp"].Value, L["ProjectSettings"].Value, ErrorCodes.ValidationFailed, L["Save"].Value);
+                return;
+            }
+            sources.Add(new ProjectVersionSourcePolicy(parts[0], parts[1], parts[2]));
+        }
+
+        var componentCount = _versionScheme switch
+        {
+            "SemVer" => 3,
+            "Calendar" => 0,
+            _ => _versionComponentCount
+        };
+        var policy = new ProjectVersionPolicy(
+            _versionScheme,
+            componentCount,
+            string.IsNullOrWhiteSpace(_versionCalendarFormat) ? null : _versionCalendarFormat.Trim(),
+            _versionTagPattern.Trim(),
+            _versionScheme == "SemVer" && _versionAllowPrerelease,
+            sources,
+            _releaseManagementEnabled,
+            string.IsNullOrWhiteSpace(_versionDeploymentEndpoint) ? null : _versionDeploymentEndpoint.Trim());
+        _versionPolicyBusy = true;
+        try
+        {
+            var initialVersion = _versionPolicy.OfficialVersion is null
+                ? _versionInitialOfficialVersion.Trim()
+                : null;
+            var saved = await SetVersionPolicy.HandleAsync(new SetProjectVersionPolicyCommand(
+                projectId, policy, initialVersion, _versionPolicy.Revision, _actor));
+            if (!saved.Success || saved.Value is null)
+            {
+                Notifications.Failure(saved, L["ProjectSettings"].Value, L["Save"].Value);
+                await ReloadVersionPolicy();
+                return;
+            }
+            ApplyVersionPolicy(saved.Value);
+            await ReloadGitPolicy();
+            Notifications.Add(L["ProjectVersionSaved"].Value, Severity.Success);
+        }
+        finally
+        {
+            _versionPolicyBusy = false;
+        }
     }
 
     private async Task ReloadGitPolicy()
@@ -561,7 +758,7 @@ else
         {
             var saved = await SetGitPolicy.HandleAsync(new SetProjectGitPolicyCommand(
                 projectId, _gitPolicyAutonomy, _gitDirtyCheckoutBehavior, paths, _gitMaxChangedFiles,
-                _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor));
+                _gitMaxChangedLines, _gitAutoRevertMode, _gitPolicy.Revision, _actor, _gitAutoSyncEnabled));
             if (!saved.Success || saved.Value is null)
             {
                 Notifications.Failure(saved, L["ProjectSettings"].Value, L["Save"].Value);
@@ -1011,7 +1208,6 @@ else
 
                 if (!current.Success || current.Value is null)
                 {
-                    consecutiveStatusReadFailures++;
                     Logger.LogWarning(
                         "Could not refresh GitSync command {CommandId} for project {ProjectId}: {Error}",
                         commandId, projectId, current.Error);
@@ -1167,7 +1363,7 @@ else
         }
         catch (Exception exception)
         {
-
+            
             try
             {
                 await InvokeAsync(() =>

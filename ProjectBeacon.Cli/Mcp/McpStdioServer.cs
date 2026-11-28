@@ -174,6 +174,13 @@ public static partial class McpStdioServer
             if (IsControlPlaneTool(name) && RequireApi(id, api, env) is { } apiError)
                 return apiError;
 
+            if (name is McpToolNames.WriteFile or McpToolNames.ApplyPatch)
+            {
+                var protectedPathError = await RejectVersionSourceMutationAsync(name, arguments, api, env);
+                if (protectedPathError is not null)
+                    return ToolError(id, protectedPathError);
+            }
+
             return name switch
             {
                 McpToolNames.ReadFile => TextResult(id,
@@ -224,6 +231,63 @@ public static partial class McpStdioServer
         catch (ArgumentException ex)
         {
             return ToolError(id, ex.Message);
+        }
+    }
+
+    private static async Task<string?> RejectVersionSourceMutationAsync(
+        string tool, JsonObject? arguments, BeaconApiClient? api, McpEnvironment env)
+    {
+        var path = arguments?["path"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(path))
+            return "A workspace-relative path is required.";
+
+        var root = env.Get("BEACON_WORKSPACE_ROOT");
+        if (string.IsNullOrWhiteSpace(root))
+            return "Workspace root is unavailable; refusing to modify a file until version-file protection is verified.";
+
+        try
+        {
+            var fullRoot = Path.GetFullPath(root);
+            var fullPath = Path.GetFullPath(path, fullRoot);
+            var relativePath = Path.GetRelativePath(fullRoot, fullPath).Replace('\\', '/');
+            if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)
+                || Path.IsPathRooted(relativePath))
+                return null; // FileWorkspace will report the workspace boundary violation.
+
+            // The Beacon release manifest is an immutable server projection. Even an
+            // ordinary project with no enabled Release Management policy cannot edit it.
+            if (string.Equals(relativePath, ".beacon/release.json", StringComparison.OrdinalIgnoreCase))
+                return "'.beacon/release.json' is a Beacon-managed release manifest. Ordinary agent sessions cannot create or modify it; use the authorized ReleasePrepare operation.";
+
+            if (!Guid.TryParse(env.Get("BEACON_PROJECT_ID"), out var projectId)
+                || projectId == Guid.Empty)
+                return null; // No Beacon project scope: there is no project policy to consult.
+
+            if (api is null)
+                return $"Version-file protection could not be verified because the Beacon API is unavailable. Refusing {tool}.";
+
+            var response = await api.SendAsync(
+                HttpMethod.Get, $"v1/projects/{projectId:D}/version-policy", null, CancellationToken.None);
+            if (!response.Ok)
+                return $"Version-file protection could not be verified (HTTP {response.Status}). Refusing {tool}.";
+
+            var policy = JsonNode.Parse(response.Body) as JsonObject
+                ?? throw new JsonException("Version policy is not an object.");
+            var sources = policy["sources"] as JsonArray ?? [];
+            foreach (var source in sources)
+            {
+                if (source?["path"]?.GetValue<string>() is not { } sourcePath)
+                    return "Version policy contains an invalid source entry; refusing file modification.";
+                var normalizedSource = sourcePath.Replace('\\', '/');
+                if (string.Equals(relativePath, normalizedSource, StringComparison.OrdinalIgnoreCase))
+                    return $"'{relativePath}' is configured as a protected version source. Ordinary agent sessions cannot modify official version files; use the authorized ReleasePrepare operation.";
+            }
+            return null;
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException
+            or InvalidOperationException or NotSupportedException or PathTooLongException)
+        {
+            return "Version-file protection could not be evaluated safely: " + exception.Message;
         }
     }
 

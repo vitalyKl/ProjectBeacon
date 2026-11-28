@@ -1,6 +1,7 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Releases;
 using Domain.Entities.Tasks;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -45,16 +46,21 @@ public class AddTaskStepHandler : ICommandHandler<AddTaskStepCommand, Result<Tas
         if (title.Length == 0 || title.Length > 200)
             return Result.Failure<TaskStepDto>("Title is required (max 200 characters).");
 
-        await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<TaskStepDto>("Task not found.");
-
-        var next = await db.TaskSteps.Where(s => s.TaskId == task.Id).MaxAsync(s => (int?)s.SortOrder, ct) ?? -1;
-        var step = TaskStep.Create(task.Id, task.ProjectId, title, next + 1);
-        db.TaskSteps.Add(step);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(ListTaskStepsHandler.Map(step));
+        return await ReleaseScopeMutationCoordinator.ExecuteForTaskAsync(
+            _dbFactory,
+            command.Request.TaskId,
+            null,
+            async (db, task, token) =>
+            {
+                var next = await db.TaskSteps
+                    .Where(step => step.TaskId == task.Id)
+                    .MaxAsync(step => (int?)step.SortOrder, token) ?? -1;
+                var step = TaskStep.Create(task.Id, task.ProjectId, title, next + 1);
+                db.TaskSteps.Add(step);
+                await db.SaveChangesAsync(token);
+                return Result.Ok(ListTaskStepsHandler.Map(step));
+            },
+            ct);
     }
 }
 /// <summary>
@@ -68,13 +74,16 @@ public class ToggleTaskStepHandler : ICommandHandler<ToggleTaskStepCommand, Resu
 
     public async Task<Result<TaskStepDto>> HandleAsync(ToggleTaskStepCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var step = await db.TaskSteps.FirstOrDefaultAsync(s => s.Id == command.Request.StepId, ct);
-        if (step is null)
-            return Result.Failure<TaskStepDto>("Step not found.");
-        step.SetDone(command.Request.Done);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(ListTaskStepsHandler.Map(step));
+        return await ReleaseScopeMutationCoordinator.ExecuteForStepAsync(
+            _dbFactory,
+            command.Request.StepId,
+            async (db, task, step, token) =>
+            {
+                step.SetDone(command.Request.Done);
+                await db.SaveChangesAsync(token);
+                return Result.Ok(ListTaskStepsHandler.Map(step));
+            },
+            ct);
     }
 }
 /// <summary>
@@ -88,12 +97,19 @@ public class DeleteTaskStepHandler : ICommandHandler<DeleteTaskStepCommand, Resu
 
     public async Task<Result> HandleAsync(DeleteTaskStepCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var step = await db.TaskSteps.FirstOrDefaultAsync(s => s.Id == command.Request.StepId, ct);
-        if (step is null)
-            return Result.Failure("Step not found.");
-        db.TaskSteps.Remove(step);
-        await db.SaveChangesAsync(ct);
-        return Result.Ok();
+        var result = await ReleaseScopeMutationCoordinator.ExecuteForStepAsync(
+            _dbFactory,
+            command.Request.StepId,
+            async (db, task, step, token) =>
+            {
+                db.TaskSteps.Remove(step);
+                await db.SaveChangesAsync(token);
+                return Result.Ok(true);
+            },
+            ct);
+        return result.Success
+            ? Result.Ok()
+            : Result.Failure(result.Error ?? "Checklist step delete conflict.", result.Kind);
     }
 }
+

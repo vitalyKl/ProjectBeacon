@@ -337,6 +337,75 @@ public sealed class MilestoneLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task PreparedReleaseFreezesMilestoneMetadataDeletionAndLifecycleChanges()
+    {
+        var release = Release.Create("Frozen milestones", null, _projectId, "0.7.5.9", "main", 1);
+        release.TransitionTo(ReleaseStatus.InProgress);
+        release.BeginPreparation(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), """{"version":"0.7.5.9"}""");
+
+        var openMilestone = Milestone.Create("Open milestone", "Frozen description", _projectId, 1);
+        openMilestone.AssignRelease(release.Id);
+        var closedMilestone = Milestone.Create("Closed milestone", null, _projectId, 2);
+        closedMilestone.AssignRelease(release.Id);
+        closedMilestone.Close();
+
+        var writer = new ContentWriter();
+        _db.Releases.Add(release);
+        _db.Milestones.AddRange(openMilestone, closedMilestone);
+        writer.AddVersion(_db, openMilestone, "Human", _ownerId.ToString("D"));
+        writer.AddVersion(_db, closedMilestone, "Human", _ownerId.ToString("D"));
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var update = await new UpdateMilestoneHandler(HandlerSqlite.Factory(_connection), writer)
+            .HandleAsync(
+                new UpdateMilestoneCommand(
+                    new UpdateMilestoneRequest(
+                        openMilestone.Id, "Changed name", "Changed description", 3,
+                        openMilestone.Revision, _projectId),
+                    HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(update.Success);
+        Assert.Equal(ErrorKind.Conflict, update.Kind);
+        Assert.Contains("scope is frozen", update.Error, StringComparison.OrdinalIgnoreCase);
+
+        var delete = await new DeleteMilestoneHandler(HandlerSqlite.Factory(_connection), writer)
+            .HandleAsync(
+                new DeleteMilestoneCommand(
+                    new DeleteMilestoneRequest(openMilestone.Id, _projectId), HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(delete.Success);
+        Assert.Equal(ErrorKind.Conflict, delete.Kind);
+
+        var close = await new CloseMilestoneHandler(HandlerSqlite.Factory(_connection), writer)
+            .HandleAsync(
+                new CloseMilestoneCommand(
+                    new CloseMilestoneRequest(openMilestone.Id, _projectId), HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(close.Success);
+        Assert.Equal(ErrorKind.Conflict, close.Kind);
+
+        var reopen = await new ReopenMilestoneHandler(HandlerSqlite.Factory(_connection), writer)
+            .HandleAsync(
+                new ReopenMilestoneCommand(
+                    new ReopenMilestoneRequest(closedMilestone.Id, _projectId), HumanActor()),
+                TestContext.Current.CancellationToken);
+        Assert.False(reopen.Success);
+        Assert.Equal(ErrorKind.Conflict, reopen.Kind);
+
+        await _db.Entry(openMilestone).ReloadAsync(TestContext.Current.CancellationToken);
+        await _db.Entry(closedMilestone).ReloadAsync(TestContext.Current.CancellationToken);
+        Assert.Equal("Open milestone", openMilestone.Name);
+        Assert.Equal("Frozen description", openMilestone.Description);
+        Assert.Null(openMilestone.ClosedAt);
+        Assert.NotNull(closedMilestone.ClosedAt);
+        Assert.Equal(release.Id, openMilestone.ReleaseId);
+        Assert.Equal(release.Id, closedMilestone.ReleaseId);
+        Assert.Equal(1, await CountVersions(openMilestone.Id));
+        Assert.Equal(1, await CountVersions(closedMilestone.Id));
+    }
+
+    [Fact]
     public async Task CloseAndReopen_AppendLifecycleVersions_AndRemainIdempotent()
     {
         var milestone = Milestone.Create(

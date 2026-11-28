@@ -32,6 +32,7 @@ internal static partial class McpApiTools
         ..PipelineTools(),
         ..ModelTools(),
         ..ProposalTools(),
+        ..VersionTools(),
     ];
 
     static McpApiTools()

@@ -13,12 +13,14 @@ public class Milestone : Entity, IProjectScoped
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
     public Guid ProjectId { get; private set; }
+    public Guid? ReleaseId { get; private set; }
     public int Order { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
     public DateTime? ClosedAt { get; private set; }
 
     public Project Project { get; private set; } = null!;
+    public Release? Release { get; private set; }
     public ICollection<TaskItem> Tasks { get; private set; } = [];
 
     public static Milestone Create(string name, string? description, Guid projectId, int order)
@@ -100,6 +102,16 @@ public class Milestone : Entity, IProjectScoped
 
     public void Delete()
     {
+        Revision++;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>Associates this milestone with a Release in the same project.</summary>
+    public void AssignRelease(Guid? releaseId)
+    {
+        if (ReleaseId == releaseId)
+            return;
+        ReleaseId = releaseId;
         Revision++;
         UpdatedAt = DateTime.UtcNow;
     }

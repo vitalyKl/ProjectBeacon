@@ -1,7 +1,9 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Devices;
 using Application.Persistence;
+using Application.Releases;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -126,6 +128,16 @@ public sealed class CancelPipelineHandler : ICommandHandler<CancelPipelineComman
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineStateDto>("Task not found.");
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, task.ProjectId, ct))
+                return Result.Failure<PipelineStateDto>("Project not found.", ErrorKind.NotFound);
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineStateDto>(releaseBlock, ErrorKind.Conflict);
+            task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
             if (task.PipelineStage is null or TaskPipelineStage.None)
                 return Result.Failure<PipelineStateDto>("Pipeline is not started.");
             if (task.PipelineStage == TaskPipelineStage.Cancelled)
@@ -228,6 +240,16 @@ public sealed class RestartPipelineHandler : ICommandHandler<RestartPipelineComm
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
             var task = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
+            if (task is null)
+                return Result.Failure<PipelineStateDto>("Task not found.");
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, task.ProjectId, ct))
+                return Result.Failure<PipelineStateDto>("Project not found.", ErrorKind.NotFound);
+            var releaseBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, task.ProjectId, [task.MilestoneId], ct);
+            if (releaseBlock is not null)
+                return Result.Failure<PipelineStateDto>(releaseBlock, ErrorKind.Conflict);
+            task = await db.Tasks.AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
             if (task is null)
                 return Result.Failure<PipelineStateDto>("Task not found.");

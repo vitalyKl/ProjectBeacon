@@ -40,7 +40,11 @@ public static class WorkstationProbe
     {
         if (gitPath is null)
             return Array.Empty<string>();
-        var capabilities = new List<string> { WorkstationCapabilities.GitSyncV1 };
+        var capabilities = new List<string>
+        {
+            WorkstationCapabilities.GitSyncV1,
+            WorkstationCapabilities.AutoSyncV1
+        };
         var (settings, error) = WorkstationSettings.TryRead();
         if (error is null && WorkstationWorkspaceMode.UsesTaskBranches(settings.WorkspaceMode))
         {
@@ -62,6 +66,12 @@ public static class WorkstationProbe
                 {
                     capabilities.Add(WorkstationCapabilities.GitLandV1);
                     capabilities.Add(WorkstationCapabilities.GitLandIntegrationV1);
+                    if (Which("gh") is not null)
+                    {
+                        capabilities.Add(WorkstationCapabilities.RemoteLandingReconcileV1);
+                        capabilities.Add(WorkstationCapabilities.ReleasePrepareV1);
+                        capabilities.Add(WorkstationCapabilities.ReleasePublishV1);
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException)

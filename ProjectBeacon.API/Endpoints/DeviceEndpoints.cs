@@ -9,11 +9,11 @@ using Domain.Common;
 using Microsoft.AspNetCore.Mvc;
 using ProjectBeacon.API.Auth;
 
-/// <summary>Workstation enroll, heartbeat, command queue, and per-device project roots.</summary>
+/// <summary>Workstation enrollment, heartbeat, command queue, per-device project roots, and AutoSync targets.</summary>
 public static class DeviceEndpoints
 {
     /// <summary>
-    /// <c>RequireDevice</c> covers heartbeat, claim, complete, llama-swap config, and provider connections.
+    /// <c>RequireDevice</c> covers heartbeat, claim, complete, AutoSync target discovery, llama-swap config, and provider connections.
     /// Create, list, revoke, enqueue, and runtime attach are <c>RequireHuman</c>.
     /// </summary>
     public static IEndpointRouteBuilder MapDeviceEndpoints(this IEndpointRouteBuilder app)
@@ -35,6 +35,15 @@ public static class DeviceEndpoints
         app.MapGet("/v1/projects/{projectId:guid}/runtimes/{id:guid}/diagnostics", GetRuntimeDiagnostics).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPost("/v1/projects/{projectId:guid}/runtimes", AttachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapDelete("/v1/projects/{projectId:guid}/runtimes/{id:guid}", DetachRuntime).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/devices/me/auto-sync-targets", GetAutoSyncTargets).RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/devices/me/remote-landings/reconcile", ReconcileRemoteLanding)
+            .RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/devices/me/remote-landings/failure", ReportRemoteLandingFailure)
+            .RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapPost("/v1/devices/me/remote-landings/status", ReportRemoteLandingStatus)
+            .RequireAuthorization().DisableAntiforgery().RequireDevice();
+        app.MapGet("/v1/devices/me/tasks/{taskId:guid}/workspace-bootstrap", GetTaskWorkspaceBootstrap)
+            .RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet("/v1/devices/me/llamaswap-config", GetLlamaSwapConfig).RequireAuthorization().DisableAntiforgery().RequireDevice();
         app.MapGet(ApiRoutes.DeviceProviderConnections, GetAgentProviderConnections).RequireAuthorization().DisableAntiforgery().RequireDevice();
         return app;
@@ -230,6 +239,56 @@ public static class DeviceEndpoints
         var actor = ctx.GetActor();
         var result = await handler.HandleAsync(new DetachRuntimeCommand(new DetachRuntimeRequest(id, actor.UserId!.Value)), ct);
         return result.Success ? Results.NoContent() : result.FromResult(404);
+    }
+
+    private static async Task<IResult> GetTaskWorkspaceBootstrap(
+        Guid taskId, GetDeviceTaskWorkspaceBootstrapHandler handler,
+        HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(actor.DeviceId!.Value, taskId, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> GetAutoSyncTargets(
+        GetDeviceAutoSyncTargetsHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(actor.DeviceId!.Value, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ReconcileRemoteLanding(
+        [FromBody] DeviceRemoteLandingReconciliationRequest body,
+        ReconcileDeviceRemoteLandingHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.HandleAsync(actor.DeviceId!.Value, body, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ReportRemoteLandingStatus(
+        [FromBody] DeviceRemoteLandingStatusRequest body,
+        ReconcileDeviceRemoteLandingHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.ReportAsyncMergeStatusAsync(actor.DeviceId!.Value, body, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> ReportRemoteLandingFailure(
+        [FromBody] DeviceRemoteLandingFailureRequest body,
+        ReconcileDeviceRemoteLandingHandler handler,
+        HttpContext ctx,
+        CancellationToken ct)
+    {
+        var actor = ctx.GetActor();
+        var result = await handler.ReportFailureAsync(actor.DeviceId!.Value, body, ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
 
     private static async Task<IResult> GetAgentProviderConnections(

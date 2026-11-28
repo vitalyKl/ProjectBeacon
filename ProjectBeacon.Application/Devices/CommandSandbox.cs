@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Application.Common;
 using Domain.Enums;
 using Application.Projects;
+using Domain.Entities.Projects;
 /// <summary>
 /// Strips a client-supplied root from a command payload and rejects paths that are not relative.
 /// </summary>
@@ -20,6 +21,12 @@ public static class CommandSandbox
 
     private static bool IsGitSha(string value) => (value.Length is 40 or 64) && value.All(Uri.IsHexDigit);
     private static bool IsSha256(string value) => value.Length == 64 && value.All(Uri.IsHexDigit);
+    private static Guid ReadGuid(JsonObject value, string name) =>
+        Guid.TryParse(ReadText(value, name), out var id) ? id : Guid.Empty;
+    private static string ReadText(JsonObject value, string name) =>
+        value[name] is JsonValue item && item.TryGetValue<string>(out var text) ? text ?? string.Empty : string.Empty;
+    private static int ReadInt(JsonObject value, string name) =>
+        value[name] is JsonValue item && item.TryGetValue<int>(out var number) ? number : 0;
 
     public static Result<string> SanitizeProjectPayload(string? payloadJson, WorkstationCommandKind? kind = null)
     {
@@ -117,6 +124,117 @@ public static class CommandSandbox
                 return Result.Failure<string>("GitLand Execute requires the preview target head and candidate tree.");
             if (action == "Revert" && obj["mergeCommitSha"] is null)
                 return Result.Failure<string>("GitLand Revert requires the recorded merge commit.");
+            return Result.Ok(obj.ToJsonString());
+        }
+
+        if (kind == WorkstationCommandKind.ReleasePrepare)
+        {
+            var action = obj["action"] is JsonValue actionValue
+                && actionValue.TryGetValue<string>(out var actionText) ? actionText : null;
+            var projectId = obj["projectId"] is JsonValue projectValue
+                && projectValue.TryGetValue<string>(out var projectText)
+                && Guid.TryParse(projectText, out var parsedProjectId) ? parsedProjectId : Guid.Empty;
+            var releaseId = obj["releaseId"] is JsonValue releaseValue
+                && releaseValue.TryGetValue<string>(out var releaseText)
+                && Guid.TryParse(releaseText, out var parsedReleaseId) ? parsedReleaseId : Guid.Empty;
+            var candidateId = obj["candidateId"] is JsonValue candidateValue
+                && candidateValue.TryGetValue<string>(out var candidateText)
+                && Guid.TryParse(candidateText, out var parsedCandidateId) ? parsedCandidateId : Guid.Empty;
+            var branch = obj["targetBranch"] is JsonValue branchValue
+                && branchValue.TryGetValue<string>(out var branchText) ? branchText : null;
+            var version = obj["version"] is JsonValue versionValue
+                && versionValue.TryGetValue<string>(out var versionText) ? versionText : null;
+            var policyJson = obj["versionPolicyJson"] is JsonValue policyValue
+                && policyValue.TryGetValue<string>(out var policyText) ? policyText : null;
+            var versionPolicyRevision = obj["versionPolicyRevision"] is JsonValue policyRevisionValue
+                && policyRevisionValue.TryGetValue<int>(out var parsedPolicyRevision) ? parsedPolicyRevision : 0;
+            var releaseRevision = obj["releaseRevision"] is JsonValue releaseRevisionValue
+                && releaseRevisionValue.TryGetValue<int>(out var parsedReleaseRevision) ? parsedReleaseRevision : 0;
+            var snapshotJson = obj["snapshotJson"] is JsonValue snapshotValue
+                && snapshotValue.TryGetValue<string>(out var snapshotText) ? snapshotText : null;
+
+            if (action is not ("Prepare" or "VerifyLanding")
+                || projectId == Guid.Empty || releaseId == Guid.Empty || candidateId == Guid.Empty
+                || !ProjectVersionPolicyCatalog.IsSafeBranchName(branch)
+                || versionPolicyRevision < 1 || releaseRevision < 1
+                || string.IsNullOrWhiteSpace(snapshotJson) || snapshotJson.Length > 1_000_000)
+                return Result.Failure<string>("ReleasePrepare payload is invalid.");
+
+            if (!ProjectVersionPolicyCatalog.TryRead(policyJson, out var policy, out var policyError))
+                return Result.Failure<string>(policyError ?? "ReleasePrepare version policy is invalid.");
+            if (!policy.ReleaseManagementEnabled)
+                return Result.Failure<string>("Release Management is disabled for this project.");
+            if (!ProjectVersionPolicyCatalog.TryNormalizeVersion(policy, version, out _, out var versionError))
+                return Result.Failure<string>(versionError ?? "ReleasePrepare version is invalid.");
+
+            try
+            {
+                using var snapshot = JsonDocument.Parse(snapshotJson!);
+                if (snapshot.RootElement.ValueKind != JsonValueKind.Object)
+                    return Result.Failure<string>("ReleasePrepare snapshotJson must be a JSON object.");
+            }
+            catch (JsonException)
+            {
+                return Result.Failure<string>("ReleasePrepare snapshotJson is invalid JSON.");
+            }
+
+            var allowed = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "action", "projectId", "releaseId", "candidateId", "targetBranch", "version",
+                "versionPolicyJson", "versionPolicyRevision", "releaseRevision", "snapshotJson"
+            };
+            if (action == "VerifyLanding")
+            {
+                allowed.Add("preparedCommitSha");
+                allowed.Add("manifestSha256");
+                var prepared = obj["preparedCommitSha"] is JsonValue preparedValue
+                    && preparedValue.TryGetValue<string>(out var preparedText) ? preparedText : null;
+                var manifestHash = obj["manifestSha256"] is JsonValue hashValue
+                    && hashValue.TryGetValue<string>(out var hashText) ? hashText : null;
+                if (prepared is not { Length: 40 or 64 } || !prepared.All(Uri.IsHexDigit)
+                    || manifestHash is not { Length: 64 } || !manifestHash.All(Uri.IsHexDigit))
+                    return Result.Failure<string>("ReleasePrepare VerifyLanding SHA values are invalid.");
+            }
+            if (obj.Any(pair => !allowed.Contains(pair.Key)))
+                return Result.Failure<string>("ReleasePrepare payload contains unsupported properties.");
+
+            return Result.Ok(obj.ToJsonString());
+        }
+
+        if (kind == WorkstationCommandKind.PublishRelease)
+        {
+            var projectId = ReadGuid(obj, "projectId");
+            var releaseId = ReadGuid(obj, "releaseId");
+            var candidateId = ReadGuid(obj, "candidateId");
+            var version = ReadText(obj, "version");
+            var targetBranch = ReadText(obj, "targetBranch");
+            var tagName = ReadText(obj, "tagName");
+            var candidateSha = ReadText(obj, "candidateSha");
+            var candidateTreeSha = ReadText(obj, "candidateTreeSha");
+            var endpoint = ReadText(obj, "deploymentVersionEndpoint");
+            var publicationRevision = ReadInt(obj, "publicationRevision");
+            var releaseRevision = ReadInt(obj, "releaseRevision");
+
+            if (!ProjectVersionPolicyCatalog.TryValidateDeploymentVersionEndpoint(endpoint, out var endpointError)
+                || string.IsNullOrWhiteSpace(endpoint))
+                return Result.Failure<string>(endpointError ?? "PublishRelease requires a configured deployment version endpoint.");
+
+            if (projectId == Guid.Empty || releaseId == Guid.Empty || candidateId == Guid.Empty
+                || string.IsNullOrWhiteSpace(version) || version.Length > 100 || version.Any(char.IsWhiteSpace)
+                || !ProjectVersionPolicyCatalog.IsSafeBranchName(targetBranch)
+                || !ProjectVersionPolicyCatalog.IsSafeGitTagName(tagName)
+                || !IsGitSha(candidateSha) || !IsGitSha(candidateTreeSha)
+                || publicationRevision < 1 || releaseRevision < 1)
+                return Result.Failure<string>("PublishRelease payload is invalid.");
+
+            var allowed = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "projectId", "releaseId", "candidateId", "version", "targetBranch", "tagName",
+                "candidateSha", "candidateTreeSha", "deploymentVersionEndpoint",
+                "publicationRevision", "releaseRevision"
+            };
+            if (obj.Count != allowed.Count || obj.Any(pair => !allowed.Contains(pair.Key)))
+                return Result.Failure<string>("PublishRelease payload contains unsupported or missing properties.");
             return Result.Ok(obj.ToJsonString());
         }
 

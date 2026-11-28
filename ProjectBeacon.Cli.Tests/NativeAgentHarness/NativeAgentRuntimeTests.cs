@@ -82,14 +82,18 @@ public sealed class NativeAgentRuntimeTests
                 JsonSerializer.Serialize(new { decision }), CancellationToken.None));
 
             AgentTurnStatus? status = null;
-            for (var i = 0; i < 200; i++)
+            // Windows may need a longer cold-start path for the isolated dotnet CLI home.
+            // The command itself is bounded to 60 seconds; wait for that result rather than
+            // failing the approval/resume test after an arbitrary four-second window.
+            for (var i = 0; i < 2500; i++)
             {
                 status = await runtime.GetTurnStatusAsync(session, CancellationToken.None);
                 if (status?.Ended == true)
                     break;
                 await Task.Delay(20, TestContext.Current.CancellationToken);
             }
-            Assert.True(status?.Ended, status?.Error ?? "The approved command turn did not finish.");
+            Assert.True(status?.Ended,
+                status?.Error ?? $"The approved command turn did not finish. Last tool result: {provider.LastToolResult}");
             Assert.Equal("stop", status!.Finish);
             Assert.Equal(1, provider.FinalRequests);
             Assert.Empty(await capabilities.ListPendingFormsAsync(session, CancellationToken.None));
@@ -1940,6 +1944,7 @@ public sealed class NativeAgentRuntimeTests
             new StubLlamaSync(),
             () => WorkstationSettings.Load(settingsPath),
             providerFactory: (_, _, _) => provider);
+        var runtimeDisposed = false;
         try
         {
             await runtime.SendPromptAsync(
@@ -1963,11 +1968,18 @@ public sealed class NativeAgentRuntimeTests
             Assert.True(status?.Ended, status?.Error ?? "The lone-checkpoint turn did not finish before the timeout.");
             Assert.Equal("stop", status.Finish);
             Assert.Equal(0, provider.SummaryCalls);
+
+            // Ended is published in memory before the final durable transcript write completes.
+            // Dispose waits for the active turn task and its final persistence, so the file is
+            // not read while the Windows atomic replace is still in flight.
+            await runtime.DisposeAsync();
+            runtimeDisposed = true;
             Assert.Contains("PRIOR-CHECKPOINT-MARKER", await File.ReadAllTextAsync(transcriptPath), StringComparison.Ordinal);
         }
         finally
         {
-            await runtime.DisposeAsync();
+            if (!runtimeDisposed)
+                await runtime.DisposeAsync();
             Directory.Delete(temp, true);
         }
     }

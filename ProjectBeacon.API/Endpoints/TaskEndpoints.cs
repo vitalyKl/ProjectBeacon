@@ -48,6 +48,9 @@ public static class TaskEndpoints
         app.MapPut("/v1/tasks/{taskId:guid}/dependencies", SetDependencies).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/projects/{projectId:guid}/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/tasks/{taskId:guid}/review-notes", AddReviewNotes).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapGet("/v1/tasks/{taskId:guid}/version-impact", GetVersionImpact).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPut("/v1/tasks/{taskId:guid}/version-impact", SetVersionImpact).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
+        app.MapPost("/v1/tasks/{taskId:guid}/version-impact/review", ReviewVersionImpact).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapGet("/v1/tasks/{taskId:guid}/steps", ListSteps).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapPost("/v1/tasks/{taskId:guid}/steps", AddStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
         app.MapPatch("/v1/steps/{stepId:guid}", ToggleStep).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskWrite);
@@ -251,6 +254,44 @@ public static class TaskEndpoints
             ? Results.Ok(MapTaskResponse(result.Value!))
             : result.FromResult();
     }
+
+    private static async Task<IResult> GetVersionImpact(
+        Guid taskId, GetTaskVersionImpactHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(taskId, ctx.GetActor(), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> SetVersionImpact(
+        Guid taskId, [FromBody] SetVersionImpactBody body,
+        SetTaskVersionImpactHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new SetTaskVersionImpactCommand(
+            taskId, body.Impact, body.Rationale, body.ExpectedRevision, ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    public sealed record SetVersionImpactBody(string Impact, string Rationale, int ExpectedRevision);
+
+    private static async Task<IResult> ReviewVersionImpact(
+        Guid taskId, [FromBody] ReviewVersionImpactBody body,
+        ReviewTaskVersionImpactHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var role = Enum.TryParse<PipelineRole>(
+            ctx.User.FindFirst("pipeline_role")?.Value, true, out var parsedRole)
+                ? parsedRole
+                : (PipelineRole?)null;
+        var reviewSessionId = Guid.TryParse(
+            ctx.User.FindFirst("pipeline_session_id")?.Value, out var parsedSessionId)
+                ? parsedSessionId
+                : (Guid?)null;
+        var result = await handler.HandleAsync(new ReviewTaskVersionImpactCommand(
+            taskId, body.Decision, body.Note, body.ExpectedRevision,
+            reviewSessionId, role, ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    public sealed record ReviewVersionImpactBody(string Decision, string Note, int ExpectedRevision);
 
     private static TaskItemDto MapTaskResponse(TaskItemDto dto) =>
         new(dto.Id, dto.Title, dto.Description, dto.Status, dto.Priority, dto.Type, dto.SubStage,

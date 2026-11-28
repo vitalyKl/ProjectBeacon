@@ -11,6 +11,7 @@ using Application.Devices;
 using Application.Persistence;
 using Application.Projects;
 using Domain.Entities.Tasks;
+using Domain.Entities.Projects;
 using Domain.Common;
 using Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -55,6 +56,21 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
             return Result.Failure<LandingAttemptDto>(
                 "The project's Git policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it.",
                 ErrorKind.Conflict);
+        if (!ProjectVersionPolicyCatalog.TryRead(project.VersionPolicyJson, out var versionPolicy, out var versionPolicyError))
+            return Result.Failure<LandingAttemptDto>(
+                "The project's version policy is invalid. Landing automation remains disabled until an Owner/Admin repairs it. " + versionPolicyError,
+                ErrorKind.Conflict);
+        // Configured version manifests are server-protected from ordinary Actor landings.
+        // The exact list is copied into the immutable landing attempt so policy edits cannot
+        // silently change the files protected by an already requested review/landing.
+        gitPolicy = gitPolicy with
+        {
+            ProtectedPaths = gitPolicy.ProtectedPaths
+                .Concat(versionPolicy.Sources.Select(source => source.Path))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()
+        };
         var expectedCommandHash = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(checkCommand))).ToLowerInvariant();
 
@@ -97,10 +113,28 @@ public sealed class RequestLandingHandler : ICommandHandler<RequestLandingComman
                 ErrorKind.Conflict);
 
         var reviewBaseBranch = reviewRun.CheckedBaseBranch!;
+        string landingTargetBranch;
+        if (task.HotfixSourceReleaseId is not null)
+        {
+            if (string.IsNullOrWhiteSpace(task.HotfixTargetBranch)
+                || !string.Equals(reviewBaseBranch, task.HotfixTargetBranch, StringComparison.Ordinal))
+                return Result.Failure<LandingAttemptDto>(
+                    "A Hotfix review proof must target the exact production branch recorded by its published Release.",
+                    ErrorKind.Conflict);
+            if (gitPolicy.AutonomyLevel == 1
+                || string.Equals(gitPolicy.DirtyCheckoutBehavior, "LandViaIntegration", StringComparison.Ordinal))
+                return Result.Failure<LandingAttemptDto>(
+                    "Hotfix landing must target the deployed production branch directly. Disable integration-branch landing/fallback in Project Git Settings before requesting the Hotfix landing.",
+                    ErrorKind.Conflict);
+            landingTargetBranch = task.HotfixTargetBranch;
+        }
+        else
+        {
+            landingTargetBranch = gitPolicy.AutonomyLevel == 1
+                ? ProjectGitPolicyCatalog.IntegrationBranchName
+                : reviewBaseBranch;
+        }
         var policySnapshot = ProjectGitPolicyCatalog.SerializeAttemptSnapshot(gitPolicy, reviewBaseBranch);
-        var landingTargetBranch = gitPolicy.AutonomyLevel == 1
-            ? ProjectGitPolicyCatalog.IntegrationBranchName
-            : reviewBaseBranch;
 
         var latestLanding = await db.LandingAttempts
             .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
@@ -420,6 +454,14 @@ public sealed class ExecuteLandingHandler : ICommandHandler<ExecuteLandingComman
             db, attempt.ProjectId, attempt.Id, "Execute", ct);
         if (activeCommand is not null || LandingCommandDispatch.HasFreshLease(attempt, "Execute"))
             return Result.Ok(RequestLandingHandler.ToDto(attempt));
+
+        if (attempt.IsGitHubMergeAccepted)
+        {
+            // GitHub already accepted this exact PR into background processing or its
+            // merge queue. Do not overwrite that durable state with a second Execute;
+            // AutoSync owns read-only polling until the exact PR reaches MERGED or fails.
+            return Result.Ok(RequestLandingHandler.ToDto(attempt));
+        }
 
         if (attempt.Status is not (LandingAttemptStatus.Previewed or LandingAttemptStatus.ExecutePending)
             || string.IsNullOrWhiteSpace(attempt.TargetBranch)

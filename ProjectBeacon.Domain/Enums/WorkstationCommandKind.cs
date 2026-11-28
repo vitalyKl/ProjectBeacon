@@ -30,5 +30,7 @@ public enum WorkstationCommandKind
     UpdateClient,
     GitSync,
     ApplyProposalPatch,
-    GitLand
+    GitLand,
+    ReleasePrepare,
+    PublishRelease
 }

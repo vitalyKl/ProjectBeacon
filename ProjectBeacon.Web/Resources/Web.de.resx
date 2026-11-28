@@ -3552,4 +3552,125 @@ Kein von Beacon gehosteter Coding-Agent.</value>
   <data name="Goal" xml:space="preserve">
     <value>Ziel</value>
   </data>
+  <data name="ReleasePreparationFailedSummary" xml:space="preserve">
+    <value>Die Release-Vorbereitung wurde nicht abgeschlossen. Prüfen Sie die Diagnose unten, beheben Sie die Ursache und versuchen Sie es erneut.</value>
+  </data>
+  <data name="ReleasePublicationFailedSummary" xml:space="preserve">
+    <value>Die Veröffentlichung in Produktion wurde nicht abgeschlossen. Prüfen Sie die Diagnose unten. Wenn der unveränderliche Tag bereits gepusht wurde, verwendet ein erneuter Versuch denselben Candidate und Tag.</value>
+  </data>
+  <data name="ReleaseDiagnosticDetails" xml:space="preserve">
+    <value>Diagnosedetails</value>
+  </data>
+
+<data name="LandingReasonGitHubMergePending" xml:space="preserve">
+    <value>GitHub hat den asynchronen Merge-Auftrag angenommen und verarbeitet ihn noch. Ein Eintrag in der Merge Queue wurde noch nicht bestätigt. Die Aufgabe bleibt offen, bis Beacon den Merge-Commit und die Prüfung nach dem Merge bestätigt.</value>
+  </data>
+<data name="LandingReasonGitHubMergeQueued" xml:space="preserve">
+    <value>GitHub hat den PR in die Merge Queue aufgenommen. Die Aufgabe bleibt offen, bis GitHub den Merge abschließt und Beacon den Merge-Commit sowie die Prüfung nach dem Merge bestätigt.</value>
+  </data>
+<data name="LandingReasonGitHubAsyncMergeFailed" xml:space="preserve">
+    <value>GitHub hat den asynchronen Merge-Auftrag abgelehnt. Prüfen Sie den Fehler der Merge Queue, nehmen Sie erforderliche Änderungen vor und fordern Sie eine neue Landing-Vorschau an.</value>
+  </data>
+<data name="ProjectAutoSyncLabel" xml:space="preserve"><value>Upstream automatisch synchronisieren</value></data>
+<data name="ProjectAutoSyncHelp" xml:space="preserve"><value>Beacon ruft regelmäßig das Upstream-Repository dieses Projekts ab und führt einen Fast-Forward nur bei einem sauberen, inaktiven Checkout aus. Lokale Änderungen, abweichende Historien, Detached HEAD und aktive Agentensitzungen bleiben erhalten. Vorhandene lokale Tags werden niemals erzwungen verschoben oder gelöscht.</value></data>
+<data name="ProjectAutoSyncUnavailable" xml:space="preserve"><value>Verbinde eine Workstation mit einem AutoSync-fähigen Beacon-Client, um diese Einstellung zu aktivieren.</value></data>
+<data name="ProjectVersionPolicyTitle" xml:space="preserve"><value>Projekt-Versionsrichtlinie</value></data>
+<data name="ProjectVersionPolicyHelp" xml:space="preserve"><value>Beacon speichert die maßgebliche Projektversion und vergleicht konfigurierte Repository-Manifeste damit. Repository-Dateien sind Projektionen; Agenten dürfen die offizielle Version während normaler Aufgaben weder veröffentlichen noch ändern.</value></data>
+<data name="ProjectVersionPolicyUnavailable" xml:space="preserve"><value>Die Versionsrichtlinie konnte nicht geladen werden.</value></data>
+<data name="OfficialProjectVersion" xml:space="preserve"><value>Offizielle Version</value></data>
+<data name="VersionNotInitialized" xml:space="preserve"><value>Nicht initialisiert</value></data>
+<data name="VersionScheme" xml:space="preserve"><value>Versionsschema</value></data>
+<data name="VersionSchemeNumeric" xml:space="preserve"><value>Numerische Komponenten</value></data>
+<data name="VersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+<data name="VersionSchemeCalendar" xml:space="preserve"><value>Kalenderversion</value></data>
+<data name="VersionComponentCount" xml:space="preserve"><value>Anzahl numerischer Komponenten</value></data>
+<data name="VersionCalendarFormat" xml:space="preserve"><value>Kalenderformat</value></data>
+<data name="VersionTagPattern" xml:space="preserve"><value>Git-Tag-Muster</value></data>
+<data name="VersionTagPatternHelp" xml:space="preserve"><value>Genau einen Platzhalter {version} verwenden, z. B. v{version}.</value></data>
+<data name="VersionAllowPrerelease" xml:space="preserve"><value>SemVer-Prerelease-Versionen zulassen</value></data>
+<data name="VersionManifestSources" xml:space="preserve"><value>Versionsquellen in Manifestdateien</value></data>
+<data name="VersionManifestSourcesHelp" xml:space="preserve"><value>Eine Quelle pro Zeile: path|Format|selector. Beispiele: Directory.Build.props|Xml|//Version ; package.json|Json|/version ; pyproject.toml|Toml|project.version ; Regex-Dateien verwenden eine benannte (?&lt;version>...) oder die erste Capture-Gruppe.</value></data>
+<data name="InitialOfficialVersion" xml:space="preserve"><value>Offizielle Version initialisieren</value></data>
+<data name="InitialOfficialVersionHelp" xml:space="preserve"><value>Dieser Wert kann nur einmal initialisiert werden. Weitere Änderungen erfordern den ReleasePrepare-Workflow.</value></data>
+<data name="SaveVersionPolicy" xml:space="preserve"><value>Versionsrichtlinie speichern</value></data>
+<data name="VersionSourceLineInvalid" xml:space="preserve"><value>Jede Quelle muss das Format path|Format|selector haben.</value></data>
+<data name="ProjectVersionScheme" xml:space="preserve"><value>Versionschema</value></data>
+<data name="ProjectVersionSchemeSemVer" xml:space="preserve"><value>Semantic Versioning (SemVer)</value></data>
+<data name="ProjectVersionSchemeNumeric" xml:space="preserve"><value>Numerische Komponenten</value></data>
+<data name="ProjectVersionSchemeCalendar" xml:space="preserve"><value>Kalenderversion</value></data>
+<data name="ProjectVersionComponentCount" xml:space="preserve"><value>Anzahl numerischer Komponenten (1–8)</value></data>
+<data name="ProjectVersionCalendarFormat" xml:space="preserve"><value>Kalenderformat (invariantes .NET-Datumsformat)</value></data>
+<data name="ProjectVersionCalendarFormatHelp" xml:space="preserve"><value>Verwenden Sie yyyy, MM und dd (erforderlich) sowie optional HH, mm und ss. Unterstützte Trennzeichen: . - / _ Leerzeichen : T Z. Beispiele: yyyy.MM.dd, yyyyMMdd, yyyy-MM-ddTHH:mm:ssZ.</value></data>
+<data name="ProjectVersionTagPattern" xml:space="preserve"><value>Git-Tag-Muster</value></data>
+<data name="ProjectVersionTagPatternHelp" xml:space="preserve"><value>Verwende genau einen Platzhalter {version}, zum Beispiel v{version}.</value></data>
+<data name="ProjectVersionAllowPrerelease" xml:space="preserve"><value>SemVer-Prerelease-Versionen zulassen</value></data>
+<data name="ProjectOfficialVersion" xml:space="preserve"><value>Offizielle Projektversion (maßgeblich in Beacon)</value></data>
+<data name="ProjectVersionInitialVersion" xml:space="preserve"><value>Erste offizielle Version</value></data>
+<data name="ProjectVersionSources" xml:space="preserve"><value>Versionsdatei-Projektionen</value></data>
+<data name="ProjectVersionSourcesHelp" xml:space="preserve"><value>Eine Quelle pro Zeile: relativer/Pfad|Xml, Json, Toml oder Regex|Selektor. XML unterstützt nur absolute Elementpfade und Nachfahrenpfade, z. B. /Project/PropertyGroup/Version oder //Version. JSON verwendet JSON Pointer. TOML verwendet einen punktgetrennten Schlüsselpfad und muss eine Zeichenfolge oder Ganzzahl ergeben. Regex verwendet das gemeinsame .NET/Python-Teilsystem: genau eine Capture-Gruppe ((?&lt;version&gt;...) oder Gruppe 1), nur nicht-erfassende Gruppen und Look-ahead. Unterstützte Escapes sind \d, \D, \s, \S, \t, \r, \n, \f, \v, \A und \z; benannte \k&lt;version&gt;-Rückverweise müssen auf die benannte Gruppe folgen. Look-behind, Inline-Optionen, \w/\W/\b/\B, Unicode-Kategorien, numerische Rückverweise und verschachtelte/subtraktive Zeichenklassen werden nicht unterstützt. Zum Vorbereiten eines Candidates ist mindestens eine Quelle erforderlich; sie kann später eingerichtet werden, wenn zunächst nur Releases geplant werden sollen. Dateien müssen im Projekt-Workspace bleiben.</value></data>
+<data name="ProjectVersionOwnerAdminOnly" xml:space="preserve"><value>Nur Projekt-Owner und Admins können die Versionsrichtlinie ändern.</value></data>
+<data name="ProjectVersionSave" xml:space="preserve"><value>Versionsrichtlinie speichern</value></data>
+<data name="ProjectVersionSaved" xml:space="preserve"><value>Versionsrichtlinie gespeichert</value></data>
+<data name="NotConfigured" xml:space="preserve"><value>Nicht konfiguriert</value></data>
+<data name="ProjectReleaseManagementEnabled" xml:space="preserve"><value>Release Management für dieses Projekt aktivieren</value></data>
+<data name="ProjectReleaseManagementHelp" xml:space="preserve"><value>Wenn aktiviert, zeigt die Roadmap Releases an und ermöglicht das Gruppieren von Meilensteinen in einem Release. Aufgaben übernehmen den Release-Kontext über ihren Meilenstein. Konfiguriere zuerst oben das Versionsschema und die Manifest-Projektionen. Standardmäßig deaktiviert; die Aktivierung veröffentlicht oder deployed nichts.</value></data>
+<data name="ProjectReleases" xml:space="preserve"><value>Projekt-Releases</value></data>
+<data name="Releases" xml:space="preserve"><value>Releases</value></data>
+<data name="NewRelease" xml:space="preserve"><value>Neues Release</value></data>
+<data name="ReleaseName" xml:space="preserve"><value>Release-Name</value></data>
+<data name="ReleaseTargetVersion" xml:space="preserve"><value>Zielversion</value></data>
+<data name="ReleaseTargetVersionHelp" xml:space="preserve"><value>Optional. Muss dem Versionsschema in den Projekteinstellungen entsprechen.</value></data>
+<data name="ReleaseTargetBranch" xml:space="preserve"><value>Zielbranch</value></data>
+<data name="ReleaseStart" xml:space="preserve"><value>Starten</value></data>
+<data name="ReleaseMarkCandidate" xml:space="preserve"><value>Als Candidate markieren</value></data>
+<data name="CancelRelease" xml:space="preserve"><value>Release abbrechen</value></data>
+<data name="ReleaseCreated" xml:space="preserve"><value>Release erstellt</value></data>
+<data name="ReleaseDeleted" xml:space="preserve"><value>Release gelöscht</value></data>
+<data name="MilestoneRelease" xml:space="preserve"><value>Release</value></data>
+<data name="NoRelease" xml:space="preserve"><value>Keinem Release zugeordnet</value></data>
+<data name="NoReleases" xml:space="preserve"><value>Für dieses Projekt wurden noch keine Releases erstellt.</value></data>
+<data name="ReleaseStatusPlanned" xml:space="preserve"><value>Geplant</value></data>
+<data name="ReleaseStatusInProgress" xml:space="preserve"><value>In Bearbeitung</value></data>
+<data name="ReleaseStatusCandidate" xml:space="preserve"><value>Candidate</value></data>
+<data name="ReleaseStatusPublished" xml:space="preserve"><value>Veröffentlicht</value></data>
+<data name="ReleaseStatusCancelled" xml:space="preserve"><value>Abgebrochen</value></data>
+<data name="ReleaseCandidateViaPrepare" xml:space="preserve"><value>Ein Candidate wird von ReleasePrepare erstellt, nachdem Richtlinien-, Impact-, Landing- und Validierungsprüfungen bestanden wurden.</value></data>
+<data name="ProjectVersionDeploymentEndpoint" xml:space="preserve"><value>Produktions-Version-Endpunkt</value></data>
+<data name="ProjectVersionDeploymentEndpointHelp" xml:space="preserve"><value>HTTPS-URL mit /v1/version am Ende. Beacon prüft diesen Endpunkt nach erfolgreichem Release-Workflow und verlangt übereinstimmende Werte für Version und gitSha.</value></data>
+<data name="CreateHotfixTask" xml:space="preserve"><value>Hotfix-Aufgabe erstellen</value></data>
+<data name="HotfixTaskTitle" xml:space="preserve"><value>Titel der Hotfix-Aufgabe</value></data>
+<data name="HotfixTaskDescription" xml:space="preserve"><value>Produktionsproblem und erforderliche Korrektur beschreiben</value></data>
+<data name="HotfixTaskCreated" xml:space="preserve"><value>Hotfix-Aufgabe aus dem bereitgestellten Release erstellt</value></data>
+<data name="HotfixSourceRelease" xml:space="preserve"><value>Quell-Release</value></data>
+<data name="HotfixDeployedVersion" xml:space="preserve"><value>Bereitgestellte Version</value></data>
+<data name="HotfixDeployedSha" xml:space="preserve"><value>In Produktion bereitgestellter Commit</value></data>
+<data name="HotfixDeploymentRun" xml:space="preserve"><value>Deployment-Workflow öffnen</value></data>
+<data name="ForwardPortOfHotfix" xml:space="preserve"><value>Forward-Port des Hotfix</value></data>
+<data name="HotfixTasks" xml:space="preserve"><value>Hotfix- und Forward-Port-Aufgaben</value></data>
+<data name="HotfixOriginNotice" xml:space="preserve"><value>Diese Aufgabe basiert exakt auf dem in Produktion bereitgestellten Commit. Branch und Basis-Commit werden von Beacon geschützt.</value></data>
+<data name="ForwardPortNotice" xml:space="preserve"><value>Diese reguläre Aufgabe wurde erstellt, nachdem der ursprüngliche Hotfix nachweislich gelandet ist. Verwende den normalen Planner-, Actor-, Reviewer- und Landing-Workflow.</value></data>
+<data name="ReleaseManagementIntroduction" xml:space="preserve"><value>Release-Ablauf: Konfiguriere die maßgebliche Version und die Manifestdateien in den Projekteinstellungen, erstelle hier einen Release und ordne ihm anschließend Meilensteine zu. Aufgaben dieser Meilensteine erhalten Zielversion und Ziel-Branch im Planner-Kontext. Die Release-Vorbereitung erstellt einen unveränderlichen Candidate; die Veröffentlichung in Produktion erfordert eine separate ausdrückliche Bestätigung.</value></data>
+<data name="PrepareReleaseCandidate" xml:space="preserve"><value>Candidate vorbereiten</value></data>
+<data name="ReleasePreparationPullRequest" xml:space="preserve"><value>Release-Pull-Request öffnen</value></data>
+<data name="VerifyReleaseLanding" xml:space="preserve"><value>Landing verifizieren</value></data>
+<data name="ReleasePreparationInProgress" xml:space="preserve"><value>Die Release-Vorbereitung läuft auf der fest zugeordneten Workstation.</value></data>
+<data name="ReleasePrepareQueued" xml:space="preserve"><value>Die Release-Vorbereitung wurde auf der fest zugeordneten Workstation eingereiht.</value></data>
+<data name="ReleaseLandingVerificationQueued" xml:space="preserve"><value>Die Landing-Prüfung wurde auf derselben Workstation eingereiht.</value></data>
+<data name="PublishRelease" xml:space="preserve"><value>In Produktion veröffentlichen</value></data>
+<data name="PublishReleaseConfirmTitle" xml:space="preserve"><value>Produktionsveröffentlichung bestätigen</value></data>
+<data name="PublishReleaseConfirmMessage" xml:space="preserve"><value>Release „{0}“ als Version {1} mit Tag „{2}“ aus Branch „{3}“ veröffentlichen? Dadurch wird ein unveränderlicher Git-Tag erstellt und der konfigurierte GitHub-Release-Workflow gestartet, der möglicherweise in Produktion deployed. Ein gepushter Tag wird niemals verschoben oder gelöscht; Wiederholungen verwenden denselben Candidate und Tag.</value></data>
+<data name="ReleasePublicationQueued" xml:space="preserve"><value>Die Veröffentlichung wurde auf der fest zugeordneten Workstation eingereiht. Beacon prüft den GitHub-Workflow sowie die bereitgestellte Version und SHA.</value></data>
+<data name="ReleaseTagAlreadyPushed" xml:space="preserve"><value>Der unveränderliche Release-Tag wurde bereits gepusht. Ein erneuter Versuch verschiebt ihn nicht.</value></data>
+<data name="TaskVersionImpactTitle" xml:space="preserve"><value>Versionsauswirkung</value></data>
+<data name="TaskVersionImpactNotDeclared" xml:space="preserve"><value>Der Actor hat für diese Aufgabe noch keine Versionsauswirkung angegeben.</value></data>
+<data name="TaskVersionImpactLevel" xml:space="preserve"><value>Angegebene Auswirkung</value></data>
+<data name="TaskVersionImpactRationale" xml:space="preserve"><value>Begründung des Actors</value></data>
+<data name="TaskVersionImpactReview" xml:space="preserve"><value>Entscheidung des Reviewers</value></data>
+<data name="TaskVersionImpactNone" xml:space="preserve"><value>Keine Versionsänderung</value></data>
+<data name="TaskVersionImpactPatch" xml:space="preserve"><value>Patch</value></data>
+<data name="TaskVersionImpactMinor" xml:space="preserve"><value>Minor</value></data>
+<data name="TaskVersionImpactMajor" xml:space="preserve"><value>Major</value></data>
+<data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Bestätigt</value></data>
+<data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Angefochten</value></data>
+<data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer ausstehend</value></data>
 </root>

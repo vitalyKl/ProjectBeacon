@@ -351,6 +351,12 @@ internal static class NativeCommandRunner
         startInfo.Environment["TEMP"] = tempDirectory;
         startInfo.Environment["TMPDIR"] = tempDirectory;
         startInfo.Environment["DOTNET_CLI_HOME"] = Path.Combine(isolatedHome, ".dotnet");
+        // Avoid first-run welcome/certificate setup and telemetry network activity on a
+        // fresh per-session CLI home. This keeps short diagnostics such as dotnet --version
+        // deterministic on Windows workstations and CI without sharing user CLI state.
+        startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+        startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+        startInfo.Environment["DOTNET_NOLOGO"] = "1";
         // Persist only package/build caches per project; HOME, CLI config and credentials stay session-local.
         // Project-scoped caches avoid cold restores for every Actor without sharing mutable caches across tenants.
         var packageCache = string.IsNullOrWhiteSpace(cacheScope) ? isolatedHome : ProjectCachePath(cacheScope);

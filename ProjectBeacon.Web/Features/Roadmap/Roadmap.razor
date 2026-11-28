@@ -1,3 +1,4 @@
+@using System.Text.Json
 @page "/roadmap"
 @layout MainLayout
 @attribute [Authorize]
@@ -8,6 +9,8 @@
 @using ProjectBeacon.Application.Milestones
 @using ProjectBeacon.Application.Projects
 @using ProjectBeacon.Application.Tasks
+@using ProjectBeacon.Application.Releases
+@using ProjectBeacon.Application.Persistence
 @inject Microsoft.Extensions.Localization.IStringLocalizer<Web> L
 @inject GetCurrentProjectHandler CurrentProject
 @inject AuthenticationStateProvider Auth
@@ -21,10 +24,27 @@
 @inject DeleteMilestoneHandler DeleteMilestoneHandler
 @inject CloseMilestoneHandler CloseMilestoneHandler
 @inject ReopenMilestoneHandler ReopenMilestoneHandler
+@inject GetProjectVersionPolicyHandler GetVersionPolicy
+@inject ListProjectReleasesHandler ListProjectReleases
+@inject CreateReleaseHandler CreateReleaseHandler
+@inject CreateHotfixTaskHandler CreateHotfixTaskHandler
+@inject PrepareReleaseHandler PrepareRelease
+@inject VerifyReleaseLandingHandler VerifyReleaseLanding
+@inject PublishReleaseHandler PublishRelease
+@inject UpdateReleaseHandler UpdateReleaseHandler
+@inject SetReleaseStatusHandler SetReleaseStatus
+@inject DeleteReleaseHandler DeleteReleaseHandler
+@inject SetMilestoneReleaseHandler SetMilestoneRelease
+@inject ProjectBeacon.Application.Authorization.IAuthorizationService Authorization
+@inject IBeaconDbFactory DbFactory
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Roadmap"]</PageTitle>
 <PageHeader Title="@L["Roadmap"]">
+    @if (_releaseManagementEnabled && _canManageReleases)
+    {
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@ShowCreateReleaseForm">@L["NewRelease"]</MudButton>
+    }
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ShowCreateForm">@L["NewMilestone"]</MudButton>
 </PageHeader>
 
@@ -40,7 +60,7 @@ else if (_project is null)
 {
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
-else if (_milestones.Count == 0 && _deletedMilestones.Count == 0 && !_showCreateForm && _loadErrorMessage is null)
+    else if (ShowEmptyState)
 {
     <EmptyState>@L["NoMilestones"]</EmptyState>
 }
@@ -50,6 +70,245 @@ else
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@_loadErrorMessage</MudAlert>
     }
+    @if (_releaseManagementEnabled)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.h6">@L["ProjectReleases"]</MudText>
+                <MudText Typo="Typo.caption">@_releases.Count @L["Releases"]</MudText>
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">@L["ReleaseManagementIntroduction"]</MudText>
+            @if (_showCreateReleaseForm && _canManageReleases)
+            {
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle1">@L["NewRelease"]</MudText>
+                <MudTextField @bind-Value="_releaseName" Label="@L["ReleaseName"]" Required="true"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MarkdownEditor @bind-Value="_releaseDescription" Label="@L["Description"]" Lines="2" />
+                <MudTextField @bind-Value="_releaseTargetVersion" Label="@L["ReleaseTargetVersion"]"
+                              HelperText="@L["ReleaseTargetVersionHelp"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_releaseTargetBranch" Label="@L["ReleaseTargetBranch"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudNumericField T="int" @bind-Value="_releaseOrder" Label="@L["Order"]"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_releaseBusy" OnClick="CreateRelease">@L["Create"]</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="@_releaseBusy" OnClick="HideCreateReleaseForm">@L["Cancel"]</MudButton>
+                </MudStack>
+            }
+            @if (_editingReleaseId is not null && _canManageReleases)
+            {
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.subtitle1">@L["Edit"] · @_releaseName</MudText>
+                <MudTextField @bind-Value="_releaseName" Label="@L["ReleaseName"]" Required="true"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MarkdownEditor @bind-Value="_releaseDescription" Label="@L["Description"]" Lines="2" />
+                <MudTextField @bind-Value="_releaseTargetVersion" Label="@L["ReleaseTargetVersion"]"
+                              HelperText="@L["ReleaseTargetVersionHelp"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_releaseTargetBranch" Label="@L["ReleaseTargetBranch"]"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudNumericField T="int" @bind-Value="_releaseOrder" Label="@L["Order"]"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudStack Row="true" Spacing="2" Class="mt-2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_releaseBusy" OnClick="SaveRelease">@L["Save"]</MudButton>
+                    <MudButton Variant="Variant.Text" Disabled="@_releaseBusy" OnClick="CancelEditRelease">@L["Cancel"]</MudButton>
+                </MudStack>
+            }
+            @if (_releaseLoadErrorMessage is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_releaseLoadErrorMessage</MudAlert>
+            }
+            @if (_releases.Count == 0 && _releaseLoadErrorMessage is null)
+            {
+                <MudText Typo="Typo.body2" Class="mt-3">@L["NoReleases"]</MudText>
+            }
+            else if (_releases.Count > 0)
+            {
+                <MudGrid Class="mt-2">
+                    @foreach (var release in _releases.OrderBy(item => item.Order))
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-3 h-100">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.subtitle1">@release.Name</MudText>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(release.Status == ReleaseStatus.Published ? Color.Success : Color.Default)">
+                                        @L[$"ReleaseStatus{release.Status}"]
+                                    </MudChip>
+                                </MudStack>
+                                @if (!string.IsNullOrWhiteSpace(release.Description))
+                                {
+                                    <MarkdownView Text="@release.Description" MaxHeight="90" Class="mt-1" />
+                                }
+                                <MudText Typo="Typo.caption" Class="mt-2">@L["ReleaseTargetVersion"]: @(release.TargetVersion ?? "—")</MudText>
+                                <MudText Typo="Typo.caption">@L["ReleaseTargetBranch"]: @release.TargetBranch</MudText>
+                                <MudText Typo="Typo.caption">@L["Milestones"]: @release.MilestoneCount</MudText>
+                                @if (release.Status == ReleaseStatus.Published
+                                    && release.PublicationStatus == ReleasePublicationStatus.Published
+                                    && release.PublicationTagPushed)
+                                {
+                                    <MudDivider Class="my-2" />
+                                    <MudText Typo="Typo.subtitle2">@L["HotfixSourceRelease"]</MudText>
+                                    <MudText Typo="Typo.caption">@L["HotfixDeployedVersion"]: @(release.DeployedVersion ?? "—")</MudText>
+                                    <MudText Typo="Typo.caption" Style="overflow-wrap:anywhere">@L["HotfixDeployedSha"]: @(release.DeployedCommitSha ?? "—")</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(release.DeploymentWorkflowRunUrl))
+                                    {
+                                        <MudLink Href="@release.DeploymentWorkflowRunUrl" Target="_blank">
+                                            @L["HotfixDeploymentRun"]
+                                        </MudLink>
+                                    }
+                                    @if (_canManageReleases)
+                                    {
+                                        @if (_hotfixReleaseId == release.Id)
+                                        {
+                                            <MudStack Spacing="2" Class="mt-2">
+                                                <MudText Typo="Typo.subtitle2">@L["CreateHotfixTask"]</MudText>
+                                                <MudTextField T="string" @bind-Value="_hotfixTitle"
+                                                              Label="@L["HotfixTaskTitle"]" Required="true"
+                                                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                                <MarkdownEditor @bind-Value="_hotfixDescription"
+                                                                Label="@L["HotfixTaskDescription"]" Lines="3" />
+                                                <MudStack Row="true" Spacing="2">
+                                                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                                               Disabled="@_releaseBusy" OnClick="CreateHotfixTask">
+                                                        @L["CreateHotfixTask"]
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Text" Disabled="@_releaseBusy"
+                                                               OnClick="CancelCreateHotfixTask">@L["Cancel"]</MudButton>
+                                                </MudStack>
+                                            </MudStack>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                       Color="Color.Warning" Disabled="@_releaseBusy"
+                                                       OnClick="() => ShowCreateHotfixTask(release)">
+                                                @L["CreateHotfixTask"]
+                                            </MudButton>
+                                        }
+                                    }
+                                }
+                                @if (_canManageReleases)
+                                {
+                                    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="mt-2">
+                                        @if (release.Status is ReleaseStatus.Planned or ReleaseStatus.InProgress)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@_releaseBusy"
+                                                       OnClick="() => StartEditRelease(release)">@L["Edit"]</MudButton>
+                                        }
+                                        @if (release.Status == ReleaseStatus.Planned)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="@_releaseBusy"
+                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.InProgress)">@L["ReleaseStart"]</MudButton>
+                                        }
+                                        @if (release.Status == ReleaseStatus.InProgress)
+                                        {
+                                            @if (release.PreparationStatus is ReleasePreparationStatus.NotStarted or ReleasePreparationStatus.Failed)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                           Disabled="@_releaseBusy" OnClick="() => PrepareReleaseAsync(release)">
+                                                    @L["PrepareReleaseCandidate"]
+                                                </MudButton>
+                                            }
+                                            else if (release.PreparationStatus is ReleasePreparationStatus.Prepared or ReleasePreparationStatus.VerifyFailed)
+                                            {
+                                                @if (GetPreparationPullRequestUrl(release.PreparationResultJson) is { } pullRequestUrl)
+                                                {
+                                                    <MudLink Href="@pullRequestUrl" Target="_blank">@L["ReleasePreparationPullRequest"]</MudLink>
+                                                }
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                           Disabled="@_releaseBusy" OnClick="() => VerifyReleaseLandingAsync(release)">
+                                                    @L["VerifyReleaseLanding"]
+                                                </MudButton>
+                                            }
+                                            else
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                                    @L["ReleasePreparationInProgress"]
+                                                </MudText>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(release.PreparationError))
+                                            {
+                                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                                    <MudText Typo="Typo.body2">@L["ReleasePreparationFailedSummary"]</MudText>
+                                                    <MudText Typo="Typo.caption" Style="white-space:pre-wrap;overflow-wrap:anywhere">
+                                                        @L["ReleaseDiagnosticDetails"]: @release.PreparationError
+                                                    </MudText>
+                                                </MudAlert>
+                                            }
+                                        }
+                                        @if (release.Status == ReleaseStatus.Candidate)
+                                        {
+                                            @if (release.PublicationStatus == ReleasePublicationStatus.Queued)
+                                            {
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@L["ReleasePublicationQueued"]</MudText>
+                                            }
+                                            else if (release.PublicationStatus != ReleasePublicationStatus.Published)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           Disabled="@_releaseBusy" OnClick="() => PublishReleaseAsync(release)">
+                                                    @L["PublishRelease"]
+                                                </MudButton>
+                                            }
+                                            @if (release.PublicationTagPushed)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">@L["ReleaseTagAlreadyPushed"]</MudText>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(release.PublicationError))
+                                            {
+                                                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                                    <MudText Typo="Typo.body2">@L["ReleasePublicationFailedSummary"]</MudText>
+                                                    <MudText Typo="Typo.caption" Style="white-space:pre-wrap;overflow-wrap:anywhere">
+                                                        @L["ReleaseDiagnosticDetails"]: @release.PublicationError
+                                                    </MudText>
+                                                </MudAlert>
+                                            }
+                                            @if (release.PublicationStatus is ReleasePublicationStatus.NotStarted or ReleasePublicationStatus.FailedBeforeTag)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
+                                                           OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Cancelled)">@L["CancelRelease"]</MudButton>
+                                            }
+                                        }
+                                        @if (release.Status is ReleaseStatus.Planned or ReleaseStatus.InProgress)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
+                                                       OnClick="() => ChangeReleaseStatus(release, ReleaseStatus.Cancelled)">@L["CancelRelease"]</MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="@_releaseBusy"
+                                                       OnClick="() => DeleteRelease(release)">@L["Delete"]</MudButton>
+                                        }
+                                    </MudStack>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudPaper>
+        @if (_tasks.Any(task =>
+            task.HotfixSourceReleaseId is not null || task.ForwardPortOfTaskId is not null))
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-3">
+                <MudText Typo="Typo.subtitle1">@L["HotfixTasks"]</MudText>
+                @foreach (var task in _tasks
+                    .Where(task => task.HotfixSourceReleaseId is not null || task.ForwardPortOfTaskId is not null)
+                    .OrderByDescending(task => task.CreatedAt))
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="py-1">
+                        <MudText Typo="Typo.body2">@task.Title</MudText>
+                        @if (task.HotfixSourceReleaseId is { } sourceReleaseId)
+                        {
+                            <MudText Typo="Typo.caption">@L["HotfixSourceRelease"]: @(_releases.FirstOrDefault(item => item.Id == sourceReleaseId)?.Name ?? task.HotfixDeployedSha ?? "—")</MudText>
+                        }
+                        else if (task.ForwardPortOfTaskId is { } sourceTaskId)
+                        {
+                            <MudText Typo="Typo.caption">@L["ForwardPortOfHotfix"]: @(_tasks.FirstOrDefault(item => item.Id == sourceTaskId)?.Title ?? sourceTaskId.ToString("N"))</MudText>
+                        }
+                    </MudStack>
+                }
+            </MudPaper>
+        }
+    }
+
     @if (_showCreateForm)
     {
         <MudPaper Elevation="0" Outlined="true" Class="beacon-panel mt-4">
@@ -86,25 +345,43 @@ else
             <MudItem xs="12" sm="6" md="4">
                 <MudPaper Elevation="0" Outlined="true" Class="beacon-card pa-4 h-100">
                     <MudText Typo="Typo.h6">@milestone.Name</MudText>
+                    @if (_releaseManagementEnabled && _canManageReleases)
+                    {
+                        <MudSelect T="Guid?" Value="@milestone.ReleaseId"
+                                   ValueChanged="@(releaseId => SetMilestoneReleaseAsync(milestone, releaseId))"
+                                   Label="@L["MilestoneRelease"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   Dense="true" Disabled="@_releaseBusy" Class="mt-2">
+                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">@L["NoRelease"]</MudSelectItem>
+                            @foreach (var release in _releases.Where(item => item.Status is not (ReleaseStatus.Published or ReleaseStatus.Cancelled)))
+                            {
+                                <MudSelectItem T="Guid?" Value="@((Guid?)release.Id)">@release.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else if (_releaseManagementEnabled && milestone.ReleaseId is not null)
+                    {
+                        <MudText Typo="Typo.caption">@L["MilestoneRelease"]: @(_releases.FirstOrDefault(item => item.Id == milestone.ReleaseId)?.Name ?? "—")</MudText>
+                    }
                     @if (!string.IsNullOrEmpty(milestone.Description))
                     {
                         <MarkdownView Text="@milestone.Description" MaxHeight="120" Class="mt-2" />
                     }
-                    @{
-                        var milestoneTasks = _tasks.Where(t => t.MilestoneId == milestone.Id).ToList();
-                        var done = milestoneTasks.Count(t => t.Status == "Done");
-                    }
                     <MudText Typo="Typo.caption" Class="mt-2">
-                        @L["TaskCount"]: @milestoneTasks.Count · @done/@milestoneTasks.Count @L["Done"]
+                        @L["TaskCount"]: @_tasks.Count(task => task.MilestoneId == milestone.Id)
+                        · @_tasks.Count(task => task.MilestoneId == milestone.Id && task.Status == "Done")/@_tasks.Count(task => task.MilestoneId == milestone.Id) @L["Done"]
                     </MudText>
-                    <MudProgressLinear Value="@(milestoneTasks.Count == 0 ? 0 : done * 100d / milestoneTasks.Count)" Color="Color.Default" Class="mt-1 beacon-track" />
-                    @foreach (var task in milestoneTasks.Take(3))
+                    <MudProgressLinear Value="@(_tasks.Count(task => task.MilestoneId == milestone.Id) == 0 ? 0 :
+                        _tasks.Count(task => task.MilestoneId == milestone.Id && task.Status == "Done") * 100d /
+                        _tasks.Count(task => task.MilestoneId == milestone.Id))" Color="Color.Default" Class="mt-1 beacon-track" />
+                    @foreach (var task in _tasks.Where(task => task.MilestoneId == milestone.Id).Take(3))
                     {
                         <MudText Typo="Typo.body2" Class="mt-1 beacon-ellipsis" title="@task.Title">@task.Title</MudText>
                     }
-                    @if (milestoneTasks.Count > 3)
+                    @if (_tasks.Count(task => task.MilestoneId == milestone.Id) > 3)
                     {
-                        <MudText Typo="Typo.caption">@string.Format(L["MoreTasks"].Value, milestoneTasks.Count - 3)</MudText>
+                        <MudText Typo="Typo.caption">
+                            @string.Format(L["MoreTasks"].Value, _tasks.Count(task => task.MilestoneId == milestone.Id) - 3)
+                        </MudText>
                     }
                     <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-1"
                                data-testid="@($"open-milestone-{milestone.Id:D}")"
@@ -228,6 +505,34 @@ else
     private bool _busy;
     private string? _projectLoadErrorMessage;
     private string? _loadErrorMessage;
+    private string? _releaseLoadErrorMessage;
+
+    private bool ShowEmptyState => ShouldShowEmptyState(
+        _milestones.Count,
+        _deletedMilestones.Count,
+        _showCreateForm,
+        _releaseManagementEnabled,
+        _releases.Count,
+        _showCreateReleaseForm,
+        _loadErrorMessage is not null,
+        _releaseLoadErrorMessage is not null);
+
+    internal static bool ShouldShowEmptyState(
+        int milestoneCount,
+        int deletedMilestoneCount,
+        bool showCreateForm,
+        bool releaseManagementEnabled,
+        int releaseCount,
+        bool showCreateReleaseForm,
+        bool hasRoadmapLoadError,
+        bool hasReleaseLoadError) =>
+        milestoneCount == 0
+        && deletedMilestoneCount == 0
+        && !showCreateForm
+        && (!releaseManagementEnabled || releaseCount == 0)
+        && !showCreateReleaseForm
+        && !hasRoadmapLoadError
+        && !hasReleaseLoadError;
     private bool _showCreateForm;
     private Guid? _editingId;
     private MilestoneDto? _open;
@@ -240,6 +545,22 @@ else
     private int _editOrder;
     private int _newOrder;
     private int? _editRevision;
+    private List<ReleaseDto> _releases = [];
+    private bool _releaseManagementEnabled;
+    private bool _canManageReleases;
+    private bool _showCreateReleaseForm;
+    private Guid? _editingReleaseId;
+    private int? _editingReleaseRevision;
+    private bool _releaseBusy;
+    private string _releaseName = string.Empty;
+    private string? _releaseDescription;
+    private string? _releaseTargetVersion;
+    private string _releaseTargetBranch = "main";
+    private int _releaseOrder = 1;
+    private Guid? _hotfixReleaseId;
+    private Guid _hotfixRequestId;
+    private string _hotfixTitle = string.Empty;
+    private string? _hotfixDescription;
 
     protected override async Task OnInitializedAsync()
     {
@@ -253,6 +574,15 @@ else
         }
 
         _project = current.Value;
+        if (_project is not null)
+        {
+            var policy = await GetVersionPolicy.HandleAsync(_project.Id, _actor);
+            _releaseManagementEnabled = policy.Success && policy.Value?.ReleaseManagementEnabled == true;
+            await using var db = DbFactory.CreateDbContext();
+            var permission = await Authorization.CanAsync(
+                db, _actor, ResourceType.Project, AuthAction.Administer, projectId: _project.Id);
+            _canManageReleases = permission.Success;
+        }
         await Reload();
         _loading = false;
     }
@@ -287,7 +617,376 @@ else
         else
             loadErrors.Add(Notifications.FormatFailure(tasks, L["Roadmap"].Value, L["Load"].Value));
 
+        if (_releaseManagementEnabled)
+        {
+            var releases = await ListProjectReleases.HandleAsync(new ListProjectReleasesCommand(
+                new ListProjectReleasesRequest(_project.Id), _actor));
+            if (releases.Success)
+            {
+                _releases = releases.Value!.ToList();
+                _releaseLoadErrorMessage = null;
+            }
+            else
+                _releaseLoadErrorMessage = Notifications.FormatFailure(releases, L["Roadmap"].Value, L["Load"].Value);
+        }
+        else
+        {
+            _releases = [];
+            _releaseLoadErrorMessage = null;
+        }
+
         _loadErrorMessage = loadErrors.Count == 0 ? null : string.Join(Environment.NewLine, loadErrors);
+    }
+
+    private void ShowCreateHotfixTask(ReleaseDto release)
+    {
+        if (!_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.Published
+            || release.PublicationStatus != ReleasePublicationStatus.Published
+            || !release.PublicationTagPushed
+            || string.IsNullOrWhiteSpace(release.DeployedCommitSha))
+            return;
+
+        _hotfixReleaseId = release.Id;
+        _hotfixRequestId = Guid.NewGuid();
+        _hotfixTitle = $"Hotfix for {release.Name}";
+        _hotfixDescription =
+            $"Production fix for deployed version {release.DeployedVersion ?? release.TargetVersion ?? "unknown"}.\n\n" +
+            $"Deployed commit: {release.DeployedCommitSha}\n" +
+            $"Production branch: {release.TargetBranch}";
+    }
+
+    private void CancelCreateHotfixTask()
+    {
+        if (_releaseBusy)
+            return;
+        _hotfixReleaseId = null;
+        _hotfixRequestId = Guid.Empty;
+        _hotfixTitle = string.Empty;
+        _hotfixDescription = null;
+    }
+
+    private async Task CreateHotfixTask()
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || _hotfixReleaseId is not { } releaseId || _hotfixRequestId == Guid.Empty
+            || string.IsNullOrWhiteSpace(_hotfixTitle))
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await CreateHotfixTaskHandler.HandleAsync(new CreateHotfixTaskCommand(
+                _project.Id,
+                releaseId,
+                new CreateHotfixTaskRequest(
+                    _hotfixTitle.Trim(), _hotfixDescription, _hotfixRequestId),
+                _actor));
+            if (!result.Success || result.Value is null)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["CreateHotfixTask"].Value);
+                return;
+            }
+
+            _hotfixReleaseId = null;
+            _hotfixRequestId = Guid.Empty;
+            _hotfixTitle = string.Empty;
+            _hotfixDescription = null;
+            Notifications.Add(L["HotfixTaskCreated"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private void ShowCreateReleaseForm()
+    {
+        _releaseName = string.Empty;
+        _releaseDescription = null;
+        _releaseTargetVersion = null;
+        _releaseTargetBranch = "main";
+        _releaseOrder = _releases.Count + 1;
+        _showCreateReleaseForm = true;
+        _editingReleaseId = null;
+        _editingReleaseRevision = null;
+        _showCreateForm = false;
+        _editingId = null;
+    }
+
+    private void HideCreateReleaseForm() => _showCreateReleaseForm = false;
+
+    private void StartEditRelease(ReleaseDto release)
+    {
+        if (!_canManageReleases || _releaseBusy
+            || release.Status is not (ReleaseStatus.Planned or ReleaseStatus.InProgress))
+            return;
+        _editingReleaseId = release.Id;
+        _editingReleaseRevision = release.Revision;
+        _releaseName = release.Name;
+        _releaseDescription = release.Description;
+        _releaseTargetVersion = release.TargetVersion ?? string.Empty;
+        _releaseTargetBranch = release.TargetBranch;
+        _releaseOrder = release.Order;
+        _showCreateReleaseForm = false;
+        _showCreateForm = false;
+        _editingId = null;
+    }
+
+    private void CancelEditRelease()
+    {
+        _editingReleaseId = null;
+        _editingReleaseRevision = null;
+    }
+
+    private async Task SaveRelease()
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || _editingReleaseId is not { } releaseId
+            || _editingReleaseRevision is not { } expectedRevision)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await UpdateReleaseHandler.HandleAsync(new UpdateReleaseCommand(
+                new UpdateReleaseRequest(
+                    releaseId, _project.Id, _releaseName, _releaseDescription,
+                    _releaseTargetVersion, _releaseTargetBranch, _releaseOrder, expectedRevision),
+                _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Save"].Value);
+                await Reload();
+                return;
+            }
+            _editingReleaseId = null;
+            _editingReleaseRevision = null;
+            Notifications.Add(L["Saved"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task CreateRelease()
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await CreateReleaseHandler.HandleAsync(new CreateReleaseCommand(
+                _project.Id,
+                new CreateReleaseRequest(_releaseName, _releaseDescription, _releaseTargetVersion,
+                    _releaseTargetBranch, _releaseOrder),
+                _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Create"].Value);
+                return;
+            }
+            _showCreateReleaseForm = false;
+            Notifications.Add(L["ReleaseCreated"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task PrepareReleaseAsync(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.InProgress
+            || release.PreparationStatus is not (ReleasePreparationStatus.NotStarted or ReleasePreparationStatus.Failed))
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await PrepareRelease.HandleAsync(new PrepareReleaseCommand(
+                _project.Id, release.Id, release.Revision, _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["PrepareReleaseCandidate"].Value);
+                await Reload();
+                return;
+            }
+            Notifications.Add(L["ReleasePrepareQueued"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task VerifyReleaseLandingAsync(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.InProgress
+            || release.PreparationStatus is not (ReleasePreparationStatus.Prepared or ReleasePreparationStatus.VerifyFailed))
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await VerifyReleaseLanding.HandleAsync(new VerifyReleaseLandingCommand(
+                _project.Id, release.Id, release.PreparationRevision, _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["VerifyReleaseLanding"].Value);
+                await Reload();
+                return;
+            }
+            Notifications.Add(L["ReleaseLandingVerificationQueued"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task PublishReleaseAsync(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy
+            || release.Status != ReleaseStatus.Candidate
+            || release.PublicationStatus is ReleasePublicationStatus.Queued or ReleasePublicationStatus.Published)
+            return;
+
+        var policy = await GetVersionPolicy.HandleAsync(_project.Id, _actor);
+        var tagName = policy.Success && policy.Value is not null && !string.IsNullOrWhiteSpace(release.TargetVersion)
+            ? policy.Value.TagPattern.Replace("{version}", release.TargetVersion, StringComparison.Ordinal)
+            : release.TargetVersion ?? string.Empty;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            L["PublishReleaseConfirmTitle"].Value,
+            string.Format(
+                L["PublishReleaseConfirmMessage"].Value,
+                release.Name,
+                release.TargetVersion ?? "—",
+                tagName,
+                release.TargetBranch),
+            yesText: L["PublishRelease"].Value,
+            cancelText: L["Cancel"].Value);
+        if (confirmed != true)
+            return;
+
+        _releaseBusy = true;
+        try
+        {
+            var result = await PublishRelease.HandleAsync(new PublishReleaseCommand(
+                _project.Id, release.Id, release.Revision, release.PublicationRevision, _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["PublishRelease"].Value);
+                await Reload();
+                return;
+            }
+            Notifications.Add(L["ReleasePublicationQueued"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private static string? GetPreparationPullRequestUrl(string? resultJson)
+    {
+        if (string.IsNullOrWhiteSpace(resultJson))
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(resultJson);
+            if (!document.RootElement.TryGetProperty("pullRequestUrl", out var property)
+                || property.ValueKind != JsonValueKind.String)
+                return null;
+            var value = property.GetString();
+            return Uri.TryCreate(value, UriKind.Absolute, out var uri)
+                && uri.Scheme == Uri.UriSchemeHttps
+                && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+                && System.Text.RegularExpressions.Regex.IsMatch(
+                    uri.AbsolutePath, @"^/[^/]+/[^/]+/pull/[1-9][0-9]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+                    ? uri.AbsoluteUri
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private async Task ChangeReleaseStatus(ReleaseDto release, ReleaseStatus status)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await SetReleaseStatus.HandleAsync(new SetReleaseStatusCommand(
+                new SetReleaseStatusRequest(release.Id, _project.Id, status, release.Revision), _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Save"].Value);
+                return;
+            }
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task DeleteRelease(ReleaseDto release)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await DeleteReleaseHandler.HandleAsync(new DeleteReleaseCommand(
+                new DeleteReleaseRequest(release.Id, _project.Id), _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Delete"].Value);
+                return;
+            }
+            Notifications.Add(L["ReleaseDeleted"].Value, Severity.Success);
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
+    }
+
+    private async Task SetMilestoneReleaseAsync(MilestoneDto milestone, Guid? releaseId)
+    {
+        if (_project is null || !_canManageReleases || _releaseBusy || milestone.ReleaseId == releaseId)
+            return;
+        _releaseBusy = true;
+        try
+        {
+            var result = await SetMilestoneRelease.HandleAsync(new SetMilestoneReleaseCommand(
+                new SetMilestoneReleaseRequest(milestone.Id, _project.Id, releaseId, milestone.Revision), _actor));
+            if (!result.Success)
+            {
+                Notifications.Failure(result, L["Roadmap"].Value, L["Save"].Value);
+                await Reload();
+                return;
+            }
+            await Reload();
+        }
+        finally
+        {
+            _releaseBusy = false;
+        }
     }
 
     private void ShowCreateForm()

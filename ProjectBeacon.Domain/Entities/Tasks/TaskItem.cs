@@ -23,7 +23,24 @@ public class TaskItem : Entity, IProjectScoped
     public Guid ProjectId { get; private set; }
     public Guid? LabelId { get; private set; }
     public Guid? MilestoneId { get; private set; }
+    /// <summary>Published Release from whose verified deployed commit this Hotfix was created.</summary>
+    public Guid? HotfixSourceReleaseId { get; private set; }
+    public string? HotfixDeployedSha { get; private set; }
+    public string? HotfixTargetBranch { get; private set; }
+    /// <summary>Idempotency key supplied by the human who creates the Hotfix task.</summary>
+    public Guid? HotfixRequestId { get; private set; }
+    /// <summary>Set on the ordinary follow-up task automatically created after the Hotfix lands.</summary>
+    public Guid? ForwardPortOfTaskId { get; private set; }
     public string? ReviewNotes { get; private set; }
+    /// <summary>Agent-declared version impact for this task, confirmed or challenged by Reviewer.</summary>
+    public string? VersionImpact { get; private set; }
+    public string? VersionImpactRationale { get; private set; }
+    public DateTime? VersionImpactAt { get; private set; }
+    public string? VersionImpactReviewStatus { get; private set; }
+    public string? VersionImpactReviewNote { get; private set; }
+    public DateTime? VersionImpactReviewedAt { get; private set; }
+    public Guid? VersionImpactReviewedBySessionId { get; private set; }
+    public int VersionImpactRevision { get; private set; } = 1;
     public DateTime CreatedAt { get; private set; }
     public DateTime? CompletedAt { get; private set; }
     public TaskPipelineStage? PipelineStage { get; private set; }
@@ -63,6 +80,10 @@ public class TaskItem : Entity, IProjectScoped
 
     public void Update(string? title = null, string? description = null, TaskPriority? priority = null, TaskType? type = null)
     {
+        var scopeChanged =
+            (title is not null && !string.Equals(Title, title, StringComparison.Ordinal))
+            || (description is not null && !string.Equals(Description, description, StringComparison.Ordinal));
+
         if (title is not null) Title = title;
         if (description is not null && !string.Equals(Description, description, StringComparison.Ordinal))
         {
@@ -71,6 +92,8 @@ public class TaskItem : Entity, IProjectScoped
         }
         if (priority is not null) Priority = priority.Value;
         if (type is not null) Type = type.Value;
+        if (scopeChanged && VersionImpact is not null)
+            ClearVersionImpact();
     }
 
     /// <summary>Restores nullable description and review notes from a historical content snapshot.</summary>
@@ -80,9 +103,12 @@ public class TaskItem : Entity, IProjectScoped
             && string.Equals(ReviewNotes, reviewNotes, StringComparison.Ordinal))
             return;
 
+        var scopeChanged = !string.Equals(Description, description, StringComparison.Ordinal);
         Description = description;
         ReviewNotes = reviewNotes;
         ContentRevision++;
+        if (scopeChanged && VersionImpact is not null)
+            ClearVersionImpact();
     }
 
     /// <summary>Pins the task's local pipeline workspace to one workstation. The pin is permanent unless an explicit migration is performed.</summary>
@@ -93,6 +119,87 @@ public class TaskItem : Entity, IProjectScoped
         if (PipelineDeviceId is { } existing && existing != deviceId)
             throw new InvalidOperationException("The task is already pinned to another workstation. Migrate its task workspace explicitly before changing the pin.");
         PipelineDeviceId = deviceId;
+    }
+
+    /// <summary>Marks this task as a Hotfix based on an exact verified production deployment.</summary>
+    public void SetHotfixOrigin(Guid releaseId, string deployedSha, string targetBranch, Guid requestId)
+    {
+        if (releaseId == Guid.Empty || requestId == Guid.Empty)
+            throw new ArgumentException("Published Release and Hotfix request ids are required.");
+        if (deployedSha is not { Length: 40 or 64 } || !deployedSha.All(Uri.IsHexDigit))
+            throw new ArgumentException("Hotfix deployed commit must be a full Git SHA.", nameof(deployedSha));
+        if (!ProjectVersionPolicyCatalog.IsSafeBranchName(targetBranch))
+            throw new ArgumentException("Hotfix target branch is not a safe Git branch name.", nameof(targetBranch));
+        if (HotfixSourceReleaseId is not null || HotfixRequestId is not null)
+            throw new InvalidOperationException("Hotfix origin is immutable once assigned.");
+
+        HotfixSourceReleaseId = releaseId;
+        HotfixDeployedSha = deployedSha.ToLowerInvariant();
+        HotfixTargetBranch = targetBranch;
+        HotfixRequestId = requestId;
+    }
+
+    /// <summary>Links the ordinary post-landing forward-port task to its source Hotfix once.</summary>
+    public void SetForwardPortOfTask(Guid hotfixTaskId)
+    {
+        if (hotfixTaskId == Guid.Empty || hotfixTaskId == Id)
+            throw new ArgumentException("A different source Hotfix task is required.", nameof(hotfixTaskId));
+        if (HotfixSourceReleaseId is not null)
+            throw new InvalidOperationException("A Hotfix cannot itself be a forward-port task.");
+        if (ForwardPortOfTaskId is not null && ForwardPortOfTaskId != hotfixTaskId)
+            throw new InvalidOperationException("The source Hotfix of a forward-port task is immutable.");
+        ForwardPortOfTaskId = hotfixTaskId;
+    }
+
+    /// <summary>Stores the agent's proposed version impact; publication gates remain server-owned.</summary>
+    public void SetVersionImpact(string impact, string rationale)
+    {
+        if (impact is not ("none" or "patch" or "minor" or "major"))
+            throw new ArgumentException("Version impact must be none, patch, minor, or major.", nameof(impact));
+        ArgumentException.ThrowIfNullOrWhiteSpace(rationale);
+        if (rationale.Length > 1000)
+            throw new ArgumentException("Version impact rationale cannot exceed 1000 characters.", nameof(rationale));
+        VersionImpact = impact;
+        VersionImpactRationale = rationale.Trim();
+        VersionImpactAt = DateTime.UtcNow;
+        VersionImpactReviewStatus = null;
+        VersionImpactReviewNote = null;
+        VersionImpactReviewedAt = null;
+        VersionImpactReviewedBySessionId = null;
+        VersionImpactRevision++;
+    }
+
+    /// <summary>Records a Reviewer decision for the current impact revision.</summary>
+    public void ReviewVersionImpact(string decision, string note, Guid reviewSessionId)
+    {
+        if (VersionImpact is null)
+            throw new InvalidOperationException("A task must declare version impact before it can be reviewed.");
+        if (decision is not ("Confirmed" or "Challenged"))
+            throw new ArgumentException("Version impact review decision must be Confirmed or Challenged.", nameof(decision));
+        ArgumentException.ThrowIfNullOrWhiteSpace(note);
+        if (note.Trim().Length > 1000)
+            throw new ArgumentException("Version impact review note cannot exceed 1000 characters.", nameof(note));
+        if (reviewSessionId == Guid.Empty)
+            throw new ArgumentException("Reviewer session id is required.", nameof(reviewSessionId));
+
+        VersionImpactReviewStatus = decision;
+        VersionImpactReviewNote = note.Trim();
+        VersionImpactReviewedAt = DateTime.UtcNow;
+        VersionImpactReviewedBySessionId = reviewSessionId;
+        VersionImpactRevision++;
+    }
+
+    /// <summary>Clears a declaration when a task is reopened for a materially different change.</summary>
+    public void ClearVersionImpact()
+    {
+        VersionImpact = null;
+        VersionImpactRationale = null;
+        VersionImpactAt = null;
+        VersionImpactReviewStatus = null;
+        VersionImpactReviewNote = null;
+        VersionImpactReviewedAt = null;
+        VersionImpactReviewedBySessionId = null;
+        VersionImpactRevision++;
     }
 
     public void AssignLabel(Guid? labelId)

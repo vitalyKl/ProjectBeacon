@@ -202,6 +202,110 @@ public sealed class HarnessApiAuthorizationTests
     }
 
     [Fact]
+    public void ActorVersionTools_RequireExplicitTaskAndProjectToolGrants()
+    {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId, _subtaskId,
+            [McpToolNames.VersionCheck]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId, _subtaskId,
+            [McpToolNames.WriteFile]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/milestones", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId, _subtaskId,
+            [McpToolNames.GetTaskVersionImpact]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Put, $"/v1/tasks/{_taskId:D}/version-impact", _taskId, _subtaskId,
+            [McpToolNames.VersionImpact]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Put, $"/v1/tasks/{_taskId:D}/version-impact", _taskId, _subtaskId,
+            [McpToolNames.GetTaskVersionImpact]));
+    }
+
+    [Fact]
+    public void ActorReleaseContext_CanReadOnlyItsOwnTask()
+    {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}", _taskId, _subtaskId,
+            [McpToolNames.VersionCheck]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{Guid.NewGuid():D}", _taskId, _subtaskId,
+            [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}", _taskId, _subtaskId));
+    }
+
+    [Fact]
+    public void ReviewerVersionImpactConfirmation_IsAvailableOnlyToReviewerRole()
+    {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/version-impact/review", _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/version-impact/review", _taskId, _subtaskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Post, $"/v1/tasks/{_taskId:D}/version-impact/review", _taskId));
+    }
+
+    [Fact]
+    public void ReleaseContext_ReadsReleasesOnlyWithinPipelineRoleAndToolGrant()
+    {
+        var releases = $"/v1/projects/{_projectId:D}/releases";
+        var milestones = $"/v1/projects/{_projectId:D}/milestones";
+
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, releases, _taskId, _subtaskId, [McpToolNames.ReleaseContext]));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, releases, _taskId, _subtaskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Get, milestones, _taskId, _subtaskId, [McpToolNames.ReleaseContext]));
+
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, releases, _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Get, releases, _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Actor,
+            HttpMethods.Post, releases, _taskId, _subtaskId, [McpToolNames.ReleaseContext]));
+    }
+
+    [Fact]
+    public void PlannerAndReviewer_CanReadVersionContextButCannotDeclareActorImpact()
+    {
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/version-policy", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, $"/v1/projects/{_projectId:D}/releases", _taskId));
+        Assert.True(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Get, $"/v1/tasks/{_taskId:D}/version-impact", _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Planner,
+            HttpMethods.Put, $"/v1/tasks/{_taskId:D}/version-impact", _taskId));
+        Assert.False(Allowed(WorkstationCommandKind.RunPipelineSession, PipelineRole.Review,
+            HttpMethods.Put, $"/v1/tasks/{_taskId:D}/version-impact", _taskId));
+    }
+
+    [Fact]
     public void EvalToken_IsReadOnlyAndCannotAccessPipelineLifecycle()
     {
         Assert.True(Allowed(WorkstationCommandKind.RunEvalTurn, null,

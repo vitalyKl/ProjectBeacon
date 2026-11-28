@@ -282,4 +282,94 @@ public sealed class TaskItemTests
         Assert.Equal(TaskItemStatus.Done, task.Status);
         Assert.NotNull(task.CompletedAt);
     }
+    [Fact]
+    public void VersionImpact_RequiresValidImpactAndRationale()
+    {
+        var task = TaskItem.Create("Versioned change", Guid.NewGuid());
+
+        Assert.Throws<ArgumentException>(() => task.SetVersionImpact("urgent", "Reason"));
+        Assert.Throws<ArgumentException>(() => task.SetVersionImpact("patch", " "));
+        Assert.Throws<ArgumentException>(() => task.SetVersionImpact("patch", new string('x', 1001)));
+
+        task.SetVersionImpact("patch", "Adds a backward-compatible capability.");
+
+        Assert.Equal("patch", task.VersionImpact);
+        Assert.Equal("Adds a backward-compatible capability.", task.VersionImpactRationale);
+        Assert.NotNull(task.VersionImpactAt);
+        Assert.Equal(2, task.VersionImpactRevision);
+    }
+
+    [Fact]
+    public void VersionImpact_ReviewerCanConfirmOrChallenge_AndActorChangeClearsReview()
+    {
+        var task = TaskItem.Create("Versioned change", Guid.NewGuid());
+        var reviewSessionId = Guid.NewGuid();
+        task.SetVersionImpact("minor", "Adds an optional API feature.");
+        var declaredRevision = task.VersionImpactRevision;
+
+        task.ReviewVersionImpact("Confirmed", "The change is additive and backward-compatible.", reviewSessionId);
+
+        Assert.Equal("Confirmed", task.VersionImpactReviewStatus);
+        Assert.Equal("The change is additive and backward-compatible.", task.VersionImpactReviewNote);
+        Assert.Equal(reviewSessionId, task.VersionImpactReviewedBySessionId);
+        Assert.NotNull(task.VersionImpactReviewedAt);
+        Assert.Equal(declaredRevision + 1, task.VersionImpactRevision);
+
+        task.SetVersionImpact("major", "Removes a previously supported response field.");
+
+        Assert.Equal("major", task.VersionImpact);
+        Assert.Null(task.VersionImpactReviewStatus);
+        Assert.Null(task.VersionImpactReviewNote);
+        Assert.Null(task.VersionImpactReviewedAt);
+        Assert.Null(task.VersionImpactReviewedBySessionId);
+        Assert.Equal(declaredRevision + 2, task.VersionImpactRevision);
+    }
+
+    [Fact]
+    public void VersionImpact_RejectsInvalidReviewerDecisionAndSession()
+    {
+        var task = TaskItem.Create("Versioned change", Guid.NewGuid());
+        task.SetVersionImpact("none", "No public behavior changes.");
+
+        Assert.Throws<ArgumentException>(() => task.ReviewVersionImpact("Approved", "Looks good.", Guid.NewGuid()));
+        Assert.Throws<ArgumentException>(() => task.ReviewVersionImpact("Confirmed", "Looks good.", Guid.Empty));
+        Assert.Throws<ArgumentException>(() => task.ReviewVersionImpact("Challenged", " ", Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void UpdatingTaskScope_InvalidatesPreviousVersionImpactReview()
+    {
+        var task = TaskItem.Create("Original scope", Guid.NewGuid(), description: "Add an optional field.");
+        task.SetVersionImpact("minor", "Adds an optional public API field.");
+        task.ReviewVersionImpact("Confirmed", "Backward compatible.", Guid.NewGuid());
+
+        task.Update(description: "Remove the existing public field.");
+
+        Assert.Null(task.VersionImpact);
+        Assert.Null(task.VersionImpactReviewStatus);
+        Assert.Null(task.VersionImpactReviewNote);
+        Assert.Null(task.VersionImpactReviewedBySessionId);
+        Assert.Equal(4, task.VersionImpactRevision);
+    }
+
+    [Fact]
+    public void ClearVersionImpact_ClearsDeclarationAndReviewerDecision()
+    {
+        var task = TaskItem.Create("Versioned change", Guid.NewGuid());
+        task.SetVersionImpact("patch", "Fixes a regression.");
+        task.ReviewVersionImpact("Challenged", "Evidence indicates a breaking change.", Guid.NewGuid());
+        var revision = task.VersionImpactRevision;
+
+        task.ClearVersionImpact();
+
+        Assert.Null(task.VersionImpact);
+        Assert.Null(task.VersionImpactRationale);
+        Assert.Null(task.VersionImpactAt);
+        Assert.Null(task.VersionImpactReviewStatus);
+        Assert.Null(task.VersionImpactReviewNote);
+        Assert.Null(task.VersionImpactReviewedAt);
+        Assert.Null(task.VersionImpactReviewedBySessionId);
+        Assert.Equal(revision + 1, task.VersionImpactRevision);
+    }
+
 }

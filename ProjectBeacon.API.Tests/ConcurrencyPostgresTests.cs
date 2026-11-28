@@ -358,7 +358,7 @@ public sealed class ConcurrencyPostgresTests : IClassFixture<PostgresFixture>
         Assert.Equal(1, results.Count(r => r.Success));
         var loser = results.Single(r => !r.Success);
         Assert.Contains(loser.Error,
-            new[] { "Review state changed while recording verdict; retry.", "Cannot record verdict in stage Approved" });
+            new[] { "Review state changed while recording verdict; retry.", "Cannot record verdict in stage Approved." });
 
         await using var db = _postgres.CreateAdminContext();
         using (TenantScope.EnterUnscoped())

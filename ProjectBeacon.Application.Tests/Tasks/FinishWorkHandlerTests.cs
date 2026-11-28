@@ -556,6 +556,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<LabelPath> LabelPaths => _inner.LabelPaths;
         public DbSet<Report> Reports => _inner.Reports;
         public DbSet<Milestone> Milestones => _inner.Milestones;
+        public DbSet<Release> Releases => _inner.Releases;
+        public DbSet<ReleaseCandidateSnapshot> ReleaseCandidateSnapshots => _inner.ReleaseCandidateSnapshots;
         public DbSet<TaskDependency> TaskDependencies => _inner.TaskDependencies;
         public DbSet<TaskComment> TaskComments => _inner.TaskComments;
         public DbSet<TaskAttachment> TaskAttachments => _inner.TaskAttachments;
@@ -584,6 +586,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ChatPart> ChatParts => _inner.ChatParts;
         public DbSet<EvalRun> EvalRuns => _inner.EvalRuns;
         public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
+        public DbSet<RemoteLandingProof> RemoteLandingProofs => _inner.RemoteLandingProofs;
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
         public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;
@@ -637,6 +640,8 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<LabelPath> LabelPaths => _inner.LabelPaths;
         public DbSet<Report> Reports => _inner.Reports;
         public DbSet<Milestone> Milestones => _inner.Milestones;
+        public DbSet<Release> Releases => _inner.Releases;
+        public DbSet<ReleaseCandidateSnapshot> ReleaseCandidateSnapshots => _inner.ReleaseCandidateSnapshots;
         public DbSet<TaskDependency> TaskDependencies => _inner.TaskDependencies;
         public DbSet<TaskComment> TaskComments => _inner.TaskComments;
         public DbSet<TaskAttachment> TaskAttachments => _inner.TaskAttachments;
@@ -665,6 +670,7 @@ public sealed class FinishWorkHandlerTests : IDisposable
         public DbSet<ChatPart> ChatParts => _inner.ChatParts;
         public DbSet<EvalRun> EvalRuns => _inner.EvalRuns;
         public DbSet<ReviewRun> ReviewRuns => _inner.ReviewRuns;
+        public DbSet<RemoteLandingProof> RemoteLandingProofs => _inner.RemoteLandingProofs;
         public DbSet<ContextSection> ContextSections => _inner.ContextSections;
         public DbSet<ContextRevision> ContextRevisions => _inner.ContextRevisions;
         public DbSet<ContentVersion> ContentVersions => _inner.ContentVersions;

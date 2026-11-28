@@ -3,6 +3,7 @@ namespace ProjectBeacon.API.Tests;
 using Domain.Entities.Identity;
 using Domain.Entities.Content;
 using Domain.Entities.Projects;
+using Domain.Entities.Roadmap;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Infrastructure.Data;
@@ -149,6 +150,61 @@ public sealed class RlsIsolationTests : IClassFixture<PostgresFixture>, IAsyncLi
         Assert.Contains(taskA, ids);
         // taskB belongs to a different project and must be hidden by the tenant policy.
         Assert.DoesNotContain(taskB, ids);
+    }
+
+    [Fact]
+    public async Task Rls_Releases_AreProjectScoped_ViaRawSql()
+    {
+        _postgres.RequirePostgres();
+
+        var (projectA, _) = await SeedTestDataAsync("ReleaseA");
+        var (projectB, _) = await SeedTestDataAsync("ReleaseB");
+        var releaseA = Release.Create("Release A", null, projectA, "1.0.0", "main", 1);
+        var releaseB = Release.Create("Release B", null, projectB, "2.0.0", "main", 1);
+
+        await using (var seed = NewAdminContext())
+        {
+            seed.Releases.AddRange(releaseA, releaseB);
+            await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var conn = await OpenRlsConnectionAsync();
+        await using (var setCmd = new NpgsqlCommand(
+            "SELECT set_config('app.tenant_project_id', @pid, false)," +
+            "       set_config('app.tenant_unscoped', 'false', false)", conn))
+        {
+            setCmd.Parameters.AddWithValue("@pid", projectA.ToString());
+            await setCmd.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var cmd = new NpgsqlCommand("SELECT \"Id\" FROM \"Releases\"", conn);
+        using var reader = await cmd.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        var ids = new List<Guid>();
+        while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+            ids.Add(reader.GetGuid(0));
+
+        Assert.Contains(releaseA.Id, ids);
+        Assert.DoesNotContain(releaseB.Id, ids);
+    }
+
+    [Fact]
+    public async Task MilestoneReleaseForeignKey_RejectsCrossProjectAssociation()
+    {
+        _postgres.RequirePostgres();
+
+        var (projectA, _) = await SeedTestDataAsync("MilestoneReleaseA");
+        var (projectB, _) = await SeedTestDataAsync("MilestoneReleaseB");
+        var foreignRelease = Release.Create("Foreign Release", null, projectB, "2.0.0", "main", 1);
+        var milestone = Milestone.Create("Project A Milestone", null, projectA, 1);
+        milestone.AssignRelease(foreignRelease.Id);
+
+        await using var seed = NewAdminContext();
+        seed.Releases.Add(foreignRelease);
+        seed.Milestones.Add(milestone);
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(
+            () => seed.SaveChangesAsync(TestContext.Current.CancellationToken));
+        Assert.Contains("FK_Milestones_Releases_ProjectId_ReleaseId", exception.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

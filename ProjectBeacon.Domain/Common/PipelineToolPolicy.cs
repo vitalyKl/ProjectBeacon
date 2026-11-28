@@ -7,19 +7,20 @@ public static class PipelineToolPolicy
     public const string GitIntegrate = "git_integrate";
     public const string GitPublish = "git_publish";
     public const string GitPullRequest = "git_pr";
+    public const string ForgeRead = "forge_read";
 
     public static IReadOnlyList<string> PlannerGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitIntegrate, GitPullRequest
+        GitInfo, GitIntegrate, GitPullRequest, ForgeRead
     });
     /// <summary>Default Actor Git tools. Publishing is excluded unless a trusted authorization explicitly opts in.</summary>
     public static IReadOnlyList<string> ActorGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitCommit, GitIntegrate, GitPullRequest
+        GitInfo, GitCommit, GitIntegrate, GitPullRequest, ForgeRead
     });
     public static IReadOnlyList<string> ReviewerGitTools { get; } = Array.AsReadOnly(new[]
     {
-        GitInfo, GitPullRequest
+        GitInfo, GitPullRequest, ForgeRead
     });
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GitToolsByRole =
@@ -87,31 +88,35 @@ public static class PipelineToolPolicy
     {
         McpToolNames.TaskPipelineStatus, McpToolNames.TaskReviewVerdict,
         McpToolNames.PipelineLandRequest, McpToolNames.PipelineLandStatus,
-        McpToolNames.PipelineApprove
+        McpToolNames.PipelineApprove, McpToolNames.GetTaskVersionImpact,
+        McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.ReviewVersionImpact
     });
     public static IReadOnlyList<string> PlannerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
         {
-            McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject, "repo_status",
+            McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead, McpToolNames.GetProject, McpToolNames.VersionCheck, McpToolNames.ReleaseContext, "repo_status",
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode, McpToolNames.ExportAgentsMd,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint, McpToolNames.ListDecisions,
             McpToolNames.GetDecision, McpToolNames.ListMilestones,
+            McpToolNames.GetTaskVersionImpact,
             McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.WorkspaceWrite
         }).Concat(PlannerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ReviewerTools { get; } = Array.AsReadOnly(ReadOnlyWorkspaceTools
         .Concat(new[]
         {
-            McpToolNames.GetProject, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
+            McpToolNames.GetProject, McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
             McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
             McpToolNames.ListConstraints, McpToolNames.GetConstraint,
-            McpToolNames.ListDecisions, McpToolNames.GetDecision
+            McpToolNames.ListDecisions, McpToolNames.GetDecision,
+            McpToolNames.GetTaskVersionImpact
         }).Concat(ReviewerSupervisorTools).Distinct(StringComparer.Ordinal).ToArray());
     public static IReadOnlyList<string> ActorWorkspaceTools { get; } = Array.AsReadOnly(new[]
     {
-        "repo_status", McpToolNames.GetTask, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
+        "repo_status", McpToolNames.GetTask, McpToolNames.VersionCheck, McpToolNames.VersionImpact, McpToolNames.ReleaseContext, McpToolNames.ListConstraints, McpToolNames.GetConstraint,
         McpToolNames.ListDecisions, McpToolNames.GetDecision,
         McpToolNames.ListContextNodes, McpToolNames.GetContextNode,
         McpToolNames.TaskPipelineStatus, McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead,
+        McpToolNames.GetTaskVersionImpact,
         McpToolNames.WorkspaceWrite, McpToolNames.TaskAttachFile,
         McpToolNames.TaskListAttachments, McpToolNames.TaskReadAttachment,
         McpToolNames.ContextCreateDraft, McpToolNames.ConstraintPropose, McpToolNames.DecisionPropose,
@@ -120,7 +125,7 @@ public static class PipelineToolPolicy
     });
     public static IReadOnlyList<string> ActorForbiddenTools { get; } = Array.AsReadOnly(new[]
     {
-        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict,
+        McpToolNames.TaskCreateSubtask, McpToolNames.TaskReviewVerdict, McpToolNames.ReviewVersionImpact,
         McpToolNames.PipelineStart, McpToolNames.PipelineStartActor, McpToolNames.PipelineLaunchSession,
         McpToolNames.PipelineStartReview, McpToolNames.PipelineApprove, McpToolNames.PipelineForceClose,
         McpToolNames.ModelBind, McpToolNames.ModelStatus, McpToolNames.ModelUpsert, McpToolNames.ModelDelete, McpToolNames.ModelUnbind,
@@ -164,7 +169,7 @@ public static class PipelineToolPolicy
         McpToolNames.ListMilestones, McpToolNames.GetMilestone,
         McpToolNames.ListLabels, McpToolNames.MatchLabel, McpToolNames.ListReports, McpToolNames.GetReport,
         McpToolNames.TaskPipelineStatus, McpToolNames.ContextCompile, McpToolNames.ModelStatus, "repo_status", "suggest_command_prefixes",
-        GitInfo, "run_log", "service_status", "service_logs"
+        GitInfo, ForgeRead, "run_log", "service_status", "service_logs"
     });
     public static IReadOnlyList<string> PipelinePlanDeniedTools { get; } = Array.AsReadOnly(new[]
     {

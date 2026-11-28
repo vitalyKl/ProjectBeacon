@@ -48,6 +48,9 @@ public sealed record McpToolDescriptor(
 /// </summary>
 public static class McpToolNames
 {
+    public const string VersionCheck = "version_check";
+    public const string VersionImpact = "version_impact";
+    public const string ReleaseContext = "release_context";
     public const string GetProject = "get_project";
     public const string ListTasks = "list_tasks";
     public const string GetTask = "get_task";
@@ -67,6 +70,8 @@ public static class McpToolNames
     public const string ToggleTaskStep = "toggle_task_step";
     public const string DeleteTaskStep = "delete_task_step";
     public const string FinishWork = "finish_work";
+    public const string GetTaskVersionImpact = "get_task_version_impact";
+    public const string ReviewVersionImpact = "review_version_impact";
     public const string ContextCompile = "context_compile";
     public const string ContextCreateDraft = "context_create_draft";
     public const string ConstraintPropose = "constraint_propose";
@@ -189,12 +194,21 @@ public static class McpToolCatalog
                 McpToolNames.WorkspaceIndex, McpToolNames.WorkspaceRead),
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
                 McpToolNames.WorkspaceWrite),
+            ..Api(McpToolScope.Read, ApiTokenCapability.TaskRead,
+                McpToolNames.VersionCheck, McpToolNames.ReleaseContext, McpToolNames.GetTaskVersionImpact),
+            ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
+                McpToolNames.VersionImpact),
+            ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite, McpToolSurface.Pipeline,
+                McpToolNames.ReviewVersionImpact),
             ..Api(McpToolScope.Write, ApiTokenCapability.TaskWrite,
                 McpToolNames.CreateTask, McpToolNames.UpdateTask, McpToolNames.SetTaskStatus,
                 McpToolNames.SetTaskSubstage, McpToolNames.ClaimTask, McpToolNames.AddTaskComment,
                 McpToolNames.TaskAttachFile,
                 McpToolNames.SetTaskDependencies, McpToolNames.AddReviewNotes, McpToolNames.AddTaskStep,
                 McpToolNames.ToggleTaskStep, McpToolNames.DeleteTaskStep, McpToolNames.FinishWork),
+
+            // Project version management uses the same project/task authorization as other API tools.
+
 
             // Context and governance tools use the explicit context capability.
             ..Api(McpToolScope.Read, ApiTokenCapability.ContextRead,

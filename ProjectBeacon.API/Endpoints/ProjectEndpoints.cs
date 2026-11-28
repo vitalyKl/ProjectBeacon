@@ -8,6 +8,7 @@ using Application.Common;
 using Application.Identity;
 using Application.Projects;
 using Application.Runtime;
+using Domain.Entities.Projects;
 using Domain.Enums;
 using Infrastructure.Data;
 using Domain.Entities.Identity;
@@ -30,6 +31,8 @@ public static class ProjectEndpoints
         app.MapGet("/v1/projects/{projectId:guid}", GetProject).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
         app.MapGet("/v1/projects/{projectId:guid}/git-policy", GetGitPolicy).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapPut("/v1/projects/{projectId:guid}/git-policy", SetGitPolicy).RequireAuthorization().DisableAntiforgery().RequireHuman();
+        app.MapGet("/v1/projects/{projectId:guid}/version-policy", GetVersionPolicy).RequireAuthorization().DisableAntiforgery().RequireHumanOrApiToken(ApiTokenCapability.TaskRead);
+        app.MapPut("/v1/projects/{projectId:guid}/version-policy", SetVersionPolicy).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/orgs/{orgId:guid}/projects", ListProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
         app.MapGet("/v1/projects", ListAllProjects).RequireAuthorization().DisableAntiforgery().RequireHuman();
 
@@ -89,9 +92,44 @@ public static class ProjectEndpoints
         var result = await handler.HandleAsync(new SetProjectGitPolicyCommand(
             projectId, body.AutonomyLevel, body.DirtyCheckoutBehavior, body.ProtectedPaths,
             body.MaxChangedFiles, body.MaxChangedLines, body.AutoRevertMode,
-            body.ExpectedRevision, actor), ct);
+            body.ExpectedRevision, actor, body.AutoSyncEnabled), ct);
         return result.Success ? Results.Ok(result.Value) : result.FromResult();
     }
+
+    private static async Task<IResult> GetVersionPolicy(
+        Guid projectId, GetProjectVersionPolicyHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(projectId, ctx.GetActor(), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    private static async Task<IResult> SetVersionPolicy(
+        Guid projectId, [FromBody] SetVersionPolicyBody body,
+        SetProjectVersionPolicyHandler handler, HttpContext ctx, CancellationToken ct)
+    {
+        var result = await handler.HandleAsync(new SetProjectVersionPolicyCommand(
+            projectId,
+            new ProjectVersionPolicy(
+                body.Scheme, body.ComponentCount, body.CalendarFormat, body.TagPattern,
+                body.AllowPrerelease, body.Sources ?? [], body.ReleaseManagementEnabled,
+                body.DeploymentVersionEndpoint),
+            body.InitialOfficialVersion,
+            body.ExpectedRevision,
+            ctx.GetActor()), ct);
+        return result.Success ? Results.Ok(result.Value) : result.FromResult();
+    }
+
+    public sealed record SetVersionPolicyBody(
+        string Scheme,
+        int ComponentCount,
+        string? CalendarFormat,
+        string TagPattern,
+        bool AllowPrerelease,
+        IReadOnlyList<ProjectVersionSourcePolicy>? Sources,
+        string? InitialOfficialVersion,
+        int ExpectedRevision,
+        bool ReleaseManagementEnabled = false,
+        string? DeploymentVersionEndpoint = null);
 
     private static async Task<IResult> DeleteProject(Guid projectId, DeleteProjectHandler handler, HttpContext ctx)
     {
@@ -249,7 +287,8 @@ public static class ProjectEndpoints
         int MaxChangedFiles,
         int MaxChangedLines,
         string AutoRevertMode,
-        int ExpectedRevision);
+        int ExpectedRevision,
+        bool? AutoSyncEnabled = null);
 
     /// <summary>JSON body for <c>POST /v1/projects/{projectId:guid}/invites</c>.</summary>
     public record CreateInviteBody(string Email, MemberRole Role);

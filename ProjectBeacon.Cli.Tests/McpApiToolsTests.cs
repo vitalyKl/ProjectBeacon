@@ -647,6 +647,298 @@ public sealed class McpApiToolsTests
             call.Method == "POST" && call.Path == $"/v1/projects/{projectId:D}/proposals/{proposalId:D}/withdraw");
     }
 
+    [Fact]
+    public async Task VersionCheck_ParsesConfiguredManifestProjectionAgainstOfficialVersion()
+    {
+        var root = TempRoot();
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "Directory.Build.props"),
+                "<Project><PropertyGroup><Version>0.7.5.9</Version></PropertyGroup></Project>");
+            var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+            var env = McpEnvironment.Of(
+                ("BEACON_PROJECT_ID", projectId.ToString("D")),
+                ("BEACON_WORKSPACE_ROOT", root));
+            var handler = new RecordingHandler();
+            using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+            var api = new BeaconApiClient(http, env);
+
+            var result = await McpApiTools.CallAsync(
+                McpToolNames.VersionCheck, new JsonObject(), api, env);
+
+            Assert.False(result.IsError, result.Text);
+            var json = JsonNode.Parse(result.Text)!;
+            Assert.Equal("0.7.5.9", json["officialVersion"]!.GetValue<string>());
+            Assert.Equal("in_sync", json["status"]!.GetValue<string>());
+            Assert.Equal("in_sync", json["sources"]![0]!["status"]!.GetValue<string>());
+            Assert.Contains(handler.Calls, call =>
+                call.Method == "GET" && call.Path == $"/v1/projects/{projectId:D}/version-policy");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ReleaseContext_IncludesMilestoneReleaseLinksAndActiveReleases()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Planner"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.ReleaseContext,
+            new JsonObject
+            {
+                ["projectId"] = projectId.ToString("D"),
+                ["taskId"] = taskId.ToString("D")
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var json = JsonNode.Parse(result.Text)!;
+        Assert.True(json["releaseManagementEnabled"]!.GetValue<bool>());
+        Assert.Equal("Prepare API release", json["milestones"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal("cccccccc-cccc-cccc-cccc-cccccccccccc",
+            json["milestones"]![0]!["releaseId"]!.GetValue<string>());
+        Assert.Equal("0.7.5.9", json["releases"]![0]!["targetVersion"]!.GetValue<string>());
+        Assert.Equal("InProgress", json["releases"]![0]!["status"]!.GetValue<string>());
+        Assert.Equal("dddddddd-dddd-dddd-dddd-dddddddddddd",
+            json["activeTask"]!["milestoneId"]!.GetValue<string>());
+        Assert.True(json["activeTaskReleaseMode"]!.GetValue<bool>());
+        Assert.Equal("cccccccc-cccc-cccc-cccc-cccccccccccc",
+            json["activeTaskRelease"]!["id"]!.GetValue<string>());
+        Assert.Contains(handler.Calls, call => call.Method == "GET"
+            && call.Path == $"/v1/tasks/{taskId:D}");
+        Assert.Contains(handler.Calls, call => call.Method == "GET"
+            && call.Path == $"/v1/projects/{projectId:D}/milestones");
+        Assert.Contains(handler.Calls, call => call.Method == "GET"
+            && call.Path == $"/v1/projects/{projectId:D}/releases");
+    }
+
+    [Fact]
+    public async Task ReleaseContext_IncludesEnabledProjectReleaseRecords()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var releaseId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        var env = McpEnvironment.Of(("BEACON_PROJECT_ID", projectId.ToString("D")));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.ReleaseContext,
+            new JsonObject
+            {
+                ["projectId"] = projectId.ToString("D"),
+                ["taskId"] = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var json = JsonNode.Parse(result.Text)!;
+        Assert.True(json["releaseManagementEnabled"]!.GetValue<bool>());
+        Assert.Equal(releaseId.ToString("D"), json["releases"]![0]!["id"]!.GetValue<string>());
+        Assert.Contains(handler.Calls, call =>
+            call.Method == "GET" && call.Path == $"/v1/projects/{projectId:D}/releases");
+    }
+
+
+    [Fact]
+    public async Task VersionCheck_ProjectsIndependentPackageJsonSourceThroughMcpTool()
+    {
+        var root = TempRoot();
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "package.json"),
+                """
+                {
+                  "name": "beacon-release-policy-proof",
+                  "version": "2.4.1",
+                  "private": true
+                }
+                """);
+
+            var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+            var env = McpEnvironment.Of(
+                ("BEACON_PROJECT_ID", projectId.ToString("D")),
+                ("BEACON_WORKSPACE_ROOT", root));
+            var policy = new JsonObject
+            {
+                ["scheme"] = "SemVer",
+                ["componentCount"] = 3,
+                ["calendarFormat"] = null,
+                ["tagPattern"] = "release-{version}",
+                ["allowPrerelease"] = false,
+                ["releaseManagementEnabled"] = true,
+                ["sources"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["path"] = "package.json",
+                        ["format"] = "Json",
+                        ["selector"] = "/version"
+                    }
+                },
+                ["officialVersion"] = "2.4.1",
+                ["revision"] = 7
+            };
+            using var http = new HttpClient(new ProblemResponseHandler(
+                HttpStatusCode.OK, policy.ToJsonString()))
+            {
+                BaseAddress = new Uri("http://beacon.test/")
+            };
+            var api = new BeaconApiClient(http, env);
+
+            var result = await McpApiTools.CallAsync(
+                McpToolNames.VersionCheck,
+                new JsonObject { ["projectId"] = projectId.ToString("D") },
+                api, env, TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsError, result.Text);
+            var json = JsonNode.Parse(result.Text)!;
+            Assert.Equal("in_sync", json["status"]!.GetValue<string>());
+            Assert.Equal(7, json["policyRevision"]!.GetValue<int>());
+            Assert.Equal("release-2.4.1", json["tagName"]!.GetValue<string>());
+            Assert.False(json["hasProjectionDrift"]!.GetValue<bool>());
+            Assert.Equal("package.json", json["sources"]![0]!["path"]!.GetValue<string>());
+            Assert.Equal("Json", json["sources"]![0]!["format"]!.GetValue<string>());
+            Assert.Equal("2.4.1", json["sources"]![0]!["projectedVersion"]!.GetValue<string>());
+            Assert.Equal("in_sync", json["sources"]![0]!["status"]!.GetValue<string>());
+            Assert.Equal("not_checked_by_version_check", json["tagVerification"]!.GetValue<string>());
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task VersionImpact_UsesPinnedPipelineTaskAndExpectedRevision()
+    {
+        var projectId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(
+            ("BEACON_PROJECT_ID", projectId.ToString("D")),
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Actor"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.VersionImpact,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["impact"] = "patch",
+                ["rationale"] = "Fixes a regression without changing public behavior.",
+                ["expectedRevision"] = 3
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var call = Assert.Single(handler.Calls);
+        Assert.Equal("PUT", call.Method);
+        Assert.Equal($"/v1/tasks/{taskId:D}/version-impact", call.Path);
+        Assert.Contains("\"expectedRevision\":3", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\"impact\":\"patch\"", call.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReviewVersionImpact_UsesReviewerSessionRouteAndRevision()
+    {
+        var taskId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        var env = McpEnvironment.Of(
+            ("BEACON_TASK_ID", taskId.ToString("D")),
+            ("BEACON_PIPELINE_ROLE", "Review"));
+        var handler = new RecordingHandler();
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://beacon.test/") };
+        var api = new BeaconApiClient(http, env);
+
+        var result = await McpApiTools.CallAsync(
+            McpToolNames.ReviewVersionImpact,
+            new JsonObject
+            {
+                ["taskId"] = taskId.ToString("D"),
+                ["decision"] = "Challenged",
+                ["note"] = "The change removes a previously supported field.",
+                ["expectedRevision"] = 4
+            }, api, env);
+
+        Assert.False(result.IsError, result.Text);
+        var call = Assert.Single(handler.Calls);
+        Assert.Equal("POST", call.Method);
+        Assert.Equal($"/v1/tasks/{taskId:D}/version-impact/review", call.Path);
+        Assert.Contains("\"expectedRevision\":4", call.Body, StringComparison.Ordinal);
+        Assert.Contains("\"decision\":\"Challenged\"", call.Body, StringComparison.Ordinal);
+    }
+
+
+    [Fact]
+    public async Task DeploymentVersionCheck_RequiresExactOfficialVersionAndValidGitSha()
+    {
+        const string sha = "0123456789abcdef0123456789abcdef01234567";
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.OK, new JsonObject { ["version"] = "0.7.5.9", ["gitSha"] = sha }.ToJsonString()));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            "https://beacon.example/v1/version", "0.7.5.9",
+            TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("in_sync", result["status"]!.GetValue<string>());
+        Assert.Equal("0.7.5.9", result["deployedVersion"]!.GetValue<string>());
+        Assert.Equal(sha, result["deployedCommitSha"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task DeploymentVersionCheck_ReportsDriftForVersionOrShaMismatch()
+    {
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.OK, """{"version":"0.7.5.8","gitSha":"not-a-sha"}"""));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            "https://beacon.example/v1/version", "0.7.5.9",
+            TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("drift", result["status"]!.GetValue<string>());
+        Assert.False(result["versionMatches"]!.GetValue<bool>());
+        Assert.False(result["gitShaValid"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task DeploymentVersionCheck_DoesNotFollowRedirects()
+    {
+        using var http = new HttpClient(new ProblemResponseHandler(
+            HttpStatusCode.Redirect, """{"version":"0.7.5.9","gitSha":"0123456789abcdef0123456789abcdef01234567"}"""));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            "https://beacon.example/v1/version", "0.7.5.9",
+            TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("unreachable", result["status"]!.GetValue<string>());
+        Assert.Contains("redirected", result["error"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("http://beacon.example/v1/version")]
+    [InlineData("https://beacon.example/v1/version?token=secret")]
+    public async Task DeploymentVersionCheck_RejectsUnsafeEndpointConfiguration(string endpoint)
+    {
+        using var http = new HttpClient(new ProblemResponseHandler(HttpStatusCode.OK, "{}"));
+
+        var result = await McpApiTools.CheckDeploymentEndpointAsync(
+            endpoint, "0.7.5.9", TestContext.Current.CancellationToken, http);
+
+        Assert.Equal("invalid_configuration", result["status"]!.GetValue<string>());
+    }
+
     private static string TempRoot()
     {
         var root = Path.Combine(Path.GetTempPath(), "beacon-mcp-api-" + Guid.NewGuid().ToString("N"));
@@ -727,6 +1019,10 @@ public sealed class McpApiToolsTests
                 "/v1/models" => """{"projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","backends":[],"bindings":[]}""",
                 "/v1/models/proxy/status" => """{"available":false}""",
                 "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/context/compile" => """{"success":true,"value":{"briefMarkdown":"# Project\n\n## Goals\n\nDone."}}""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/version-policy" => """{"scheme":"NumericComponents","componentCount":4,"calendarFormat":null,"tagPattern":"v{version}","allowPrerelease":false,"releaseManagementEnabled":true,"sources":[{"path":"Directory.Build.props","format":"Xml","selector":"/Project/PropertyGroup/Version"}],"officialVersion":"0.7.5.9","revision":2}""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/milestones" => """[{"id":"dddddddd-dddd-dddd-dddd-dddddddddddd","name":"Prepare API release","releaseId":"cccccccc-cccc-cccc-cccc-cccccccccccc"}]""",
+                "/v1/projects/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/releases" => """[{"id":"cccccccc-cccc-cccc-cccc-cccccccccccc","name":"0.7.5.9","targetVersion":"0.7.5.9","targetBranch":"main","status":"InProgress","order":1,"milestoneCount":2}]""",
+                "/v1/tasks/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" => """{"id":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","projectId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","title":"Prepare API release","status":"InProgress","milestoneId":"dddddddd-dddd-dddd-dddd-dddddddddddd"}""",
                 _ => """{"ok":true}"""
             };
             return new HttpResponseMessage(HttpStatusCode.OK)

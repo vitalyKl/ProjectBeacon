@@ -1,6 +1,8 @@
 namespace ProjectBeacon.Application.Tasks;
 
 using Application.Common;
+using Application.Devices;
+using Application.Releases;
 using Domain.Entities.Tasks;
 using Domain.Enums;
 using Application.Persistence;
@@ -69,19 +71,35 @@ public class FinishWorkHandler
         return await strategy.ExecuteAsync(async () =>
         {
             attempt++;
-            if (attempt > 1)
+            // The project lock and scope guard must be inside the same transaction as the
+            // finish operation. This serializes Actor/Reviewer completion with ReleasePrepare
+            // and prevents a stale pre-lock task read from bypassing a newly pinned Release.
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            if (!await ProjectRuntimeMutationGate.TryLockProjectAsync(db, task.ProjectId, ct))
+                return Result.Failure("Task not found.", ErrorKind.NotFound);
+
+            var live = await db.Tasks.AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+            if (live is null)
+                return Result.Failure("Task not found.", ErrorKind.NotFound);
+            var milestoneBlock = await ReleaseTaskMutationGuard.GetBlockReasonAsync(
+                db, live.ProjectId, [live.MilestoneId], ct);
+            if (milestoneBlock is not null)
+                return Result.Failure(milestoneBlock, ErrorKind.Conflict);
+
+            if (attempt == 1)
+            {
+                // Refresh the entity snapshot after the project lock, but deliberately keep
+                // the original request's compare-and-swap baseline. A rival may have committed
+                // after the handler's initial read but before this lock was acquired.
+                task = live;
+            }
+            else
             {
                 // A transient failure rolls the attempt back and re-enters this lambda.
-                // Re-read the row so the retry works from the committed state: if the
-                // effect is already in place (the attempt committed, or a rival made the
-                // same transition) return the idempotent result; otherwise the row is
-                // back at the baseline below and the guarded compare-and-swap still
-                // protects it. The baseline stays the pre-strategy read, so a rival that
-                // committed in the meantime is still detected by its stale revision.
-                var live = await db.Tasks.AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.Id == taskId, ct);
-                if (live is null)
-                    return Result.Failure("Task not found.");
+                // If the effect is already in place, return an idempotent result; otherwise
+                // keep the original committed baseline so the guarded CAS still detects rivals.
                 if (guardedTransition
                     && (resultType == "done"
                         ? live.Status == TaskItemStatus.Done
@@ -89,10 +107,7 @@ public class FinishWorkHandler
                     return Result.Ok();
                 task = live;
             }
-            // A retry re-enters with the failed attempt's tracked comment still in the
-            // change tracker; detach it so the retried save cannot insert it twice.
-            db.ChangeTracker.Clear();
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+
             switch (resultType)
             {
                 case "done":

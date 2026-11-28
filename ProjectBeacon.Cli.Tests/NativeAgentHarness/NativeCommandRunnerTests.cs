@@ -39,13 +39,15 @@ public sealed class NativeCommandRunnerTests
             var args = new JsonObject
             {
                 ["argv"] = new JsonArray { JsonValue.Create("dotnet"), JsonValue.Create("--version") },
-                ["timeoutSeconds"] = 15
+                ["timeoutSeconds"] = 60
             };
             var result = await NativeCommandRunner.ExecuteAsync(root, sessionId, args, CancellationToken.None);
             Assert.False(result.IsError, result.Text);
 
             using var document = JsonDocument.Parse(result.Text);
             var payload = document.RootElement;
+            Assert.False(payload.GetProperty("timedOut").GetBoolean(),
+                $"dotnet --version timed out after {payload.GetProperty("durationMs").GetInt64()}ms: {payload.GetProperty("outputTail").GetString()}");
             Assert.Equal(0, payload.GetProperty("exitCode").GetInt32());
             Assert.True(payload.GetProperty("durationMs").GetInt64() >= 0);
             Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("outputTail").GetString()));
@@ -111,6 +113,9 @@ public sealed class NativeCommandRunnerTests
             Assert.True(Directory.Exists(Path.Combine(
                 NativeCommandRunner.SessionHomePath(sessionId), "home", "git-hooks-empty")));
             Assert.Equal("cat", start.Environment["GIT_PAGER"]);
+            Assert.Equal("1", start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"]);
+            Assert.Equal("1", start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"]);
+            Assert.Equal("1", start.Environment["DOTNET_NOLOGO"]);
             Assert.False(start.Environment.ContainsKey("GIT_EXTERNAL_DIFF"));
             Assert.Equal("status", args[^2]);
             Assert.Equal("--short", args[^1]);

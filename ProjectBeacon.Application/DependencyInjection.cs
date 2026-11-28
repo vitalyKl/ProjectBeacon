@@ -17,6 +17,7 @@ using Application.Milestones;
 using Application.Context;
 using Application.Decisions;
 using Application.Reports;
+using Application.Releases;
 using Application.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -159,6 +160,11 @@ public static class ServiceCollectionExtensions
         services.AddTransient<SetProposalPolicyHandler>();
         services.AddTransient<GetProjectGitPolicyHandler>();
         services.AddTransient<SetProjectGitPolicyHandler>();
+        services.AddTransient<GetProjectVersionPolicyHandler>();
+        services.AddTransient<SetProjectVersionPolicyHandler>();
+        services.AddTransient<GetTaskVersionImpactHandler>();
+        services.AddTransient<SetTaskVersionImpactHandler>();
+        services.AddTransient<ReviewTaskVersionImpactHandler>();
 
         services.AddTransient<CreateDecisionHandler>();
         services.AddTransient<ListDecisionsHandler>();
@@ -175,10 +181,25 @@ public static class ServiceCollectionExtensions
         services.AddTransient<CloseMilestoneHandler>();
         services.AddTransient<ReopenMilestoneHandler>();
 
+        services.AddTransient<ListProjectReleasesHandler>();
+        services.AddTransient<GetReleaseHandler>();
+        services.AddTransient<CreateReleaseHandler>();
+        services.AddTransient<CreateHotfixTaskHandler>();
+        services.AddTransient<UpdateReleaseHandler>();
+        services.AddTransient<SetReleaseStatusHandler>();
+        services.AddTransient<DeleteReleaseHandler>();
+        services.AddTransient<SetMilestoneReleaseHandler>();
+        services.AddTransient<PrepareReleaseHandler>();
+        services.AddTransient<VerifyReleaseLandingHandler>();
+        services.AddTransient<PublishReleaseHandler>();
+
         services.AddTransient<CreateDeviceHandler>();
         services.AddTransient<ListDevicesHandler>();
         services.AddTransient<RevokeDeviceHandler>();
         services.AddTransient<HeartbeatDeviceHandler>();
+        services.AddTransient<GetDeviceAutoSyncTargetsHandler>();
+        services.AddTransient<ReconcileDeviceRemoteLandingHandler>();
+        services.AddTransient<GetDeviceTaskWorkspaceBootstrapHandler>();
         services.AddTransient<EnqueueCommandHandler>();
         services.AddTransient<EnqueueProjectGitSyncHandler>();
         services.AddTransient<GetProjectGitSyncCommandHandler>();

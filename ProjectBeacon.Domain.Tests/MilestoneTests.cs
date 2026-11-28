@@ -47,6 +47,26 @@ public sealed class MilestoneTests
     }
 
     [Fact]
+    public void AssignRelease_CanAssociateAndUnassociateWithoutChangingMilestoneIdentity()
+    {
+        var projectId = Guid.NewGuid();
+        var milestone = Milestone.Create("Milestone", null, projectId, 1);
+        var releaseId = Guid.NewGuid();
+
+        milestone.AssignRelease(releaseId);
+
+        Assert.Equal(releaseId, milestone.ReleaseId);
+        Assert.Equal(projectId, milestone.ProjectId);
+        Assert.Equal(2, milestone.Revision);
+
+        milestone.AssignRelease(null);
+
+        Assert.Null(milestone.ReleaseId);
+        Assert.Equal(projectId, milestone.ProjectId);
+        Assert.Equal(3, milestone.Revision);
+    }
+
+    [Fact]
     public void Close_SetsClosedAt_AndReopen_ClearsIt()
     {
         var milestone = Milestone.Create("M", null, Guid.NewGuid(), 1);

@@ -38,6 +38,8 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<LabelPath> LabelPaths { get; }
     DbSet<Report> Reports { get; }
     DbSet<Milestone> Milestones { get; }
+    DbSet<Release> Releases { get; }
+    DbSet<ReleaseCandidateSnapshot> ReleaseCandidateSnapshots { get; }
     DbSet<TaskDependency> TaskDependencies { get; }
     DbSet<TaskComment> TaskComments { get; }
     DbSet<TaskAttachment> TaskAttachments { get; }
@@ -67,6 +69,7 @@ public interface IBeaconDb : IAsyncDisposable
     DbSet<ChatPart> ChatParts { get; }
     DbSet<EvalRun> EvalRuns { get; }
     DbSet<ReviewRun> ReviewRuns { get; }
+    DbSet<RemoteLandingProof> RemoteLandingProofs { get; }
     DbSet<ContextSection> ContextSections { get; }
     DbSet<ContextRevision> ContextRevisions { get; }
     DbSet<ContentVersion> ContentVersions { get; }

@@ -1,0 +1,139 @@
+using ProjectBeacon.Application.Tasks;
+using ProjectBeacon.Domain.Enums;
+using MudBlazor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
+using ProjectBeacon.Web.Resources;
+
+namespace ProjectBeacon.Web.Tests.Bunit;
+
+public sealed class TaskPipelinePanelTests : BUnitRenderBase
+{
+    [Fact]
+    public void FailedGitHubMerge_ShowsLocalizedFailureReason()
+    {
+        var taskId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var landing = new LandingAttemptDto(
+            Guid.NewGuid(),
+            taskId,
+            LandingAttemptStatus.Failed,
+            $"beacon/task/{taskId:N}",
+            new string('a', 40),
+            new string('b', 40),
+            Guid.NewGuid(),
+            "main",
+            new string('c', 40),
+            new string('d', 40),
+            null,
+            null,
+            "GitHubAsyncMergeFailed",
+            "GitHubAsyncMergeFailed",
+            null,
+            null,
+            now,
+            now);
+        var pipeline = new PipelineStateDto(
+            taskId,
+            "Failed merge task",
+            TaskItemStatus.InProgress,
+            TaskPipelineStage.Approved,
+            null,
+            [],
+            [],
+            [],
+            LatestLandingAttempt: landing);
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
+            parameters => parameters.Add(component => component.Pipeline, pipeline));
+
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>()["LandingReasonGitHubAsyncMergeFailed"].Value, cut.Markup);
+    }
+
+    [Fact]
+    public void PendingGitHubMerge_ShowsProcessingMessageWithoutLeakingRequestId()
+    {
+        var taskId = Guid.NewGuid();
+        var mergeRequestId = Guid.NewGuid().ToString("D");
+        var now = DateTime.UtcNow;
+        var landing = new LandingAttemptDto(
+            Guid.NewGuid(),
+            taskId,
+            LandingAttemptStatus.ExecutePending,
+            $"beacon/task/{taskId:N}",
+            new string('a', 40),
+            new string('b', 40),
+            Guid.NewGuid(),
+            "main",
+            new string('c', 40),
+            new string('d', 40),
+            null,
+            null,
+            "GitHubMergePending:" + mergeRequestId,
+            null,
+            null,
+            null,
+            now,
+            now);
+        var pipeline = new PipelineStateDto(
+            taskId,
+            "Pending merge task",
+            TaskItemStatus.InProgress,
+            TaskPipelineStage.Approved,
+            null,
+            [],
+            [],
+            [],
+            LatestLandingAttempt: landing);
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
+            parameters => parameters.Add(component => component.Pipeline, pipeline));
+
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>()["LandingReasonGitHubMergePending"].Value, cut.Markup);
+        Assert.DoesNotContain(mergeRequestId, cut.Markup);
+    }
+
+    [Fact]
+    public void QueuedGitHubMerge_ShowsInformationalMessageWithoutLeakingRequestId()
+    {
+        var taskId = Guid.NewGuid();
+        var mergeRequestId = Guid.NewGuid().ToString("D");
+        var now = DateTime.UtcNow;
+        var landing = new LandingAttemptDto(
+            Guid.NewGuid(),
+            taskId,
+            LandingAttemptStatus.ExecutePending,
+            $"beacon/task/{taskId:N}",
+            new string('a', 40),
+            new string('b', 40),
+            Guid.NewGuid(),
+            "main",
+            new string('c', 40),
+            new string('d', 40),
+            null,
+            null,
+            "GitHubMergeEnqueued:" + mergeRequestId,
+            null,
+            null,
+            null,
+            now,
+            now);
+
+        var pipeline = new PipelineStateDto(
+            taskId,
+            "Merge queue task",
+            TaskItemStatus.InProgress,
+            TaskPipelineStage.Approved,
+            null,
+            [],
+            [],
+            [],
+            LatestLandingAttempt: landing);
+
+        var cut = Bunit.RenderComponent<Features.Tasks.TaskPipelinePanel>(
+            parameters => parameters.Add(component => component.Pipeline, pipeline));
+
+        Assert.Contains(Bunit.Services.GetRequiredService<IStringLocalizer<global::ProjectBeacon.Web.Resources.Web>>()["LandingReasonGitHubMergeQueued"].Value, cut.Markup);
+        Assert.DoesNotContain(mergeRequestId, cut.Markup);
+    }
+}

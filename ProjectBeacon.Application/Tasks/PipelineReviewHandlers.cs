@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Application.Common;
 using Application.Devices;
+using Application.Releases;
 using Domain.Entities.Evals;
 using Domain.Entities.Tasks;
 using Domain.Enums;
@@ -27,129 +28,132 @@ public class StartReviewHandler : ICommandHandler<StartReviewCommand, Result<Pip
 
     public async Task<Result<PipelineSessionDto>> HandleAsync(StartReviewCommand command, CancellationToken ct = default)
     {
-        await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineSessionDto>("Task not found.");
-
-        // A conflicted landing is the one supported way to re-enter review after
-        // approval. The Planner can integrate the target into the task branch, then start
-        // a fresh Review session here; the next verdict and RunReviewCheck will bind to
-        // the new branch SHA. A Failed/Rejected landing cannot use this recovery path.
-        var expectedStage = task.PipelineStage;
-        var latestLandingStatus = expectedStage == TaskPipelineStage.Approved
-            ? await db.LandingAttempts
-                .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
-                .OrderByDescending(attempt => attempt.CreatedAt)
-                .ThenByDescending(attempt => attempt.Id)
-                .Select(attempt => (LandingAttemptStatus?)attempt.Status)
-                .FirstOrDefaultAsync(ct)
-            : null;
-        var recoveryAfterLandingConflict = latestLandingStatus == LandingAttemptStatus.Conflicted;
-
-        if (expectedStage == TaskPipelineStage.Approved && !recoveryAfterLandingConflict)
-        {
-            if (latestLandingStatus is null)
-                return Result.Failure<PipelineSessionDto>("Cannot start review in stage Approved.");
-
-            var latestStatus = latestLandingStatus.Value.ToString();
-            return Result.Failure<PipelineSessionDto>(
-                $"Cannot start review in stage Approved: the latest landing attempt is conflicted only when its current status is Conflicted (current status: {latestStatus}).");
-        }
-
-        if (expectedStage != TaskPipelineStage.Executing && !recoveryAfterLandingConflict)
-            return Result.Failure<PipelineSessionDto>(
-                $"Cannot start review in stage {expectedStage ?? TaskPipelineStage.None}.");
-
-        var latestVerdict = await db.ReviewVerdicts
-            .Where(verdict => verdict.ProjectId == task.ProjectId && verdict.TaskId == task.Id)
-            .OrderByDescending(verdict => verdict.CreatedAt)
-            .ThenByDescending(verdict => verdict.Id)
-            .Select(verdict => (ReviewVerdictKind?)verdict.Kind)
-            .FirstOrDefaultAsync(ct);
-        if (recoveryAfterLandingConflict && latestVerdict != ReviewVerdictKind.Approve)
-            return Result.Failure<PipelineSessionDto>(
-                "A conflicted landing can be re-reviewed only while the latest task verdict remains Approve.");
-
-        var subtasks = await db.Subtasks
-            .Where(s => s.TaskId == task.Id)
-            .OrderBy(s => s.CreatedAt).ThenBy(s => s.Id)
-            .ToListAsync(ct);
-        if (subtasks.Count == 0)
-            return Result.Failure<PipelineSessionDto>("No subtasks to review.");
-        if (subtasks.Any(s => s.Status is SubtaskStatus.Pending or SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
-            return Result.Failure<PipelineSessionDto>("All subtasks must be done or failed before review.");
-
-        var expectedStatus = task.Status;
-        try
-        {
-            if (recoveryAfterLandingConflict)
+        var started = await ReleaseScopeMutationCoordinator.ExecuteForTaskAsync(
+            _dbFactory,
+            command.Request.TaskId,
+            null,
+            async (db, task, token) =>
             {
-                task.ReopenForRevision();
-                task.EnterExecuting();
-            }
-            task.EnterReview();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineSessionDto>(ex.Message, ErrorKind.Conflict);
-        }
+                // The coordinator supplies a tracked row for ordinary task writers. This
+                // handler uses the guarded SQL transition below, so keep its snapshot detached.
+                db.Entry(task).State = EntityState.Detached;
 
-        // Guarded stage claim before the spawn. Conflict recovery advances
-        // Approved -> ReopenedForRevision -> Executing -> Reviewing in one guarded write.
-        var transition = await GuardedTransition.TryAsync(
-            db.Tasks.Where(t => t.Id == task.Id),
-            t => t.PipelineStage == expectedStage && t.Status == expectedStatus,
-            t => t.PipelineStage == task.PipelineStage && t.Status == task.Status,
-            update => update
-                .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status),
+                var expectedStage = task.PipelineStage;
+                var latestLandingStatus = expectedStage == TaskPipelineStage.Approved
+                    ? await db.LandingAttempts
+                        .Where(attempt => attempt.ProjectId == task.ProjectId && attempt.TaskId == task.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAt)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt => (LandingAttemptStatus?)attempt.Status)
+                        .FirstOrDefaultAsync(token)
+                    : null;
+                var recoveryAfterLandingConflict = latestLandingStatus == LandingAttemptStatus.Conflicted;
+
+                if (expectedStage == TaskPipelineStage.Approved && !recoveryAfterLandingConflict)
+                {
+                    if (latestLandingStatus is null)
+                        return Result.Failure<PipelineSessionDto>(
+                            "Cannot start review in stage Approved.");
+
+                    var latestStatus = latestLandingStatus.Value.ToString();
+                    return Result.Failure<PipelineSessionDto>(
+                        $"Cannot start review in stage Approved: the latest landing attempt is conflicted only when its current status is Conflicted (current status: {latestStatus}).");
+                }
+
+                if (expectedStage != TaskPipelineStage.Executing && !recoveryAfterLandingConflict)
+                    return Result.Failure<PipelineSessionDto>(
+                        $"Cannot start review in stage {expectedStage ?? TaskPipelineStage.None}.");
+
+                var latestVerdict = await db.ReviewVerdicts
+                    .Where(verdict => verdict.ProjectId == task.ProjectId && verdict.TaskId == task.Id)
+                    .OrderByDescending(verdict => verdict.CreatedAt)
+                    .ThenByDescending(verdict => verdict.Id)
+                    .Select(verdict => (ReviewVerdictKind?)verdict.Kind)
+                    .FirstOrDefaultAsync(token);
+                if (recoveryAfterLandingConflict && latestVerdict != ReviewVerdictKind.Approve)
+                    return Result.Failure<PipelineSessionDto>(
+                        "A conflicted landing can be re-reviewed only while the latest task verdict remains Approve.");
+
+                var subtasks = await db.Subtasks
+                    .Where(subtask => subtask.TaskId == task.Id)
+                    .OrderBy(subtask => subtask.CreatedAt).ThenBy(subtask => subtask.Id)
+                    .ToListAsync(token);
+                if (subtasks.Count == 0)
+                    return Result.Failure<PipelineSessionDto>("No subtasks to review.");
+                if (subtasks.Any(subtask => subtask.Status is
+                    SubtaskStatus.Pending or SubtaskStatus.InProgress or SubtaskStatus.WaitingForUser))
+                    return Result.Failure<PipelineSessionDto>(
+                        "All subtasks must be done or failed before review.");
+
+                var expectedStatus = task.Status;
+                try
+                {
+                    if (recoveryAfterLandingConflict)
+                    {
+                        task.ReopenForRevision();
+                        task.EnterExecuting();
+                    }
+                    task.EnterReview();
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return Result.Failure<PipelineSessionDto>(exception.Message, ErrorKind.Conflict);
+                }
+
+                var transition = await GuardedTransition.TryAsync(
+                    db.Tasks.Where(item => item.Id == task.Id),
+                    item => item.PipelineStage == expectedStage && item.Status == expectedStatus,
+                    item => item.PipelineStage == task.PipelineStage && item.Status == task.Status,
+                    update => update
+                        .SetProperty(item => item.PipelineStage, task.PipelineStage)
+                        .SetProperty(item => item.Status, task.Status),
+                    token);
+                if (transition != GuardedTransitionResult.Applied)
+                    return Result.Failure<PipelineSessionDto>(
+                        "Pipeline state changed while starting review; retry.", ErrorKind.Conflict);
+
+                SpawnedSession spawned;
+                try
+                {
+                    spawned = await _spawner.SpawnAsync(
+                        db, task.ProjectId, PipelineRole.Review, task.Id, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    return Result.Failure<PipelineSessionDto>(exception.Message, ErrorCodes.InternalError);
+                }
+
+                if (spawned.ModelBackendId is null)
+                    return Result.Failure<PipelineSessionDto>(
+                        "No model is configured for the Review role. Configure the Review binding before starting review.",
+                        ErrorKind.Conflict);
+
+                var profileInstructions = await PipelineSupport.RoleInstructionsAsync(
+                    db, task.ProjectId, PipelineRole.Review, token);
+                var session = PipelineSession.Create(
+                    task.Id, task.ProjectId, PipelineRole.Review,
+                    SessionPrompts.Review(task, subtasks, profileInstructions),
+                    null, spawned.ModelBackendId, spawned.LaunchSpec);
+                db.PipelineSessions.Add(session);
+                await db.SaveChangesAsync(token);
+                return Result.Ok(PipelineMappers.ToDto(session));
+            },
             ct);
-        if (transition != GuardedTransitionResult.Applied)
-            return Result.Failure<PipelineSessionDto>(
-                "Pipeline state changed while starting review; retry.", ErrorKind.Conflict);
 
-        SpawnedSession? spawned = null;
-        Exception? spawnFailure = null;
-        try
-        {
-            spawned = await _spawner.SpawnAsync(db, task.ProjectId, PipelineRole.Review, task.Id, ct);
-        }
-        catch (Exception ex)
-        {
-            spawnFailure = ex;
-        }
-        if (spawnFailure is not null)
-        {
-            await PipelineSupport.RollbackStageAsync(
-                db, task.Id, TaskPipelineStage.Reviewing,
-                recoveryAfterLandingConflict ? TaskPipelineStage.Approved : TaskPipelineStage.Executing,
-                ct);
-            if (spawnFailure is OperationCanceledException canceled && ct.IsCancellationRequested)
-                throw canceled;
-            return Result.Failure<PipelineSessionDto>(spawnFailure.Message, ErrorCodes.InternalError);
-        }
+        if (!started.Success || started.Value is null || !command.Request.AutoLaunch)
+            return started;
 
-        var profileInstructions = await PipelineSupport.RoleInstructionsAsync(db, task.ProjectId, PipelineRole.Review, ct);
-        var session = PipelineSession.Create(
-            task.Id, task.ProjectId, PipelineRole.Review,
-            SessionPrompts.Review(task, subtasks, profileInstructions), null, spawned!.ModelBackendId, spawned.LaunchSpec);
-        db.PipelineSessions.Add(session);
-        await db.SaveChangesAsync(ct);
-
-        if (command.Request.AutoLaunch)
-        {
-            var launched = await new LaunchSessionHandler(_dbFactory)
-                .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(session.Id)), ct);
-            // Keep the Ready session as a manual fallback when the workstation is offline
-            // or cannot launch. The caller receives the original session and the UI can retry.
-            return launched.Success && launched.Value is not null
-                ? Result.Ok(launched.Value)
-                : Result.Ok(PipelineMappers.ToDto(session));
-        }
-
-        return Result.Ok(PipelineMappers.ToDto(session));
+        var launched = await new LaunchSessionHandler(_dbFactory)
+            .HandleAsync(new LaunchSessionCommand(new LaunchSessionRequest(started.Value.Id)), ct);
+        // Keep the Ready session as a manual fallback when the workstation is offline
+        // or cannot launch. The caller receives the original session and the UI can retry.
+        return launched.Success && launched.Value is not null
+            ? Result.Ok(launched.Value)
+            : Result.Ok(started.Value);
     }
 }
 /// <summary>
@@ -167,87 +171,98 @@ public class RecordReviewVerdictHandler : ICommandHandler<RecordReviewVerdictCom
         if (string.IsNullOrWhiteSpace(note))
             return Result.Failure<PipelineStateDto>("Verdict note is required.");
 
-        await using var db = _dbFactory.CreateDbContext();
-        var task = await db.Tasks.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.Id == command.Request.TaskId, ct);
-        if (task is null)
-            return Result.Failure<PipelineStateDto>("Task not found.");
+        return await ReleaseScopeMutationCoordinator.ExecuteForTaskAsync(
+            _dbFactory,
+            command.Request.TaskId,
+            null,
+            async (db, task, token) =>
+            {
+                if (task.PipelineStage != TaskPipelineStage.Reviewing)
+                    return Result.Failure<PipelineStateDto>(
+                        $"Cannot record verdict in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
 
-        if (task.PipelineStage != TaskPipelineStage.Reviewing)
-            return Result.Failure<PipelineStateDto>($"Cannot record verdict in stage {task.PipelineStage ?? TaskPipelineStage.None}.");
+                // Keep the task detached: the guarded ExecuteUpdate below is the only
+                // writer for its state. SaveChanges should persist verdict/subtask/session
+                // rows only, not replay a stale tracked TaskItem update.
+                db.Entry(task).State = EntityState.Detached;
 
-        var hasReviewSession = await db.PipelineSessions
-            .AnyAsync(s => s.TaskId == task.Id && s.Role == PipelineRole.Review, ct);
-        if (!hasReviewSession)
-            return Result.Failure<PipelineStateDto>("No review session found for this task.");
-        // All mutations below are staged in memory; the guarded claim below is the single
-        // write gate, and SaveChanges runs only for the winning verdict. The status is
-        // captured before any mutation so a concurrent finish that changed it cannot be
-        // resurrected by a stale claim.
-        var expectedStatus = task.Status;
+                var hasReviewSession = await db.PipelineSessions
+                    .AnyAsync(session => session.TaskId == task.Id && session.Role == PipelineRole.Review, token);
+                if (!hasReviewSession)
+                    return Result.Failure<PipelineStateDto>("No review session found for this task.");
 
-        Guid? subtaskId = null;
-        if (command.Request.Kind == ReviewVerdictKind.ReopenSubtask)
-        {
-            if (command.Request.SubtaskId is null)
-                return Result.Failure<PipelineStateDto>("SubtaskId is required for a ReopenSubtask verdict.");
+                var expectedStatus = task.Status;
+                Guid? subtaskId = null;
+                if (command.Request.Kind == ReviewVerdictKind.ReopenSubtask)
+                {
+                    if (command.Request.SubtaskId is null)
+                        return Result.Failure<PipelineStateDto>(
+                            "SubtaskId is required for a ReopenSubtask verdict.");
 
-            var subtask = await db.Subtasks
-                .FirstOrDefaultAsync(s => s.Id == command.Request.SubtaskId.Value && s.TaskId == task.Id, ct);
-            if (subtask is null)
-                return Result.Failure<PipelineStateDto>("Subtask not found.");
+                    var subtask = await db.Subtasks.FirstOrDefaultAsync(
+                        item => item.Id == command.Request.SubtaskId.Value && item.TaskId == task.Id, token);
+                    if (subtask is null)
+                        return Result.Failure<PipelineStateDto>("Subtask not found.");
 
-            var maxCycles = PipelineSupport.MaxReopenCycles();
-            if (subtask.ReopenCount >= maxCycles)
-                subtask.ForceFail($"Reopen limit ({maxCycles}) exceeded: {note}");
-            else
-                subtask.Reopen(note);
-            subtaskId = subtask.Id;
-        }
+                    var maxCycles = PipelineSupport.MaxReopenCycles();
+                    if (subtask.ReopenCount >= maxCycles)
+                        subtask.ForceFail($"Reopen limit ({maxCycles}) exceeded: {note}");
+                    else
+                        subtask.Reopen(note);
+                    subtaskId = subtask.Id;
+                }
 
-        var verdict = ReviewVerdict.Create(task.Id, task.ProjectId, command.Request.Kind, note, subtaskId);
-        db.ReviewVerdicts.Add(verdict);
+                var verdict = ReviewVerdict.Create(
+                    task.Id, task.ProjectId, command.Request.Kind, note, subtaskId);
+                db.ReviewVerdicts.Add(verdict);
 
-        if (command.Request.Kind == ReviewVerdictKind.Approve)
-        {
-            var reviewSessionId = await db.PipelineSessions
-                .Where(s => s.TaskId == task.Id && s.Role == PipelineRole.Review
-                    && (s.Status == SessionStatus.Ready
-                        || s.Status == SessionStatus.Active
-                        || s.Status == SessionStatus.WaitingForUser))
-                .OrderByDescending(s => s.Id)
-                .Select(s => (Guid?)s.Id)
-                .FirstOrDefaultAsync(ct);
-            if (reviewSessionId is null)
-                return Result.Failure<PipelineStateDto>("No review session found for this task.");
+                if (command.Request.Kind == ReviewVerdictKind.Approve)
+                {
+                    var reviewSessionId = await db.PipelineSessions
+                        .Where(session => session.TaskId == task.Id && session.Role == PipelineRole.Review
+                            && (session.Status == SessionStatus.Ready
+                                || session.Status == SessionStatus.Active
+                                || session.Status == SessionStatus.WaitingForUser))
+                        .OrderByDescending(session => session.Id)
+                        .Select(session => (Guid?)session.Id)
+                        .FirstOrDefaultAsync(token);
+                    if (reviewSessionId is null)
+                        return Result.Failure<PipelineStateDto>("No review session found for this task.");
 
-            db.ReviewRuns.Add(ReviewRun.Start(task.ProjectId, task.Id, ReviewerType.Agent, reviewSessionId));
-        }
+                    db.ReviewRuns.Add(
+                        ReviewRun.Start(task.ProjectId, task.Id, ReviewerType.Agent, reviewSessionId));
+                }
 
-        try
-        {
-            task.SetApproved();
-            if (command.Request.Kind == ReviewVerdictKind.ReopenSubtask)
-                task.ReopenForRevision();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Result.Failure<PipelineStateDto>(ex.Message, ErrorKind.Conflict);
-        }
+                try
+                {
+                    task.SetApproved();
+                    if (command.Request.Kind == ReviewVerdictKind.ReopenSubtask)
+                        task.ReopenForRevision();
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return Result.Failure<PipelineStateDto>(exception.Message, ErrorKind.Conflict);
+                }
 
-        foreach (var session in await PipelineSupport.OpenSessionsAsync(db, task.Id, PipelineRole.Review, ct))
-            session.Close();
+                foreach (var session in await PipelineSupport.OpenSessionsAsync(
+                    db, task.Id, PipelineRole.Review, token))
+                    session.Close();
 
-        var claimed = await db.Tasks
-            .Where(t => t.Id == task.Id && t.PipelineStage == TaskPipelineStage.Reviewing && t.Status == expectedStatus)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(t => t.PipelineStage, task.PipelineStage)
-                .SetProperty(t => t.Status, task.Status), ct);
-        if (claimed == 0)
-            return Result.Failure<PipelineStateDto>("Review state changed while recording verdict; retry.");
+                var claimed = await db.Tasks
+                    .Where(item => item.Id == task.Id
+                        && item.PipelineStage == TaskPipelineStage.Reviewing
+                        && item.Status == expectedStatus)
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(item => item.PipelineStage, task.PipelineStage)
+                        .SetProperty(item => item.Status, task.Status), token);
+                if (claimed == 0)
+                    return Result.Failure<PipelineStateDto>(
+                        "Review state changed while recording verdict; retry.", ErrorKind.Conflict);
 
-        await db.SaveChangesAsync(ct);
-        return Result.Ok(await PipelineSupport.StateAsync(db, task, ct));
+                await db.SaveChangesAsync(token);
+                return Result.Ok(await PipelineSupport.StateAsync(db, task, token));
+            },
+            ct);
     }
 }
 /// <summary>

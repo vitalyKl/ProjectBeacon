@@ -34,6 +34,17 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .IsConcurrencyToken()
             .HasDefaultValue(1);
 
+        entity.Property(e => e.VersionPolicyJson)
+            .IsRequired()
+            .HasColumnType("jsonb")
+            .HasDefaultValue(ProjectVersionPolicyDefaults.Json);
+        entity.Property(e => e.VersionPolicyRevision)
+            .IsRequired()
+            .IsConcurrencyToken()
+            .HasDefaultValue(1);
+        entity.Property(e => e.OfficialVersion)
+            .HasMaxLength(100);
+
         entity.HasOne(e => e.Org)
             .WithMany(e => e.Projects)
             .HasForeignKey(e => e.OrgId)
@@ -45,6 +56,11 @@ public class ProjectConfiguration : IEntityTypeConfiguration<Project>
             .OnDelete(DeleteBehavior.Cascade);
 
         entity.HasMany(e => e.Labels)
+            .WithOne(e => e.Project)
+            .HasForeignKey(e => e.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasMany(e => e.Releases)
             .WithOne(e => e.Project)
             .HasForeignKey(e => e.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);

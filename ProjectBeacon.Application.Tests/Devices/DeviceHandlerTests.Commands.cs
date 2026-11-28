@@ -165,6 +165,24 @@ public sealed partial class DeviceHandlerTests
                 TestContext.Current.CancellationToken);
         }
 
+        var activePrepare = WorkstationCommand.Create(
+            deviceId,
+            WorkstationCommandKind.ReleasePrepare,
+            "{}",
+            project.Id,
+            user.Id);
+        _db.WorkstationCommands.Add(activePrepare);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var duringPrepare = await EnqueueExecuteAsync(currentPolicyRevision);
+        Assert.False(duringPrepare.Success);
+        Assert.Equal(ErrorKind.Conflict, duringPrepare.Kind);
+        Assert.Contains("active repository operation", duringPrepare.Error ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(await _db.WorkstationCommands.ToListAsync(TestContext.Current.CancellationToken));
+
+        _db.WorkstationCommands.Remove(activePrepare);
+        await _db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
         var stale = await EnqueueExecuteAsync(currentPolicyRevision - 1);
         Assert.False(stale.Success);
         Assert.Equal(ErrorKind.Conflict, stale.Kind);
