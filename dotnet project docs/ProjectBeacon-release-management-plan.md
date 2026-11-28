@@ -1719,3 +1719,15 @@ PR #230 не сливать до выполнения внешних acceptance 
 - PR #230 остаётся open / mergeable / unmerged, 0 unresolved review threads; 1,114 commits ahead, 0 behind main.
 - Владелец репозитория по-прежнему должен подтвердить branch/tag rules, Environment production required reviewer, запрет self-review, deployment refs и четыре production SSH secrets. Эти настройки не были прочитаны и не считаются подтверждёнными.
 - Live Merge Queue и first-publish workflow observation должны быть проверены в отдельном writable organization-owned disposable repository. Production tag/deployment для такого теста не использовать.
+
+
+## Status correction — implementation merged into main (28 November 2026)
+
+- The earlier chronological entries above that describe PR #230 as open/unmerged are historical snapshots and are superseded by this status correction.
+- PR #230 (**Implement Project Release Management: AutoSync, Version Policy and Releases**) merged on 28 November 2026 at 09:53:45 UTC.
+- Merge commit: `4b78410596bc3fe93f5b150ebbf3448ae181708f`; implementation head: `dc7a4025c533949850ca8eb4b04d6d9387d50bc7`.
+- S0–S6 code is now part of `main`. Do not replay the old implementation branch over current mainline.
+- Post-merge main at `03c1fc69fa7b8043c7f9bab1885deb05a102f76f` passed CI run #46137352000 on Linux, Windows and macOS.
+- No production tag or deployment was created by this merge or post-merge CI.
+- First production publish remains blocked on external owner/admin acceptance: release-tag protections; required reviewers and self-review restrictions for Environment `production`; allowed deployment refs; required production SSH secrets; and live async-merge/Merge Queue acceptance in a writable org-owned disposable repository.
+- SaaS Control Plane and billing remain outside this plan's implementation scope.
