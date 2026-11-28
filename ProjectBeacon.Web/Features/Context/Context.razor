@@ -49,7 +49,10 @@ else
     {
         <LoadingState />
     }
-    <ErrorState Message="@_error" />
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <ErrorState Message="@_error" />
+    }
 
     <div class="beacon-split-3">
         <div>
@@ -367,6 +370,10 @@ else
                 {
                     _constraintHistoryErrorMessage = Notifications.FormatFailure(history, L["Context"].Value, L["Load"].Value);
                 }
+                if (!history.Success)
+                    Notifications.Warning(Notifications.FormatFailure(
+                        history, L["Context"].Value, L["Load"].Value,
+                        new { ProjectId = _project.Id, ConstraintId = constraintId, Resource = "constraint history" }));
             }
         }
 
@@ -380,6 +387,10 @@ else
         {
             _revisionsErrorMessage = Notifications.FormatFailure(revisions, L["Context"].Value, L["Load"].Value);
         }
+        if (!revisions.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                revisions, L["Context"].Value, L["Load"].Value,
+                new { Resource = "context revision history" }));
     }
 
     private async Task OnSectionKey(KeyboardEventArgs e, ContextSectionDto node)
@@ -500,7 +511,7 @@ else
         }
     }
 
-    private static string ContextSnapshotMarkdown(string json)
+    private string ContextSnapshotMarkdown(string json)
     {
         try
         {
@@ -517,7 +528,7 @@ else
         }
         catch (System.Text.Json.JsonException)
         {
-            return string.Empty;
+            return L["SnapshotPreviewUnavailable"].Value;
         }
     }
 
