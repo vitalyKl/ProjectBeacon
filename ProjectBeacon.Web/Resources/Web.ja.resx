@@ -3681,4 +3681,10 @@ Beacon がホストするコーディングエージェントは置かない。<
 <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>確認済み</value></data>
 <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>異議あり</value></data>
 <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer 待ち</value></data>
+<data name="UiBackgroundOperationRecovered" xml:space="preserve">
+    <value>{0} のバックグラウンド情報が再び利用可能になりました。</value>
+  </data>
+<data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>保存されたスナップショットのデータ形式が正しくないため、プレビューできませんでした。</value>
+  </data>
 </root>
