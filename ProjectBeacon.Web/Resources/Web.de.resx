@@ -3673,4 +3673,10 @@ Kein von Beacon gehosteter Coding-Agent.</value>
 <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Bestätigt</value></data>
 <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Angefochten</value></data>
 <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer ausstehend</value></data>
+<data name="UiBackgroundOperationRecovered" xml:space="preserve">
+    <value>Die Hintergrunddaten im Bereich „{0}“ sind wieder verfügbar.</value>
+  </data>
+<data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>Die gespeicherte Version kann nicht angezeigt werden, da ihre Daten ungültig sind.</value>
+  </data>
 </root>
