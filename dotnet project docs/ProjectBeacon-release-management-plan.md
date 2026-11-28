@@ -1699,3 +1699,15 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Прямая команда CLI test assembly использует -trx <file>. Установлено, что pinned xunit.v3 4.0.2 сохраняет этот ключ в Microsoft.Testing.Platform CLI и отображает его на xUnit TRX reporter.
 - Текущая команда workflow корректна; заменять её на общий --report-trx не требуется.
 - Официальная документация: https://xunit.net/docs/getting-started/v3/microsoft-testing-platform.
+
+### Exact-head CI #46122452195 и корректировка xUnit TRX switch — 28 ноября 2026
+
+- Run #46122452195 (workflow_dispatch) завершился success на всех трёх платформах: Linux, Windows и macOS. Проверенный SHA: 9bac5e135d3fb28b055dcf09f4aeb1346e37259b.
+- На каждой платформе прошли семь suites: API 267, Application 1 032, CLI 729, Domain 360, Infrastructure 119, Web 257, Worker 24. CLI: 729 tests, 0 failed, 0 skipped. Linux TRX guard подтвердил 2 788 результатов, 1 разрешённый platform skip, 7 модулей и прохождение обоих symlink security tests. MIN_TOTAL остаётся 2 775; build, EF model check и formatting прошли.
+- CI logs выявили предупреждение xUnit v3 4.0.2: старый -trx <file> deprecated. Предыдущая запись о том, что менять его не нужно, superseded. По официальным xUnit 4.0.0 release notes и parser source замена — -result-trx <filename>.
+- В .github/workflows/ci.yml обе CLI-команды и в .github/workflows/release.yml зеркальная CLI-команда переведены на -result-trx. Все три шага явно используют shell: bash.
+- Сверка точного commit подтвердила: Linux CLI step совпадает с release workflow, Windows/macOS CLI step совпадает с Linux, TRX guard block побайтно одинаков в ci.yml/release.yml, MIN_TOTAL = 2775.
+- Commits: 0d997b1b506db98572919438e9946891b0f4f01f, c45110f6579f3f757cee0ae6a5437f0e5952342d, correction c0c8cc0de428b0aab20d0efa208831db6f1d0226, release shell parity 451f9a997486cb0649c09bd86624ab13c33208bb.
+- Current implementation head after workflow maintenance: 451f9a997486cb0649c09bd86624ab13c33208bb; journal commit dc7a4025c533949850ca8eb4b04d6d9387d50bc7.
+- Run #46122452195 is green for preceding SHA 9bac5e1, not the current head. A new exact-head Actions run is required. PR remains open and unmerged; no production tag/deployment was created.
+- Official xUnit source: https://xunit.net/releases/v3/4.0.0 and https://github.com/xunit/xunit/blob/main/src/xunit.v3.runner.common/Parsers/CommandLineParserBase.cs.
