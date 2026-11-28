@@ -3257,3 +3257,29 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Rechecked the direct CLI test invocation against the repository's pinned xunit.v3 4.0.2 package.
 - The xUnit v3 Microsoft.Testing.Platform CLI explicitly supports -trx <file> and maps it to the xUnit TRX reporter; the existing CLI workflow argument is valid and does not require conversion to the generic MTP --report-trx option.
 - No code or workflow change required. Official xUnit docs: https://xunit.net/docs/getting-started/v3/microsoft-testing-platform.
+
+## 2026-11-28 — Exact-head CI #46122452195 is green
+
+### Confirmed run
+
+- Workflow run: https://github.com/vitalyKl/ProjectBeacon/actions/runs/46122452195 (run #1725, workflow_dispatch).
+- Exact tested head: 9bac5e135d3fb28b055dcf09f4aeb1346e37259b.
+- Linux, Windows and macOS jobs all completed with conclusion success.
+- All seven suites passed on all three platforms: API (267), Application (1,032), CLI (729), Domain (360), Infrastructure (119), Web (257) and Worker (24). The CLI suite reported 729 total, 0 errors, 0 failed, 0 skipped and 0 not run on each platform.
+- Linux TRX guard: 2,788 results, 1 allowed platform-conditional skip, 7 modules, both symlink security tests passed. Configured minimum remains 2,775. Linux, Windows and macOS TRX failure-reporting steps printed "No failed tests found in TRX reports." Build, EF model check and formatting succeeded in all jobs.
+
+### xUnit 4.0 TRX deprecation follow-up
+
+- The run log showed that -trx <file> is deprecated in xUnit v3 4.0.2 and will be removed in the next major version. The earlier journal entry claiming the switch needed no change is superseded.
+- xUnit 4.0.0 release notes list the exact replacement -result-trx; the parser source registers -result-<id> with a required <filename> argument and retains old -<id> only as a deprecated alias.
+- Updated both CLI invocations in .github/workflows/ci.yml and the mirrored CLI invocation in .github/workflows/release.yml to -result-trx TestResults/ProjectBeacon.Cli.Tests/test-results.trx.
+- Explicit shell: bash is now present on all three CLI steps.
+- Re-read both workflow files from the exact commit and verified: two CI invocations and one release invocation all use the non-deprecated option; CI Linux CLI step equals the release workflow CLI step; CI Linux CLI step equals the Windows/macOS matrix CLI step; the TRX guard block remains identical between ci.yml and release.yml; MIN_TOTAL remains 2,775.
+- Authoritative xUnit release notes: https://xunit.net/releases/v3/4.0.0 (2026-08-14); option registration: https://github.com/xunit/xunit/blob/main/src/xunit.v3.runner.common/Parsers/CommandLineParserBase.cs.
+- Workflow commits: 0d997b1b506db98572919438e9946891b0f4f01f, c45110f6579f3f757cee0ae6a5437f0e5952342d, correction c0c8cc0de428b0aab20d0efa208831db6f1d0226, release shell parity 451f9a997486cb0649c09bd86624ab13c33208bb.
+
+### Current validation state
+
+- Current PR head after the workflow-only maintenance changes: 451f9a997486cb0649c09bd86624ab13c33208bb.
+- Run #46122452195 is green for the immediately preceding head 9bac5e1. It does not validate the subsequent workflow edits.
+- A new exact-head Actions run must pass before the current head can be called green. No merge, production tag or deployment was performed.
