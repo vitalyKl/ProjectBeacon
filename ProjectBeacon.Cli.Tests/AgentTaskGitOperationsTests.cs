@@ -1259,7 +1259,7 @@ public sealed partial class AgentTaskGitOperationsTests
             var result = await ExecuteAsync(
                 CreateAuthorization(worktree, projectId, taskId),
                 PipelineToolPolicy.GitInfo,
-                """{"kind":"blame","path":"blame.txt"}""");
+                """{"kind":"blame","path":"src/app/blame.txt"}""");
 
             Assert.False(result.IsError, result.Text);
             Assert.Contains("alpha", result.Text, StringComparison.Ordinal);
