@@ -3690,4 +3690,7 @@ Beacon がホストするコーディングエージェントは置かない。<
 <data name="InvalidProposalPayload" xml:space="preserve">
     <value>提案のデータ形式が正しくないため、内容を読み取れませんでした。受信トレイを更新するか、作成者に再送信を依頼してください。</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>リポジトリパッチのデータが無効か不完全です。タスクを更新して、もう一度お試しください。</value>
+  </data>
 </root>
