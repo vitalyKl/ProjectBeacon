@@ -3682,4 +3682,7 @@ Kein von Beacon gehosteter Coding-Agent.</value>
 <data name="InvalidProposalPayload" xml:space="preserve">
     <value>Der Inhalt dieses Vorschlags konnte nicht gelesen werden, da die Nutzdaten ungültig sind. Aktualisieren Sie den Posteingang oder bitten Sie den Autor, den Vorschlag erneut einzureichen.</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>Die Daten des Repository-Patches sind ungültig oder unvollständig. Aktualisieren Sie die Aufgabe und versuchen Sie es erneut.</value>
+  </data>
 </root>
