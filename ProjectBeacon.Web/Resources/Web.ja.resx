@@ -3681,4 +3681,13 @@ Beacon がホストするコーディングエージェントは置かない。<
 <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>確認済み</value></data>
 <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>異議あり</value></data>
 <data name="TaskVersionImpactPending" xml:space="preserve"><value>Reviewer 待ち</value></data>
+<data name="LoginUnavailable" xml:space="preserve">
+    <value>サインインは一時的に利用できません。もう一度お試しください。</value>
+  </data>
+<data name="ProjectSwitchFailed" xml:space="preserve">
+    <value>アクティブなプロジェクトを切り替えられませんでした。アクセス権が変更された可能性があります。ページを更新して、もう一度お試しください。</value>
+  </data>
+<data name="ProjectSwitchUnavailable" xml:space="preserve">
+    <value>予期しないエラーが発生したため、アクティブなプロジェクトを変更できませんでした。診断 ID: {0}</value>
+  </data>
 </root>
