@@ -79,6 +79,7 @@
     private string _projectName = string.Empty;
     private string? _description;
     private string? _error;
+    private string? _initializationCommandReadError;
     private bool _saving;
     private Guid _userId;
     private Guid? _deviceId;
@@ -96,6 +97,8 @@
             _userId = id;
         if (_userId == Guid.Empty) return;
         var listed = await ListDevices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(_userId)));
+        if (!listed.Success)
+            _error = Notifications.FormatFailure(listed, L["Workstations"].Value, L["Load"].Value);
         if (!listed.Success)
         {
             _devicesLoadErrorMessage = Notifications.FormatFailure(listed, L["Workstations"].Value, L["Load"].Value);
@@ -128,7 +131,7 @@
         return Task.CompletedTask;
     }
 
-    private static string ProjectsRootOf(DaemonDeviceDto? device)
+    private string ProjectsRootOf(DaemonDeviceDto? device)
     {
         if (device is null || string.IsNullOrWhiteSpace(device.WorkstationJson))
             return "";
@@ -139,8 +142,13 @@
                 ? p.GetString() ?? ""
                 : "";
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            Notifications.ReportException(
+                exception,
+                "WorkstationSettingsInvalid",
+                "read workstation projects root",
+                new { DeviceId = device.Id });
             return "";
         }
     }
@@ -202,9 +210,29 @@
                         return;
                     }
                     var finished = await WaitAsync(queued.Value!.Id);
-                    if (finished is null || finished.Status != WorkstationCommandStatus.Succeeded)
+                    var commandContext = new { ProjectId = project.Value.Id, DeviceId = deviceId, CommandId = queued.Value.Id };
+                    if (finished is null)
                     {
-                        _error ??= Notifications.FormatFailure(finished?.Error ?? L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.InternalError, L["Initialize"].Value, new { ProjectId = project.Value.Id, DeviceId = deviceId, CommandId = queued.Value!.Id });
+                        _error = _initializationCommandReadError
+                            ?? Notifications.FormatFailure(
+                                L["CommandTimedOut"].Value, L["Workstations"].Value,
+                                ErrorCodes.Unavailable, L["Initialize"].Value, commandContext);
+                        return;
+                    }
+
+                    if (finished.Status == WorkstationCommandStatus.Cancelled)
+                    {
+                        _error = Notifications.FormatFailure(
+                            L["WorkstationCommandCancelled", L["Initialize"].Value].Value,
+                            L["Workstations"].Value, ErrorCodes.ValidationFailed, L["Initialize"].Value, commandContext);
+                        return;
+                    }
+
+                    if (finished.Status != WorkstationCommandStatus.Succeeded)
+                    {
+                        _error = Notifications.FormatFailure(
+                            finished.Error ?? L["CommandFailed"].Value, L["Workstations"].Value,
+                            ErrorCodes.InternalError, L["Initialize"].Value, commandContext);
                         return;
                     }
                 }
@@ -221,18 +249,34 @@
 
     private async Task<WorkstationCommandDto?> WaitAsync(Guid commandId)
     {
+        _initializationCommandReadError = null;
         for (var i = 0; i < 40; i++)
         {
             var got = await GetCommand.HandleAsync(new GetCommandCommand(new GetCommandRequest(commandId, _userId)));
             if (!got.Success)
             {
-                _error = Notifications.FormatFailure(got, L["Workstations"].Value, L["Read"].Value, new { CommandId = commandId });
+                _initializationCommandReadError = Notifications.FormatFailure(
+                    got, L["Workstations"].Value, L["Read"].Value,
+                    new { DeviceId = _deviceId, CommandId = commandId, Operation = "project initialization" });
                 return null;
             }
-            if (got.Value!.Status is WorkstationCommandStatus.Succeeded or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
+            }
+
+            if (got.Value is null)
+            {
+                _initializationCommandReadError = Notifications.FormatFailure(
+                    L["CommandFailed"].Value, L["Workstations"].Value, ErrorCodes.Unclassified,
+                    L["Read"].Value, new { DeviceId = _deviceId, CommandId = commandId, Operation = "project initialization" });
+                return null;
+            }
+
+            if (got.Value.Status is WorkstationCommandStatus.Succeeded
+                or WorkstationCommandStatus.Failed or WorkstationCommandStatus.Cancelled)
                 return got.Value;
+
             await Task.Delay(500);
         }
+
         return null;
     }
 }
