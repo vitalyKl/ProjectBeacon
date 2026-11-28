@@ -3690,4 +3690,7 @@
 <data name="InvalidProposalPayload" xml:space="preserve">
     <value>提案数据格式无效，无法读取其内容。请刷新收件箱，或联系提交者重新提交。</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>仓库补丁数据无效或不完整。请刷新任务后重试。</value>
+  </data>
 </root>
