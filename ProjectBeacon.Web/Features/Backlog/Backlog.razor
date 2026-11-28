@@ -118,8 +118,16 @@ else if (_error)
             return;
         }
 
-        _project = current.Value;
-        await LoadTasks();
+        if (!current.Success)
+        {
+            _error = true;
+            _errorMessage = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+        }
+        else
+        {
+            _project = current.Value;
+            await LoadTasks();
+        }
         _loading = false;
     }
 
@@ -153,6 +161,11 @@ else if (_error)
             _labelsLoadErrorMessage = Notifications.FormatFailure(labels, L["Projects"].Value, L["Load"].Value);
         }
 
+        if (!labels.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                labels, L["Backlog"].Value, L["Load"].Value,
+                new { ProjectId = _project.Id, Resource = "labels" }));
+
         var milestones = await ListMilestones.HandleAsync(new ListProjectMilestonesCommand(new ListProjectMilestonesRequest(_project.Id), _actorContext));
         if (milestones.Success)
         {
@@ -163,6 +176,10 @@ else if (_error)
         {
             _milestonesLoadErrorMessage = Notifications.FormatFailure(milestones, L["Roadmap"].Value, L["Load"].Value);
         }
+        if (!milestones.Success)
+            Notifications.Warning(Notifications.FormatFailure(
+                milestones, L["Backlog"].Value, L["Load"].Value,
+                new { ProjectId = _project.Id, Resource = "milestones" }));
     }
 
     private void NavigateToTask(Guid taskId) => Navigation.NavigateTo($"/task/{taskId}");
