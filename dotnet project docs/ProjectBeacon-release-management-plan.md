@@ -1711,3 +1711,11 @@ PR #230 не сливать до выполнения внешних acceptance 
 - Current implementation head after workflow maintenance: 451f9a997486cb0649c09bd86624ab13c33208bb; journal commit dc7a4025c533949850ca8eb4b04d6d9387d50bc7.
 - Run #46122452195 is green for preceding SHA 9bac5e1, not the current head. A new exact-head Actions run is required. PR remains open and unmerged; no production tag/deployment was created.
 - Official xUnit source: https://xunit.net/releases/v3/4.0.0 and https://github.com/xunit/xunit/blob/main/src/xunit.v3.runner.common/Parsers/CommandLineParserBase.cs.
+
+### Повторная проверка внешних acceptance — 28 ноября 2026
+
+- Repository rulesets endpoint повторно вернул пустой список. Branch protection endpoint для main вернул 403 Resource not accessible by integration. Пустой rulesets response нельзя трактовать как отсутствие legacy branch protection или требуемых правил.
+- GitHub integration не предоставляет workflow_dispatch write action; для current PR head dc7a4025c533949850ca8eb4b04d6d9387d50bc7 требуется ручной запуск Actions → CI → Run workflow.
+- PR #230 остаётся open / mergeable / unmerged, 0 unresolved review threads; 1,114 commits ahead, 0 behind main.
+- Владелец репозитория по-прежнему должен подтвердить branch/tag rules, Environment production required reviewer, запрет self-review, deployment refs и четыре production SSH secrets. Эти настройки не были прочитаны и не считаются подтверждёнными.
+- Live Merge Queue и first-publish workflow observation должны быть проверены в отдельном writable organization-owned disposable repository. Production tag/deployment для такого теста не использовать.
