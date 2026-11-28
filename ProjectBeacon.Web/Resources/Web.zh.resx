@@ -3687,4 +3687,7 @@
 <data name="SnapshotPreviewUnavailable" xml:space="preserve">
     <value>已保存快照的数据格式无效，无法预览。</value>
   </data>
+<data name="InvalidProposalPayload" xml:space="preserve">
+    <value>提案数据格式无效，无法读取其内容。请刷新收件箱，或联系提交者重新提交。</value>
+  </data>
 </root>
