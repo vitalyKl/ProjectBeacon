@@ -3681,4 +3681,10 @@
 <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>已确认</value></data>
 <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>有异议</value></data>
 <data name="TaskVersionImpactPending" xml:space="preserve"><value>等待 Reviewer</value></data>
+<data name="UiBackgroundOperationRecovered" xml:space="preserve">
+    <value>“{0}”中的后台数据已恢复可用。</value>
+  </data>
+<data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>已保存快照的数据格式无效，无法预览。</value>
+  </data>
 </root>
