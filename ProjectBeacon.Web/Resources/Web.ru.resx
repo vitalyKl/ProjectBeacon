@@ -3658,4 +3658,7 @@
 <data name="InvalidProposalPayload" xml:space="preserve">
     <value>Не удалось прочитать содержимое предложения: данные имеют неверный формат. Обновите список или попросите автора отправить предложение повторно.</value>
   </data>
+  <data name="InvalidRepoPatchPayload" xml:space="preserve">
+    <value>Данные патча репозитория имеют неверный или неполный формат. Обновите задачу и повторите попытку.</value>
+  </data>
 </root>
