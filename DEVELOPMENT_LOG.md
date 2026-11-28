@@ -3283,3 +3283,33 @@ The cross-platform run #46001832895 on `40339eb` exposed one remaining mismatch 
 - Current PR head after the workflow-only maintenance changes: 451f9a997486cb0649c09bd86624ab13c33208bb.
 - Run #46122452195 is green for the immediately preceding head 9bac5e1. It does not validate the subsequent workflow edits.
 - A new exact-head Actions run must pass before the current head can be called green. No merge, production tag or deployment was performed.
+
+
+## 2026-11-28 — Release Management PR #230 merged; post-merge main verified
+
+### Merge result
+
+- PR #230, **Implement Project Release Management: AutoSync, Version Policy and Releases**, was merged into `main` on 2026-11-28 at 09:53:45 UTC.
+- Merge commit: `4b78410596bc3fe93f5b150ebbf3448ae181708f`.
+- Merged implementation head: `dc7a4025c533949850ca8eb4b04d6d9387d50bc7`.
+- The merge delivered the S0–S6 Release Management implementation, including AutoSync, project version policy, release candidates and publication workflow, remote landing evidence, and hotfix/forward-port lineage.
+
+### Post-merge verification
+
+- Subsequent mainline PRs #241 (authentication/project-switch operation feedback) and #243 (remaining UI operation feedback) were merged and passed exact-head Linux/Windows/macOS CI.
+- Current verified `main` at this entry: `03c1fc69fa7b8043c7f9bab1885deb05a102f76f`.
+- Main push CI run #46137352000 completed successfully on Linux, Windows and macOS; cleanup run #46137351994 also succeeded.
+- This is a post-merge main verification, not a production release.
+
+### Remaining production acceptance blockers
+
+- No production release tag was created and no production deployment was triggered as part of this merge or the subsequent verification.
+- The first production publish remains gated on owner/admin confirmation of release-tag protection, the `production` Environment reviewer/self-review policy and allowed deployment refs, plus verification of the required production SSH environment secrets.
+- Live async-merge / Merge Queue acceptance still requires a writable, org-owned disposable repository. This is a separate acceptance exercise and is not inferred from a green CI result.
+- SaaS Control Plane and billing remain outside this Release Management scope.
+
+### Current state
+
+- Implementation PR #230 is merged; do not describe it as open or pending merge.
+- S0–S6 code is present in `main`. Do not reapply the historical feature branches over the current implementation.
+- Continue any future release-publishing work from current `main`, and do not create a production tag/deployment until the external acceptance blockers above are closed.
