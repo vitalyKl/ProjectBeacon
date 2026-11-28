@@ -10,6 +10,7 @@
 @using ProjectBeacon.Web.Shared
 @using ProjectBeacon.Web.Features.Chat
 @using ProjectBeacon.Application.Authorization
+@using ProjectBeacon.Application.Common
 @using ProjectBeacon.Application.Devices
 @using ProjectBeacon.Application.Identity
 @using ProjectBeacon.Application.Projects
@@ -182,6 +183,8 @@
     private int _fleetTotal;
     private int _fleetOnline;
     private int _inboxAttentionCount;
+    private readonly UiBackgroundFailureTracker _projectReadFailures = new();
+    private readonly UiBackgroundFailureTracker _inboxSummaryFailures = new();
     private DotNetObjectReference<MainLayout>? _dotNet;
 
     private bool HasLivePipeline => _pipelineHref.StartsWith("/task/", StringComparison.OrdinalIgnoreCase);
@@ -354,17 +357,29 @@
             return;
 
         var project = await CurrentProject.HandleAsync(actor);
+        ObserveBackgroundRead(
+            _projectReadFailures, project, L["Projects"].Value, L["Load"].Value,
+            new { UserId = userId, Resource = "active project for navigation" });
 
         var devices = await Devices.HandleAsync(new ListDevicesCommand(new ListDevicesRequest(userId)));
-        if (devices.Success && devices.Value is not null)
+        if (!devices.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(
+                devices, L["Workstations"].Value, L["Load"].Value,
+                new { UserId = userId, Resource = "navigation fleet summary" }));
+        }
+        else if (devices.Value is not null)
         {
             _fleetTotal = devices.Value.Count;
             _fleetOnline = devices.Value.Count(d => d.Online);
         }
 
-        if (project.Value?.Id is Guid projectId)
+        if (project.Success && project.Value?.Id is Guid projectId)
         {
             var inbox = await InboxSummary.HandleAsync(projectId, actor);
+            ObserveBackgroundRead(
+                _inboxSummaryFailures, inbox, L["ProposalInbox"].Value, L["Load"].Value,
+                new { ProjectId = projectId, Resource = "navigation inbox summary" });
             _inboxAttentionCount = inbox.Success && inbox.Value is not null
                 ? inbox.Value.PendingProposals
                     + inbox.Value.ConflictedProposals
@@ -375,7 +390,11 @@
 
             var livePipeline = await LivePipeline.HandleAsync(
                 new GetLivePipelineTaskCommand(new GetLivePipelineTaskRequest(projectId)));
-            if (livePipeline.Success && livePipeline.Value is Guid liveTaskId)
+            if (!livePipeline.Success)
+                Notifications.Warning(Notifications.FormatFailure(
+                    livePipeline, L["Tasks"].Value, L["Load"].Value,
+                    new { ProjectId = projectId, Resource = "active pipeline navigation link" }));
+            else if (livePipeline.Value is Guid liveTaskId)
                 _pipelineHref = $"/task/{liveTaskId}";
         }
     }
@@ -417,13 +436,19 @@
 
         await TenantBinder.BindUserAsync(actor);
         var project = await CurrentProject.HandleAsync(actor);
-        if (project.Value?.Id is not Guid projectId)
+        ObserveBackgroundRead(
+            _projectReadFailures, project, L["Projects"].Value, L["Load"].Value,
+            new { Resource = "active project for navigation" });
+        if (!project.Success || project.Value?.Id is not Guid projectId)
         {
             _inboxAttentionCount = 0;
             return;
         }
 
         var inbox = await InboxSummary.HandleAsync(projectId, actor);
+        ObserveBackgroundRead(
+            _inboxSummaryFailures, inbox, L["ProposalInbox"].Value, L["Load"].Value,
+            new { ProjectId = projectId, Resource = "navigation inbox summary" });
         _inboxAttentionCount = inbox.Success && inbox.Value is not null
             ? inbox.Value.PendingProposals
                 + inbox.Value.ConflictedProposals
@@ -431,6 +456,24 @@
                 + inbox.Value.ProposedConstraints
                 + inbox.Value.NeedsReviewContextSections
             : 0;
+    }
+
+    private void ObserveBackgroundRead<T>(
+        UiBackgroundFailureTracker tracker,
+        Result<T> result,
+        string section,
+        string operation,
+        object? context)
+    {
+        if (!result.Success)
+        {
+            if (tracker.RecordFailure())
+                Notifications.Warning(Notifications.FormatFailure(result, section, operation, context));
+            return;
+        }
+
+        if (tracker.RecordSuccess())
+            Notifications.Info(string.Format(L["UiBackgroundOperationRecovered"].Value, section));
     }
 
     private void RebuildChrome()
