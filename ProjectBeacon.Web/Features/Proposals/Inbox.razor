@@ -40,13 +40,13 @@
 {
     <LoadingState />
 }
-else if (_project is null)
-{
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/projects/new">@L["CreateProject"]</MudButton>
-}
 else if (!string.IsNullOrWhiteSpace(_error))
 {
     <ErrorState Message="@_error" />
+}
+else if (_project is null)
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/projects/new">@L["CreateProject"]</MudButton>
 }
 else
 {
@@ -366,9 +366,14 @@ else
     {
         _actor = ActorContextFactory.FromPrincipal((await Auth.GetAuthenticationStateAsync()).User);
         var current = await CurrentProject.HandleAsync(_actor);
-        _project = current.Value;
-        if (_project is not null)
-            await Reload();
+        if (!current.Success)
+            _error = Notifications.FormatFailure(current, L["Projects"].Value, L["Load"].Value);
+        else
+        {
+            _project = current.Value;
+            if (_project is not null)
+                await Reload();
+        }
         _loading = false;
     }
 
@@ -402,19 +407,37 @@ else
             _proposedDecisions = decisions.Success
                 ? decisions.Value!.Where(item => item.Status == DecisionStatus.Proposed).ToList()
                 : [];
+            if (!decisions.Success)
+                Notifications.Warning(Notifications.FormatFailure(
+                    decisions, L["Decisions"].Value, L["Load"].Value,
+                    new { ProjectId = _project.Id, Resource = "proposed decisions" }));
+
             var constraints = await ListConstraints.HandleAsync(_project.Id);
             _proposedConstraints = constraints.Success
                 ? constraints.Value!.Where(item => item.Status == ConstraintStatus.Proposed).ToList()
                 : [];
+            if (!constraints.Success)
+                Notifications.Warning(Notifications.FormatFailure(
+                    constraints, L["Context"].Value, L["Load"].Value,
+                    new { ProjectId = _project.Id, Resource = "proposed constraints" }));
+
             var sections = await ListContextNodes.HandleAsync(new ListContextNodesCommand(new ListContextNodesRequest(_project.Id)));
             _contextDrafts = sections.Success
                 ? sections.Value!.Where(item => item.ReviewState == ContextReviewState.NeedsReview).ToList()
                 : [];
+            if (!sections.Success)
+                Notifications.Warning(Notifications.FormatFailure(
+                    sections, L["Context"].Value, L["Load"].Value,
+                    new { ProjectId = _project.Id, Resource = "context drafts" }));
 
             await using var db = DbFactory.CreateDbContext();
             var governance = await Authorization.CanAsync(
                 db, _actor, ResourceType.Project, AuthAction.Administer,
                 projectId: _project.Id, ct: CancellationToken.None);
+            if (!governance.Success && governance.Kind != ErrorKind.Forbidden)
+                Notifications.Warning(Notifications.FormatFailure(
+                    governance, L["ProposalInbox"].Value, L["Read"].Value,
+                    new { ProjectId = _project.Id, Resource = "governance permissions" }));
             _canGovernance = governance.Success;
             _error = null;
         }
@@ -450,7 +473,7 @@ else
     private void SetEditedPayload(Guid proposalId, string? value) =>
         _editedPayloads[proposalId] = value ?? string.Empty;
 
-    private static string GetRepoPatchPreview(ProposalDto proposal)
+    private string GetRepoPatchPreview(ProposalDto proposal)
     {
         try
         {
@@ -480,7 +503,7 @@ else
         }
         catch (JsonException)
         {
-            return "Invalid RepoPatch payload.";
+            return L["InvalidRepoPatchPayload"].Value;
         }
     }
 
@@ -492,9 +515,23 @@ else
             return;
         var versions = await ListContentVersions.HandleAsync(
             _project.Id, proposal.TargetKind, proposal.TargetId, _actor, 100);
-        var version = versions.Success
-            ? versions.Value!.FirstOrDefault(item => item.Revision == proposal.BaseRevision)
-            : null;
+        if (!versions.Success)
+        {
+            Notifications.Warning(Notifications.FormatFailure(
+                versions,
+                L["ProposalInbox"].Value,
+                L["Load"].Value,
+                new
+                {
+                    ProjectId = _project.Id,
+                    ProposalId = proposal.Id,
+                    TargetId = proposal.TargetId,
+                    Resource = "base snapshot history"
+                }));
+            return;
+        }
+
+        var version = versions.Value!.FirstOrDefault(item => item.Revision == proposal.BaseRevision);
         if (version is null)
         {
             Notifications.Add(L["BaseSnapshotMissing"].Value, Severity.Warning);
@@ -532,7 +569,7 @@ else
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
-            return string.Empty;
+            return L["InvalidProposalPayload"].Value;
         }
 
         return ExtractMarkdown(payload);
@@ -550,7 +587,7 @@ else
         }
         catch (JsonException)
         {
-            return string.Empty;
+            return L["SnapshotPreviewUnavailable"].Value;
         }
     }
 
@@ -578,12 +615,12 @@ else
         }
     }
 
-    private static string ExtractSnapshotMarkdown(string json, ContentTargetKind targetKind) =>
+    private string ExtractSnapshotMarkdown(string json, ContentTargetKind targetKind) =>
         targetKind == ContentTargetKind.ContextSection
             ? FormatContextSectionPreview(ExtractContextSectionTitle(json), ExtractContextSectionBody(json))
             : ExtractMarkdown(json);
 
-    private static string ExtractMarkdown(string json)
+    private string ExtractMarkdown(string json)
     {
         try
         {
@@ -625,7 +662,7 @@ else
         }
         catch (JsonException)
         {
-            return string.Empty;
+            return L["InvalidProposalPayload"].Value;
         }
     }
 
