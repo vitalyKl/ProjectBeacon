@@ -12,9 +12,9 @@
 <MudPaper Elevation="0" Outlined="true" Class="pa-8 auth-card">
     <MudText Typo="Typo.h4" Class="text-center mb-6">@L["Login"]</MudText>
 
-    @if (_error)
+    @if (_errorMessage is not null)
     {
-        <MudAlert Severity="Severity.Error" Class="mb-4">@L["InvalidCredentials"]</MudAlert>
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
     }
 
     <form method="post" action="/v1/auth/cookie-login">
@@ -65,14 +65,30 @@
         ["name"] = "password",
         ["autocomplete"] = "current-password"
     };
-    private bool _error;
+    private string? _errorMessage;
     private bool _inviteOnly;
     private string _returnUrl = "/dashboard";
+
+    private string LoginUnavailableMessage(string? diagnosticId)
+    {
+        return diagnosticId is { Length: 8 } && diagnosticId.All(char.IsAsciiHexDigit)
+            ? Notifications.FormatDiagnosticMessage("LoginUnavailable", diagnosticId)
+            : L["LoginUnavailable"].Value;
+    }
 
     protected override void OnInitialized()
     {
         var query = QueryHelpers.ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
-        _error = query.ContainsKey("error");
+        if (query.TryGetValue("error", out var error))
+        {
+            _errorMessage = error.ToString() switch
+            {
+                "1" or "invalid_credentials" => L["InvalidCredentials"].Value,
+                "unavailable" => LoginUnavailableMessage(query.TryGetValue("diagnosticId", out var diagnosticId) ? diagnosticId.ToString() : null),
+                _ => L["InvalidCredentials"].Value
+            };
+        }
+
         _inviteOnly = LocalAuthOptions.InviteOnly(Config);
         if (query.TryGetValue("returnUrl", out var returnUrl))
             _returnUrl = returnUrl.ToString();
