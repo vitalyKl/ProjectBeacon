@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @implements IDisposable
 @using System.Security.Claims
+@using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.AspNetCore.Components.Authorization
 @using ProjectBeacon.Application.Agents
 @using ProjectBeacon.Application.Devices
@@ -34,6 +35,11 @@
         </MudButton>
     }
 </PageHeader>
+
+@if (_projectSwitchErrorMessage is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mt-3 mb-2">@_projectSwitchErrorMessage</MudAlert>
+}
 
 @if (_loading)
 {
@@ -248,6 +254,7 @@ else
     private bool _loading = true;
     private bool _error;
     private string? _errorMessage;
+    private string? _projectSwitchErrorMessage;
     private Guid _userId;
     private CancellationTokenSource? _poll;
     private List<DeviceHostSampleDto> _samples = [];
@@ -308,6 +315,18 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var query = QueryHelpers.ParseQuery(Navigation.ToAbsoluteUri(Navigation.Uri).Query);
+        if (query.TryGetValue("projectSwitchError", out var switchError))
+        {
+            _projectSwitchErrorMessage = switchError.ToString() switch
+            {
+                "failed" => L["ProjectSwitchFailed"].Value,
+                "unavailable" => ProjectSwitchUnavailableMessage(
+                    query.TryGetValue("diagnosticId", out var diagnosticId) ? diagnosticId.ToString() : null),
+                _ => null
+            };
+        }
+
         var state = await Auth.GetAuthenticationStateAsync();
         var user = state.User;
         if (user.Identity?.IsAuthenticated != true
@@ -581,6 +600,11 @@ else
                 Logger.LogWarning(exception, "Transient dashboard host sample read exception; retrying. UserId={UserId}", _userId);
         }
     }
+
+    private string ProjectSwitchUnavailableMessage(string? diagnosticId) =>
+        diagnosticId is { Length: 8 } && diagnosticId.All(char.IsAsciiHexDigit)
+            ? Notifications.FormatDiagnosticMessage("ProjectSwitchUnavailable", diagnosticId)
+            : L["ProjectSwitchUnavailable"].Value;
 
     private static string[] SparseTimes(IReadOnlyList<DeviceHostSampleDto> rows)
     {
