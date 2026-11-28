@@ -3649,4 +3649,10 @@
 <data name="TaskVersionImpactConfirmed" xml:space="preserve"><value>Подтверждено</value></data>
 <data name="TaskVersionImpactChallenged" xml:space="preserve"><value>Оспорено</value></data>
 <data name="TaskVersionImpactPending" xml:space="preserve"><value>Ожидает Reviewer</value></data>
+<data name="UiBackgroundOperationRecovered" xml:space="preserve">
+    <value>Фоновые данные раздела «{0}» снова доступны.</value>
+  </data>
+<data name="SnapshotPreviewUnavailable" xml:space="preserve">
+    <value>Не удалось показать сохранённую версию: данные имеют неверный формат.</value>
+  </data>
 </root>
