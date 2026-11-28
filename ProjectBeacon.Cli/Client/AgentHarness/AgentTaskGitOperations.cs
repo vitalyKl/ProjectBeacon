@@ -439,8 +439,10 @@ internal static class AgentTaskGitOperations
 
             case "blame":
                 {
+                    // Do not allow repository-configured textconv drivers to rewrite blame contents.
+                    // Avoid --no-color here: git blame treats it as ambiguous with its color-specific switches.
                     var blame = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
-                        "blame", "--no-ext-diff", "--no-color", "--", path!);
+                        "blame", "--no-ext-diff", "--no-textconv", "--", path!);
                     return Succeeded(blame) ? Success(new { path, blame = Clip(blame.StdOut) }) : GitFailure("Could not read file history.");
                 }
 
