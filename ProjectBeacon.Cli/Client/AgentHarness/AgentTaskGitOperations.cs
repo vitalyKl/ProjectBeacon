@@ -439,6 +439,8 @@ internal static class AgentTaskGitOperations
 
             case "blame":
                 {
+                    // git blame does not accept --no-textconv; textconv is disabled by default
+                    // for blame. --no-ext-diff also prevents configured external diff helpers.
                     var blame = await Git(context.WorktreeRoot, context.DisabledFilters, ct,
                         "blame", "--no-ext-diff", "--no-color", "--", path!);
                     return Succeeded(blame) ? Success(new { path, blame = Clip(blame.StdOut) }) : GitFailure("Could not read file history.");
